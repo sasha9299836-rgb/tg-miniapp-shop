@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from "react";
 import { useAccountStore } from "../../entities/account/model/useAccountStore";
 import { upsertTelegramUser } from "../../shared/api/telegramUsersApi";
+import { DebugTelegramBlock } from "./DebugTelegramBlock";
 import { getTelegramUser, initTelegramWebApp } from "./telegram";
 
 const TELEGRAM_USER_BOOTSTRAP_MAX_ATTEMPTS = 25;
@@ -9,6 +10,9 @@ let lastBootstrappedTelegramId: number | null = null;
 let bootstrapInFlight = false;
 
 export function AppProviders({ children }: { children: ReactNode }) {
+  const params = new URLSearchParams(window.location.search);
+  const isDebug = params.get("debug_tg") === "1";
+
   useEffect(() => {
     let isCancelled = false;
     let attempts = 0;
@@ -98,5 +102,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      {isDebug && <DebugTelegramBlock />}
+    </>
+  );
 }
