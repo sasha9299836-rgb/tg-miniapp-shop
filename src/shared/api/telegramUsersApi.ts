@@ -6,6 +6,12 @@ export type TgUserRecord = {
   telegram_username: string | null;
   telegram_first_name: string | null;
   telegram_last_name: string | null;
+  last_name: string | null;
+  first_name: string | null;
+  middle_name: string | null;
+  birth_date: string | null;
+  email: string | null;
+  phone: string | null;
   registered_at: string;
   updated_at: string;
 };
@@ -24,6 +30,7 @@ export async function upsertTelegramUser(payload: UpsertTelegramUserPayload): Pr
     telegram_username: payload.username ?? null,
     telegram_first_name: payload.firstName ?? null,
     telegram_last_name: payload.lastName ?? null,
+    updated_at: new Date().toISOString(),
   };
 
   console.log("[tg-user-upsert] request", {
@@ -52,7 +59,9 @@ export async function upsertTelegramUser(payload: UpsertTelegramUserPayload): Pr
   const { data: directData, error: directError } = await supabase
     .from("tg_users")
     .upsert(upsertRow, { onConflict: "telegram_id" })
-    .select("id, telegram_id, telegram_username, telegram_first_name, telegram_last_name, registered_at, updated_at")
+    .select(
+      "id, telegram_id, telegram_username, telegram_first_name, telegram_last_name, last_name, first_name, middle_name, birth_date, email, phone, registered_at, updated_at",
+    )
     .single();
 
   if (directError) {
@@ -67,4 +76,69 @@ export async function upsertTelegramUser(payload: UpsertTelegramUserPayload): Pr
 
   console.log("[tg-user-upsert] direct upsert success", directData);
   return directData as TgUserRecord;
+}
+
+export async function loadTelegramUserProfile(telegramId: number): Promise<TgUserRecord | null> {
+  console.log("[tg-user-profile-load] request", { telegram_id: telegramId });
+  const { data, error } = await supabase
+    .from("tg_users")
+    .select(
+      "id, telegram_id, telegram_username, telegram_first_name, telegram_last_name, last_name, first_name, middle_name, birth_date, email, phone, registered_at, updated_at",
+    )
+    .eq("telegram_id", telegramId)
+    .maybeSingle();
+
+  if (error) {
+    console.log("[tg-user-profile-load] error", error);
+    throw error;
+  }
+
+  console.log("[tg-user-profile-load] response", data);
+  return (data as TgUserRecord | null) ?? null;
+}
+
+export type SaveTelegramUserProfilePayload = {
+  telegramId: number;
+  lastName: string;
+  firstName: string;
+  middleName: string;
+  birthDate: string;
+  phone: string;
+  email: string;
+};
+
+export async function saveTelegramUserProfile(payload: SaveTelegramUserProfilePayload): Promise<TgUserRecord> {
+  const normalizedBirthDate = payload.birthDate.trim();
+  const upsertRow = {
+    telegram_id: payload.telegramId,
+    last_name: payload.lastName.trim() || null,
+    first_name: payload.firstName.trim() || null,
+    middle_name: payload.middleName.trim() || null,
+    birth_date: normalizedBirthDate || null,
+    phone: payload.phone.trim() || null,
+    email: payload.email.trim() || null,
+    updated_at: new Date().toISOString(),
+  };
+
+  console.log("[tg-user-profile-save] payload", upsertRow);
+
+  const { data, error } = await supabase
+    .from("tg_users")
+    .upsert(upsertRow, { onConflict: "telegram_id" })
+    .select(
+      "id, telegram_id, telegram_username, telegram_first_name, telegram_last_name, last_name, first_name, middle_name, birth_date, email, phone, registered_at, updated_at",
+    )
+    .single();
+
+  if (error) {
+    console.log("[tg-user-profile-save] error", error);
+    throw error;
+  }
+
+  if (!data) {
+    throw new Error("TG_USER_PROFILE_SAVE_EMPTY_RESULT");
+  }
+
+  console.log("[tg-user-profile-save] response", data);
+  return data as TgUserRecord;
 }
