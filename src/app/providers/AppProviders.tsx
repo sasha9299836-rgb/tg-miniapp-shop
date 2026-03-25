@@ -14,6 +14,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     let attempts = 0;
 
     initTelegramWebApp();
+    useAccountStore.getState().setTelegramDebug({ status: "started", upsertError: null });
     console.log("[tg-user-bootstrap] start");
 
     const tryBootstrap = async () => {
@@ -23,6 +24,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
       const tgUser = getTelegramUser();
       if (!tgUser) {
+        useAccountStore.getState().setTelegramDebug({ status: "no_user" });
         console.log(`[tg-user-bootstrap] no Telegram user yet (attempt ${attempts}/${TELEGRAM_USER_BOOTSTRAP_MAX_ATTEMPTS})`);
         return;
       }
@@ -40,6 +42,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
       bootstrapInFlight = true;
       try {
+        useAccountStore.getState().setTelegramDebug({ status: "upsert_started", upsertError: null });
         console.log("[tg-user-bootstrap] upsert payload", {
           p_telegram_id: tgUser.id,
           p_telegram_username: tgUser.username,
@@ -61,10 +64,12 @@ export function AppProviders({ children }: { children: ReactNode }) {
             telegramLastName: row.telegram_last_name,
             registeredAt: row.registered_at,
           });
+          useAccountStore.getState().setTelegramDebug({ status: "upsert_success", upsertError: null });
           lastBootstrappedTelegramId = row.telegram_id;
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : "UNKNOWN_ERROR";
+        useAccountStore.getState().setTelegramDebug({ status: "upsert_error", upsertError: message });
         console.log(`[tg-user-bootstrap] upsert error: ${message}`);
       } finally {
         bootstrapInFlight = false;
