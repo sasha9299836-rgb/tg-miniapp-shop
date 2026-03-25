@@ -6,7 +6,14 @@ export type TelegramWebApp = {
   setHeaderColor?: (color: string) => void;
   setBackgroundColor?: (color: string) => void;
   initData?: string;
-  initDataUnsafe?: any;
+  initDataUnsafe?: {
+    user?: {
+      id?: number;
+      username?: string;
+      first_name?: string;
+      last_name?: string;
+    };
+  };
   themeParams?: Record<string, string>;
   colorScheme?: "light" | "dark";
   platform?: string;
@@ -23,6 +30,35 @@ declare global {
 export const getTelegramWebApp = () => window.Telegram?.WebApp ?? null;
 
 export const getTg = () => getTelegramWebApp();
+
+export type TelegramUser = {
+  id: number;
+  username: string | null;
+  firstName: string | null;
+  lastName: string | null;
+};
+
+export function getTelegramUser(): TelegramUser | null {
+  const raw = getTg()?.initDataUnsafe?.user;
+  if (!raw || typeof raw.id !== "number") return null;
+
+  const username = typeof raw.username === "string" && raw.username.trim()
+    ? raw.username.trim()
+    : null;
+  const firstName = typeof raw.first_name === "string" && raw.first_name.trim()
+    ? raw.first_name.trim()
+    : null;
+  const lastName = typeof raw.last_name === "string" && raw.last_name.trim()
+    ? raw.last_name.trim()
+    : null;
+
+  return {
+    id: raw.id,
+    username,
+    firstName,
+    lastName,
+  };
+}
 
 export function initTelegramWebApp() {
   const tg = getTg();

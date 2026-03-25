@@ -1,12 +1,66 @@
-﻿import { useNavigate } from "react-router-dom";
+﻿import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "../../../shared/ui/Button";
 import { Input } from "../../../shared/ui/Input";
 import { Page } from "../../../shared/ui/Page";
 import { useAccountStore } from "../../../entities/account/model/useAccountStore";
+import { useTelegramUser } from "../../../shared/auth/useTelegramUser";
+
+const PROFILE_REGISTERED_AT_KEY = "tg_profile_registered_at";
+
+function formatRegistrationDate(value: number): string {
+  return new Date(value).toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export function ProfilePage() {
   const nav = useNavigate();
   const { profile, setProfile } = useAccountStore();
+  const tgUser = useTelegramUser();
+
+  const [registeredAt] = useState<number>(() => {
+    try {
+      const raw = window.localStorage.getItem(PROFILE_REGISTERED_AT_KEY) ?? "";
+      const parsed = Number(raw);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed;
+      }
+    } catch {
+      // no-op
+    }
+
+    const now = Date.now();
+    try {
+      window.localStorage.setItem(PROFILE_REGISTERED_AT_KEY, String(now));
+    } catch {
+      // no-op
+    }
+    return now;
+  });
+
+  const accountHandle = useMemo(() => {
+    if (tgUser?.username) return `@${tgUser.username}`;
+    if (tgUser?.firstName) return tgUser.firstName;
+    return profile.firstName || "Пользователь";
+  }, [profile.firstName, tgUser?.firstName, tgUser?.username]);
+
+  useEffect(() => {
+    if (tgUser?.firstName && !profile.firstName.trim()) {
+      setProfile({ firstName: tgUser.firstName });
+    }
+  }, [profile.firstName, setProfile, tgUser?.firstName]);
+
+  useEffect(() => {
+    if (!tgUser?.username) return;
+    const current = profile.telegramUsername.trim();
+    if (current && current !== "@username") return;
+    setProfile({ telegramUsername: `@${tgUser.username}` });
+  }, [profile.telegramUsername, setProfile, tgUser?.username]);
 
   return (
     <Page title="Личные данные">
@@ -14,6 +68,10 @@ export function ProfilePage() {
         <div className="glass" style={{ padding: 14 }}>
           <div className="h1">Профиль пользователя</div>
           <div className="p">Заполните данные для заказа и доставки.</div>
+          <div style={{ marginTop: 6, fontSize: 15, color: "var(--text)", fontWeight: 600 }}>{accountHandle}</div>
+          <div style={{ marginTop: 4, fontSize: 13, color: "var(--muted)" }}>
+            Зарегистрирован: {formatRegistrationDate(registeredAt)}
+          </div>
         </div>
 
         <div className="glass" style={{ padding: 14, display: "grid", gap: 10 }}>
@@ -31,11 +89,6 @@ export function ProfilePage() {
             placeholder="Дата рождения (YYYY-MM-DD)"
             value={profile.birthDate}
             onChange={(e) => setProfile({ birthDate: e.target.value })}
-          />
-          <Input
-            placeholder="Ник Telegram"
-            value={profile.telegramUsername}
-            onChange={(e) => setProfile({ telegramUsername: e.target.value })}
           />
           <Input
             placeholder="Email"
