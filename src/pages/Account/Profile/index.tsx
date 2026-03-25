@@ -1,15 +1,16 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAccountStore } from "../../../entities/account/model/useAccountStore";
+import { useTelegramUser } from "../../../shared/auth/useTelegramUser";
 import { Button } from "../../../shared/ui/Button";
 import { Input } from "../../../shared/ui/Input";
 import { Page } from "../../../shared/ui/Page";
-import { useAccountStore } from "../../../entities/account/model/useAccountStore";
-import { useTelegramUser } from "../../../shared/auth/useTelegramUser";
 
-const PROFILE_REGISTERED_AT_KEY = "tg_profile_registered_at";
-
-function formatRegistrationDate(value: number): string {
-  return new Date(value).toLocaleString("ru-RU", {
+function formatRegistrationDate(value: string | null): string {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString("ru-RU", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -23,26 +24,6 @@ export function ProfilePage() {
   const { profile, setProfile } = useAccountStore();
   const tgUser = useTelegramUser();
 
-  const [registeredAt] = useState<number>(() => {
-    try {
-      const raw = window.localStorage.getItem(PROFILE_REGISTERED_AT_KEY) ?? "";
-      const parsed = Number(raw);
-      if (Number.isFinite(parsed) && parsed > 0) {
-        return parsed;
-      }
-    } catch {
-      // no-op
-    }
-
-    const now = Date.now();
-    try {
-      window.localStorage.setItem(PROFILE_REGISTERED_AT_KEY, String(now));
-    } catch {
-      // no-op
-    }
-    return now;
-  });
-
   const accountHandle = useMemo(() => {
     if (tgUser?.username) return `@${tgUser.username}`;
     if (tgUser?.firstName) return tgUser.firstName;
@@ -50,8 +31,13 @@ export function ProfilePage() {
   }, [profile.firstName, tgUser?.firstName, tgUser?.username]);
 
   const telegramUsernameView = useMemo(
-    () => (tgUser?.username ? `@${tgUser.username}` : "Не указан в Telegram"),
-    [tgUser?.username],
+    () => (tgUser?.username ? `@${tgUser.username}` : profile.telegramUsername || "Не указан в Telegram"),
+    [profile.telegramUsername, tgUser?.username],
+  );
+
+  const telegramIdView = useMemo(
+    () => String(tgUser?.id ?? profile.telegramId ?? "").trim() || "Не указан в Telegram",
+    [profile.telegramId, tgUser?.id],
   );
 
   useEffect(() => {
@@ -68,7 +54,7 @@ export function ProfilePage() {
           <div className="p">Заполните данные для заказа и доставки.</div>
           <div style={{ marginTop: 6, fontSize: 15, color: "var(--text)", fontWeight: 600 }}>{accountHandle}</div>
           <div style={{ marginTop: 4, fontSize: 13, color: "var(--muted)" }}>
-            Зарегистрирован: {formatRegistrationDate(registeredAt)}
+            Зарегистрирован: {formatRegistrationDate(profile.registeredAt)}
           </div>
         </div>
 
@@ -91,6 +77,11 @@ export function ProfilePage() {
           <Input
             placeholder="Telegram username"
             value={telegramUsernameView}
+            readOnly
+          />
+          <Input
+            placeholder="Telegram ID"
+            value={telegramIdView}
             readOnly
           />
           <Input
