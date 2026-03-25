@@ -3,6 +3,7 @@ import { create } from "zustand";
 export type Profile = {
   firstName: string;
   lastName: string;
+  middleName: string;
   birthDate: string; // YYYY-MM-DD
   telegramUsername: string;
   telegramId: string;
@@ -26,6 +27,7 @@ export const useAccountStore = create<State>((set) => ({
   profile: {
     firstName: "",
     lastName: "",
+    middleName: "",
     birthDate: "",
     telegramUsername: "",
     telegramId: "",
@@ -39,8 +41,6 @@ export const useAccountStore = create<State>((set) => ({
         ...s.profile,
         telegramId: String(payload.telegramId),
         telegramUsername: payload.telegramUsername ? `@${payload.telegramUsername}` : "",
-        firstName: s.profile.firstName.trim() || payload.telegramFirstName || "",
-        lastName: s.profile.lastName.trim() || payload.telegramLastName || "",
         registeredAt: payload.registeredAt,
       },
     })),

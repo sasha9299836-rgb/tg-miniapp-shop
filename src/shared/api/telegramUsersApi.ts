@@ -19,12 +19,16 @@ type UpsertTelegramUserPayload = {
 
 export async function upsertTelegramUser(payload: UpsertTelegramUserPayload): Promise<TgUserRecord> {
   const supabaseUrl = String((import.meta as { env?: Record<string, unknown> }).env?.VITE_SUPABASE_URL ?? "").trim();
+  const upsertRow = {
+    telegram_id: payload.telegramId,
+    telegram_username: payload.username ?? null,
+    telegram_first_name: payload.firstName ?? null,
+    telegram_last_name: payload.lastName ?? null,
+  };
+
   console.log("[tg-user-upsert] request", {
     supabaseUrl,
-    p_telegram_id: payload.telegramId,
-    p_telegram_username: payload.username ?? null,
-    p_telegram_first_name: payload.firstName ?? null,
-    p_telegram_last_name: payload.lastName ?? null,
+    ...upsertRow,
   });
 
   const { data, error } = await supabase.rpc("tg_upsert_telegram_user", {
@@ -35,16 +39,32 @@ export async function upsertTelegramUser(payload: UpsertTelegramUserPayload): Pr
   });
 
   if (error) {
-    console.log("[tg-user-upsert] error", error);
-    throw error;
+    console.log("[tg-user-upsert] rpc error", error);
+  } else {
+    const rpcRow = Array.isArray(data) ? (data[0] as TgUserRecord | undefined) : (data as TgUserRecord | null);
+    if (rpcRow) {
+      console.log("[tg-user-upsert] rpc success", rpcRow);
+      return rpcRow;
+    }
+    console.log("[tg-user-upsert] rpc empty result", data);
   }
 
-  const row = Array.isArray(data) ? (data[0] as TgUserRecord | undefined) : (data as TgUserRecord | null);
-  if (!row) {
-    console.log("[tg-user-upsert] empty result", data);
+  const { data: directData, error: directError } = await supabase
+    .from("tg_users")
+    .upsert(upsertRow, { onConflict: "telegram_id" })
+    .select("id, telegram_id, telegram_username, telegram_first_name, telegram_last_name, registered_at, updated_at")
+    .single();
+
+  if (directError) {
+    console.log("[tg-user-upsert] direct upsert error", directError);
+    throw directError;
+  }
+
+  if (!directData) {
+    console.log("[tg-user-upsert] direct upsert empty result", directData);
     throw new Error("TG_USER_UPSERT_EMPTY_RESULT");
   }
 
-  console.log("[tg-user-upsert] success", row);
-  return row;
+  console.log("[tg-user-upsert] direct upsert success", directData);
+  return directData as TgUserRecord;
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAccountStore } from "../../../entities/account/model/useAccountStore";
 import { useTelegramUser } from "../../../shared/auth/useTelegramUser";
@@ -29,12 +29,6 @@ export function ProfilePage() {
     [profile.telegramUsername, tgUser?.username],
   );
 
-  useEffect(() => {
-    if (tgUser?.firstName && !profile.firstName.trim()) {
-      setProfile({ firstName: tgUser.firstName });
-    }
-  }, [profile.firstName, setProfile, tgUser?.firstName]);
-
   return (
     <Page title="Личные данные">
       <div style={{ display: "grid", gap: 12 }}>
@@ -56,6 +50,11 @@ export function ProfilePage() {
             placeholder="Имя"
             value={profile.firstName}
             onChange={(e) => setProfile({ firstName: e.target.value })}
+          />
+          <Input
+            placeholder="Отчество"
+            value={profile.middleName}
+            onChange={(e) => setProfile({ middleName: e.target.value })}
           />
           <Input
             placeholder="Дата рождения (YYYY-MM-DD)"
