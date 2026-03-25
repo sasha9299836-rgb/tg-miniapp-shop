@@ -1,7 +1,7 @@
 const TG_USER_ID_KEY = "tg_user_id";
 const DEFAULT_TG_USER_ID = 1;
 
-export function getCurrentTgUserId(): number {
+export function getKnownTgUserId(): number | null {
   try {
     const telegramRuntimeId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
     if (typeof telegramRuntimeId === "number" && Number.isInteger(telegramRuntimeId) && telegramRuntimeId > 0) {
@@ -10,10 +10,19 @@ export function getCurrentTgUserId(): number {
     }
 
     const raw = window.localStorage.getItem(TG_USER_ID_KEY);
-    if (raw) {
-      const parsed = Number.parseInt(raw, 10);
-      if (Number.isInteger(parsed) && parsed > 0) return parsed;
-    }
+    if (!raw) return null;
+    const parsed = Number.parseInt(raw, 10);
+    if (Number.isInteger(parsed) && parsed > 0) return parsed;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function getCurrentTgUserId(): number {
+  const known = getKnownTgUserId();
+  if (known) return known;
+  try {
     window.localStorage.setItem(TG_USER_ID_KEY, String(DEFAULT_TG_USER_ID));
     return DEFAULT_TG_USER_ID;
   } catch {

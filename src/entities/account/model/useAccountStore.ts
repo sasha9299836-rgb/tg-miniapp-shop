@@ -4,7 +4,6 @@ export type Profile = {
   firstName: string;
   lastName: string;
   middleName: string;
-  birthDate: string; // YYYY-MM-DD
   phone: string;
   telegramUsername: string;
   telegramId: string;
@@ -29,7 +28,6 @@ export const useAccountStore = create<State>((set) => ({
     firstName: "",
     lastName: "",
     middleName: "",
-    birthDate: "",
     phone: "",
     telegramUsername: "",
     telegramId: "",

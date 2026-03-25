@@ -6,10 +6,14 @@ import {
   saveTelegramUserProfile,
   type TgUserRecord,
 } from "../../../shared/api/telegramUsersApi";
+import { getKnownTgUserId } from "../../../shared/auth/tgUser";
 import { useTelegramUser } from "../../../shared/auth/useTelegramUser";
+import { normalizeFio } from "../../../shared/lib/formatFio";
+import { extractNationalDigits } from "../../../shared/lib/formatPhone";
 import { Button } from "../../../shared/ui/Button";
 import { Input } from "../../../shared/ui/Input";
 import { Page } from "../../../shared/ui/Page";
+import { PhoneInput } from "../../../shared/ui/inputs/PhoneInput";
 
 function formatRegistrationDate(value: string | null): string {
   if (!value) return "-";
@@ -29,7 +33,6 @@ function applyProfileFromDbRow(setProfile: (patch: Partial<Profile>) => void, ro
     lastName: row.last_name ?? "",
     firstName: row.first_name ?? "",
     middleName: row.middle_name ?? "",
-    birthDate: row.birth_date ?? "",
     phone: row.phone ?? "",
     email: row.email ?? "",
     telegramUsername: row.telegram_username ? `@${row.telegram_username}` : "",
@@ -43,6 +46,7 @@ export function ProfilePage() {
   const tgUser = useTelegramUser();
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const telegramUsernameView = useMemo(
     () => (tgUser?.username ? `@${tgUser.username}` : profile.telegramUsername || "Не указан в Telegram"),
@@ -51,6 +55,8 @@ export function ProfilePage() {
 
   const telegramId = useMemo(() => {
     if (tgUser?.id && Number.isInteger(tgUser.id) && tgUser.id > 0) return tgUser.id;
+    const known = getKnownTgUserId();
+    if (known && Number.isInteger(known) && known > 0) return known;
     const parsed = Number.parseInt(profile.telegramId, 10);
     return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
   }, [profile.telegramId, tgUser?.id]);
@@ -77,8 +83,22 @@ export function ProfilePage() {
   }, [setProfile, telegramId]);
 
   const handleSave = async () => {
+    setFormError(null);
     if (!telegramId) {
       console.log("[tg-user-profile-save] skip: telegram_id is missing");
+      setFormError("Не удалось определить Telegram ID");
+      return;
+    }
+
+    const email = profile.email.trim();
+    if (email && !email.includes("@")) {
+      setFormError("Проверьте формат email");
+      return;
+    }
+
+    const phoneDigits = extractNationalDigits(profile.phone);
+    if (profile.phone.trim() && phoneDigits.length !== 10) {
+      setFormError("Проверьте формат телефона");
       return;
     }
 
@@ -89,7 +109,6 @@ export function ProfilePage() {
         lastName: profile.lastName,
         firstName: profile.firstName,
         middleName: profile.middleName,
-        birthDate: profile.birthDate,
         phone: profile.phone,
         email: profile.email,
       });
@@ -97,6 +116,7 @@ export function ProfilePage() {
       nav(-1);
     } catch (error) {
       console.log("[tg-user-profile-save] page error", error);
+      setFormError("Не удалось сохранить профиль");
     } finally {
       setIsSaving(false);
     }
@@ -118,31 +138,44 @@ export function ProfilePage() {
             placeholder="Фамилия"
             value={profile.lastName}
             onChange={(e) => setProfile({ lastName: e.target.value })}
+            autoCapitalize="words"
+            autoCorrect="on"
+            spellCheck
+            onBlur={(e) => setProfile({ lastName: normalizeFio(e.target.value) })}
           />
           <Input
             placeholder="Имя"
             value={profile.firstName}
             onChange={(e) => setProfile({ firstName: e.target.value })}
+            autoCapitalize="words"
+            autoCorrect="on"
+            spellCheck
+            onBlur={(e) => setProfile({ firstName: normalizeFio(e.target.value) })}
           />
           <Input
             placeholder="Отчество"
             value={profile.middleName}
             onChange={(e) => setProfile({ middleName: e.target.value })}
+            autoCapitalize="words"
+            autoCorrect="on"
+            spellCheck
+            onBlur={(e) => setProfile({ middleName: normalizeFio(e.target.value) })}
           />
-          <Input
-            placeholder="Дата рождения (YYYY-MM-DD)"
-            value={profile.birthDate}
-            onChange={(e) => setProfile({ birthDate: e.target.value })}
-          />
-          <Input
+          <PhoneInput
             placeholder="Телефон"
             value={profile.phone}
-            onChange={(e) => setProfile({ phone: e.target.value })}
+            onChange={(value) => setProfile({ phone: value })}
           />
           <Input
             placeholder="Email"
+            type="email"
+            inputMode="email"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             value={profile.email}
             onChange={(e) => setProfile({ email: e.target.value })}
+            onBlur={(e) => setProfile({ email: e.target.value.trim() })}
           />
           <Input
             placeholder="Telegram username"
@@ -150,6 +183,8 @@ export function ProfilePage() {
             readOnly
           />
         </div>
+
+        {formError ? <div style={{ color: "#b00020", fontSize: 13 }}>{formError}</div> : null}
 
         <div style={{ display: "grid", gap: 10 }}>
           <Button onClick={() => void handleSave()} disabled={isSaving || isLoadingProfile}>

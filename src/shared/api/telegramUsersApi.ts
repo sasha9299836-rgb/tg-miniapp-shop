@@ -9,7 +9,6 @@ export type TgUserRecord = {
   last_name: string | null;
   first_name: string | null;
   middle_name: string | null;
-  birth_date: string | null;
   email: string | null;
   phone: string | null;
   registered_at: string;
@@ -60,7 +59,7 @@ export async function upsertTelegramUser(payload: UpsertTelegramUserPayload): Pr
     .from("tg_users")
     .upsert(upsertRow, { onConflict: "telegram_id" })
     .select(
-      "id, telegram_id, telegram_username, telegram_first_name, telegram_last_name, last_name, first_name, middle_name, birth_date, email, phone, registered_at, updated_at",
+      "id, telegram_id, telegram_username, telegram_first_name, telegram_last_name, last_name, first_name, middle_name, email, phone, registered_at, updated_at",
     )
     .single();
 
@@ -83,7 +82,7 @@ export async function loadTelegramUserProfile(telegramId: number): Promise<TgUse
   const { data, error } = await supabase
     .from("tg_users")
     .select(
-      "id, telegram_id, telegram_username, telegram_first_name, telegram_last_name, last_name, first_name, middle_name, birth_date, email, phone, registered_at, updated_at",
+      "id, telegram_id, telegram_username, telegram_first_name, telegram_last_name, last_name, first_name, middle_name, email, phone, registered_at, updated_at",
     )
     .eq("telegram_id", telegramId)
     .maybeSingle();
@@ -102,19 +101,16 @@ export type SaveTelegramUserProfilePayload = {
   lastName: string;
   firstName: string;
   middleName: string;
-  birthDate: string;
   phone: string;
   email: string;
 };
 
 export async function saveTelegramUserProfile(payload: SaveTelegramUserProfilePayload): Promise<TgUserRecord> {
-  const normalizedBirthDate = payload.birthDate.trim();
   const upsertRow = {
     telegram_id: payload.telegramId,
     last_name: payload.lastName.trim() || null,
     first_name: payload.firstName.trim() || null,
     middle_name: payload.middleName.trim() || null,
-    birth_date: normalizedBirthDate || null,
     phone: payload.phone.trim() || null,
     email: payload.email.trim() || null,
     updated_at: new Date().toISOString(),
@@ -126,7 +122,7 @@ export async function saveTelegramUserProfile(payload: SaveTelegramUserProfilePa
     .from("tg_users")
     .upsert(upsertRow, { onConflict: "telegram_id" })
     .select(
-      "id, telegram_id, telegram_username, telegram_first_name, telegram_last_name, last_name, first_name, middle_name, birth_date, email, phone, registered_at, updated_at",
+      "id, telegram_id, telegram_username, telegram_first_name, telegram_last_name, last_name, first_name, middle_name, email, phone, registered_at, updated_at",
     )
     .single();
 
