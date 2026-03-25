@@ -10,14 +10,6 @@ export type Profile = {
   email: string;
 };
 
-export type TelegramBootstrapStatus =
-  | "idle"
-  | "started"
-  | "no_user"
-  | "upsert_started"
-  | "upsert_success"
-  | "upsert_error";
-
 type State = {
   profile: Profile;
   setProfile: (patch: Partial<Profile>) => void;
@@ -28,11 +20,6 @@ type State = {
     telegramLastName: string | null;
     registeredAt: string | null;
   }) => void;
-  telegramDebug: {
-    status: TelegramBootstrapStatus;
-    upsertError: string | null;
-  };
-  setTelegramDebug: (patch: Partial<State["telegramDebug"]>) => void;
 };
 
 export const useAccountStore = create<State>((set) => ({
@@ -56,13 +43,5 @@ export const useAccountStore = create<State>((set) => ({
         lastName: s.profile.lastName.trim() || payload.telegramLastName || "",
         registeredAt: payload.registeredAt,
       },
-    })),
-  telegramDebug: {
-    status: "idle",
-    upsertError: null,
-  },
-  setTelegramDebug: (patch) =>
-    set((s) => ({
-      telegramDebug: { ...s.telegramDebug, ...patch },
     })),
 }));
