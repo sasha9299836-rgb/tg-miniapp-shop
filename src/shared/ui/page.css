@@ -8,10 +8,11 @@
   /* 14–18px gap for iOS grouped */
   gap: 22px;
 
-  padding: var(--page-pad-y) var(--page-pad-x) calc(var(--page-pad-bottom) + env(safe-area-inset-bottom, 0px));
+  padding: var(--page-pad-y) var(--page-pad-x) calc(var(--page-pad-bottom) + var(--safe-bottom, 0px));
 }
 
 .ui-page--compact {
   gap: 16px;
-  padding: var(--page-pad-compact-y) var(--page-pad-x) calc(var(--page-pad-compact-bottom) + env(safe-area-inset-bottom, 0px));
+  padding: var(--page-pad-compact-y) var(--page-pad-x) calc(var(--page-pad-compact-bottom) + var(--safe-bottom, 0px));
 }
+

@@ -49,18 +49,16 @@ export function ProfilePage() {
     return profile.firstName || "Пользователь";
   }, [profile.firstName, tgUser?.firstName, tgUser?.username]);
 
+  const telegramUsernameView = useMemo(
+    () => (tgUser?.username ? `@${tgUser.username}` : "Не указан в Telegram"),
+    [tgUser?.username],
+  );
+
   useEffect(() => {
     if (tgUser?.firstName && !profile.firstName.trim()) {
       setProfile({ firstName: tgUser.firstName });
     }
   }, [profile.firstName, setProfile, tgUser?.firstName]);
-
-  useEffect(() => {
-    if (!tgUser?.username) return;
-    const current = profile.telegramUsername.trim();
-    if (current && current !== "@username") return;
-    setProfile({ telegramUsername: `@${tgUser.username}` });
-  }, [profile.telegramUsername, setProfile, tgUser?.username]);
 
   return (
     <Page title="Личные данные">
@@ -89,6 +87,11 @@ export function ProfilePage() {
             placeholder="Дата рождения (YYYY-MM-DD)"
             value={profile.birthDate}
             onChange={(e) => setProfile({ birthDate: e.target.value })}
+          />
+          <Input
+            placeholder="Telegram username"
+            value={telegramUsernameView}
+            readOnly
           />
           <Input
             placeholder="Email"

@@ -1,6 +1,7 @@
 export type TelegramWebApp = {
   ready?: () => void;
   expand?: () => void;
+  requestFullscreen?: () => void | Promise<void>;
   close?: () => void;
   disableVerticalSwipes?: () => void;
   setHeaderColor?: (color: string) => void;
@@ -17,6 +18,18 @@ export type TelegramWebApp = {
   themeParams?: Record<string, string>;
   colorScheme?: "light" | "dark";
   platform?: string;
+  safeAreaInset?: {
+    top?: number;
+    bottom?: number;
+    left?: number;
+    right?: number;
+  };
+  contentSafeAreaInset?: {
+    top?: number;
+    bottom?: number;
+    left?: number;
+    right?: number;
+  };
   onEvent?: (event: string, cb: () => void) => void;
   offEvent?: (event: string, cb: () => void) => void;
 };
@@ -62,11 +75,33 @@ export function getTelegramUser(): TelegramUser | null {
 
 export function initTelegramWebApp() {
   const tg = getTg();
+  if (!tg) return;
+
+  const applySafeArea = () => {
+    const safeArea = tg.contentSafeAreaInset ?? tg.safeAreaInset;
+    if (!safeArea) return;
+
+    const root = document.documentElement;
+    const top = Number(safeArea.top ?? 0);
+    const bottom = Number(safeArea.bottom ?? 0);
+
+    root.style.setProperty("--tg-safe-top", `${Math.max(0, top)}px`);
+    root.style.setProperty("--tg-safe-bottom", `${Math.max(0, bottom)}px`);
+  };
+
   tg?.ready?.();
   tg?.expand?.();
+  if (typeof tg.requestFullscreen === "function") {
+    Promise.resolve(tg.requestFullscreen()).catch(() => {
+      // requestFullscreen is not supported in all Telegram clients.
+    });
+  }
   tg?.disableVerticalSwipes?.();
   tg?.setHeaderColor?.("#ffffff");
   tg?.setBackgroundColor?.("#ffffff");
+  applySafeArea();
+  tg?.onEvent?.("safe_area_changed", applySafeArea);
+  tg?.onEvent?.("viewport_changed", applySafeArea);
 }
 
 export function closeTelegramWebApp() {

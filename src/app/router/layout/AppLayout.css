@@ -1,4 +1,4 @@
-.app-shell {
+﻿.app-shell {
   min-height: 100vh;
   width: 100%;
   padding-top: var(--safe-top, 0px);
@@ -19,6 +19,7 @@
 }
 
 .app-content {
-  /* РјРµСЃС‚Рѕ РїРѕРґ С‚Р°Р±Р±Р°СЂ + safe area */
-  padding-bottom: calc(86px + env(safe-area-inset-bottom, 0px));
+  /* Р СР ВµРЎРѓРЎвЂљР С• Р С—Р С•Р Т‘ РЎвЂљР В°Р В±Р В±Р В°РЎР‚ + safe area */
+  padding-bottom: calc(86px + var(--safe-bottom, 0px));
 }
+

@@ -1,4 +1,6 @@
 :root {
+  --tg-safe-bottom: 0px;
+  --tg-safe-top: 0px;
   --bg: #f6f7fb;
   --text: rgba(8, 10, 18, 0.92);
   --muted: rgba(8, 10, 18, 0.58);
@@ -147,8 +149,8 @@ body::after {
 .themeGate__label { font-weight: 800; }
 
 :root {
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--tg-safe-bottom));
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--tg-safe-top));
   --tabbar-h: 70px;
 }
 

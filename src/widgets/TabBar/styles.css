@@ -4,7 +4,7 @@
   right: 0;
   bottom: 0;
 
-  padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px));
+  padding: 12px 14px calc(12px + var(--safe-bottom, 0px));
   z-index: 50;
 }
 
@@ -109,3 +109,4 @@
   font-weight: 650;
   opacity: 0.95;
 }
+
