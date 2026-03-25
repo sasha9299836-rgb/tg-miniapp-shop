@@ -92,9 +92,14 @@ export function initTelegramWebApp() {
   tg?.ready?.();
   tg?.expand?.();
   if (typeof tg.requestFullscreen === "function") {
-    Promise.resolve(tg.requestFullscreen()).catch(() => {
-      // requestFullscreen is not supported in all Telegram clients.
-    });
+    try {
+      const maybePromise = tg.requestFullscreen();
+      Promise.resolve(maybePromise).catch((error) => {
+        console.log("[telegram] requestFullscreen rejected", error);
+      });
+    } catch (error) {
+      console.log("[telegram] requestFullscreen unsupported", error);
+    }
   }
   tg?.disableVerticalSwipes?.();
   tg?.setHeaderColor?.("#ffffff");
