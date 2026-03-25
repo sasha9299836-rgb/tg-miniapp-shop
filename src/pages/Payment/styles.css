@@ -1,0 +1,130 @@
+.payment-page {
+  display: grid;
+  gap: 12px;
+}
+
+.payment-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 800;
+}
+
+.payment-total__value {
+  font-weight: 900;
+}
+
+.payment-total__note {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.payment-requisites {
+  display: grid;
+  gap: 6px;
+}
+
+.payment-requisites__title {
+  font-weight: 900;
+  margin-bottom: 4px;
+}
+
+.payment-requisites__line {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.payment-upload {
+  display: grid;
+  gap: 10px;
+}
+
+.payment-upload__title {
+  font-weight: 900;
+}
+
+.payment-upload__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+  width: fit-content;
+}
+
+.payment-upload__label:active {
+  opacity: 0.8;
+}
+
+.payment-upload__icon {
+  width: 18px;
+  height: 18px;
+  color: var(--muted);
+}
+
+.payment-upload__input {
+  display: none;
+}
+
+.payment-upload__file {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.payment-upload__preview {
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid var(--glass-stroke);
+}
+
+.payment-upload__hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.payment-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.payment-section {
+  display: grid;
+  gap: 10px;
+}
+
+.payment-section__title {
+  font-weight: 900;
+}
+
+.payment-section__row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.payment-segment {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.payment-segment__btn {
+  border-radius: 999px;
+  border: 1px solid var(--glass-stroke);
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.payment-segment__btn.is-active {
+  background:
+    linear-gradient(140deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.08)),
+    linear-gradient(135deg, rgba(90, 130, 255, 0.35), rgba(140, 180, 255, 0.25));
+  color: var(--text);
+}

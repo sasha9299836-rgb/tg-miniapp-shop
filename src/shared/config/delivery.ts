@@ -1,0 +1,1 @@
+export const DEFAULT_DELIVERY_FEE_RUB = 400;

@@ -1,0 +1,159 @@
+﻿.cart-page {
+  display: grid;
+  gap: 12px;
+}
+
+.cart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cart-title {
+  font-size: 18px;
+  margin: 0;
+}
+
+.cart-clear {
+  width: auto;
+}
+
+.cart-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.cart-item {
+  display: grid;
+  gap: 10px;
+}
+
+.cart-item__row {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 10px;
+}
+
+.cart-item__image {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 12px;
+}
+
+.cart-item__title {
+  font-weight: 800;
+}
+
+.cart-item__desc {
+  color: var(--muted);
+  margin-top: 4px;
+  font-size: 13px;
+}
+
+.cart-item__price {
+  color: var(--text);
+  margin-top: 6px;
+  font-weight: 700;
+}
+
+.cart-item__actions {
+  margin-top: 4px;
+}
+
+.cart-section__title {
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.cart-pvz {
+  display: grid;
+  gap: 10px;
+}
+
+.cart-pvz__list {
+  display: grid;
+  gap: 0;
+}
+
+.cart-pvz__badge {
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.cart-muted {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.cart-recipient {
+  display: grid;
+  gap: 10px;
+}
+
+.cart-recipient__content {
+  display: grid;
+  gap: 4px;
+}
+
+.cart-recipient__name {
+  font-weight: 800;
+}
+
+.cart-recipient__line {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.cart-pvz__picker {
+  display: grid;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.cart-pvz__empty {
+  display: grid;
+  gap: 10px;
+}
+
+.cart-total {
+  display: grid;
+  gap: 10px;
+}
+
+.cart-total__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cart-total__label {
+  font-weight: 800;
+}
+
+.cart-total__value {
+  font-weight: 900;
+}
+
+.cart-total__sum .cart-total__label,
+.cart-total__sum .cart-total__value {
+  font-weight: 950;
+}
+
+.cart-actions {
+  margin-top: 12px;
+}
+
+.grouped-list .ui-li {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.grouped-list .ui-li__divider {
+  left: 0;
+  right: 0;
+}

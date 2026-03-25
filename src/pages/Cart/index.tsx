@@ -1,0 +1,230 @@
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useCartStore } from "../../entities/cart/model/useCartStore";
+import { useProductsStore } from "../../entities/product/model/useProductsStore";
+import { getCurrentTgUserId } from "../../shared/auth/tgUser";
+import {
+  listAddressPresets,
+  readSelectedPresetId,
+  saveSelectedPresetId,
+  type TgAddressPreset,
+} from "../../shared/api/addressPresetsApi";
+import { calculateDeliveryQuote, type DeliveryQuoteResult } from "../../shared/api/ordersApi";
+import { EmptyState } from "../../shared/ui/EmptyState";
+import { Button } from "../../shared/ui/Button";
+import { Card } from "../../shared/ui/Card";
+import { Page } from "../../shared/ui/Page";
+import "./styles.css";
+
+export function CartPage() {
+  const nav = useNavigate();
+  const cart = useCartStore();
+  const { products, load } = useProductsStore();
+  const [presets, setPresets] = useState<TgAddressPreset[]>([]);
+  const [selectedPreset, setSelectedPreset] = useState<TgAddressPreset | null>(null);
+  const [presetError, setPresetError] = useState<string | null>(null);
+  const [deliveryQuote, setDeliveryQuote] = useState<DeliveryQuoteResult | null>(null);
+  const [deliveryQuoteError, setDeliveryQuoteError] = useState<string | null>(null);
+  const [isDeliveryQuoteLoading, setIsDeliveryQuoteLoading] = useState(false);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    const loadPresets = async () => {
+      try {
+        setPresetError(null);
+        const rows = await listAddressPresets(getCurrentTgUserId());
+        setPresets(rows);
+        const selectedId = readSelectedPresetId();
+        const active =
+          rows.find((row) => row.id === selectedId) ??
+          rows.find((row) => row.is_default) ??
+          rows[0] ??
+          null;
+        setSelectedPreset(active);
+        saveSelectedPresetId(active?.id ?? null);
+      } catch (error) {
+        console.error("cart presets load failed", error);
+        setPresetError("Не удалось загрузить адрес получателя.");
+      }
+    };
+
+    void loadPresets();
+  }, []);
+
+  const lines = useMemo(() => {
+    return cart.items
+      .map((item) => {
+        const product = products.find((row) => row.id === item.productId);
+        if (!product) return null;
+        return { ...item, product, lineSum: product.price * item.qty };
+      })
+      .filter(Boolean) as Array<{
+        productId: number;
+        qty: number;
+        product: {
+          id: number;
+          title: string;
+          description?: string;
+          price: number;
+          images?: string[];
+          postId?: string;
+        };
+        lineSum: number;
+      }>;
+  }, [cart.items, products]);
+
+  const quotePostIds = useMemo(
+    () =>
+      lines.flatMap((line) => {
+        const postId = line.product.postId ? String(line.product.postId) : "";
+        if (!postId) return [];
+        return Array.from({ length: Math.max(1, line.qty) }, () => postId);
+      }),
+    [lines],
+  );
+
+  useEffect(() => {
+    const run = async () => {
+      if (!quotePostIds.length || !selectedPreset?.city_code || !selectedPreset?.pvz_code) {
+        setDeliveryQuote(null);
+        setDeliveryQuoteError(null);
+        return;
+      }
+
+      setIsDeliveryQuoteLoading(true);
+      setDeliveryQuoteError(null);
+      try {
+        const quote = await calculateDeliveryQuote({
+          post_ids: quotePostIds,
+          receiver_city_code: selectedPreset.city_code,
+          delivery_point: selectedPreset.pvz_code,
+        });
+        setDeliveryQuote(quote);
+      } catch (error) {
+        console.error("cart delivery quote failed", error);
+        setDeliveryQuote(null);
+        setDeliveryQuoteError("Не удалось рассчитать доставку. Проверьте адрес и попробуйте снова.");
+      } finally {
+        setIsDeliveryQuoteLoading(false);
+      }
+    };
+    void run();
+  }, [quotePostIds, selectedPreset?.city_code, selectedPreset?.pvz_code]);
+
+  const itemsSum = useMemo(() => lines.reduce((sum, line) => sum + line.lineSum, 0), [lines]);
+  const deliveryTotalFee = deliveryQuote?.delivery_total_fee_rub ?? 0;
+  const total = itemsSum + deliveryTotalFee;
+  const totalQty = cart.totalQty();
+  const isPresetValid = Boolean(
+    selectedPreset?.recipient_fio.trim() &&
+      selectedPreset?.recipient_phone.trim() &&
+      selectedPreset?.city.trim() &&
+      selectedPreset?.pvz.trim(),
+  );
+
+  if (!cart.items.length) {
+    return (
+      <Page>
+        <div className="cart-page">
+          <div className="cart-header">
+            <h1 className="cart-title">Корзина</h1>
+          </div>
+          <EmptyState
+            title="Корзина пуста"
+            text="Добавьте товары из каталога, чтобы оформить заказ."
+          />
+          <div className="cart-actions">
+            <Button onClick={() => nav("/catalog")}>В каталог</Button>
+          </div>
+        </div>
+      </Page>
+    );
+  }
+
+  return (
+    <Page>
+      <div className="cart-page">
+        <div className="cart-header">
+          <h1 className="cart-title">Корзина</h1>
+          <Button variant="secondary" className="cart-clear" onClick={() => cart.clear()}>
+            Удалить все
+          </Button>
+        </div>
+
+        <div className="cart-grid">
+          {lines.map((line) => (
+            <Card key={line.productId} className="ui-card--padded cart-item">
+              <div className="cart-item__row">
+                <img src={line.product.images?.[0]} alt={line.product.title} className="cart-item__image" />
+                <div>
+                  <div className="cart-item__title">{line.product.title}</div>
+                  {line.product.description ? (
+                    <div className="cart-item__desc">{line.product.description}</div>
+                  ) : null}
+                  <div className="cart-item__price">
+                    {line.qty === 1
+                      ? `${line.product.price.toLocaleString("ru-RU")} ₽`
+                      : `${line.product.price.toLocaleString("ru-RU")} ₽ × ${line.qty} = ${line.lineSum.toLocaleString("ru-RU")} ₽`}
+                  </div>
+                </div>
+              </div>
+
+              <div className="cart-item__actions">
+                <Button variant="secondary" onClick={() => cart.remove(line.productId)}>Удалить</Button>
+              </div>
+            </Card>
+          ))}
+        </div>
+
+        <Card className="ui-card--padded cart-recipient">
+          <div className="cart-section__title">Получатель и доставка</div>
+          {selectedPreset && isPresetValid ? (
+            <div className="cart-recipient__content">
+              <div className="cart-recipient__name">{selectedPreset.name}</div>
+              <div className="cart-recipient__line">{selectedPreset.recipient_fio}</div>
+              <div className="cart-recipient__line">{selectedPreset.recipient_phone}</div>
+              <div className="cart-recipient__line">{selectedPreset.city}</div>
+              <div className="cart-recipient__line">{selectedPreset.pvz}</div>
+            </div>
+          ) : (
+            <div className="cart-muted">
+              Выберите и заполните адрес получателя.
+            </div>
+          )}
+          <Button variant="secondary" onClick={() => nav("/account/addresses")}>
+            Изменить
+          </Button>
+          {presetError ? <div className="cart-muted">{presetError}</div> : null}
+          {!presets.length ? <div className="cart-muted">Адреса пока не добавлены.</div> : null}
+        </Card>
+
+        <Card className="ui-card--padded cart-total">
+          <div className="cart-total__row">
+            <div className="cart-total__label">Товары ({totalQty})</div>
+            <div className="cart-total__value">{itemsSum.toLocaleString("ru-RU")} ₽</div>
+          </div>
+          <div className="cart-total__row">
+            <div className="cart-total__label">Доставка</div>
+            <div className="cart-total__value">
+              {isDeliveryQuoteLoading ? "..." : `${deliveryTotalFee.toLocaleString("ru-RU")} ₽`}
+            </div>
+          </div>
+          <div className="cart-total__row cart-total__sum">
+            <div className="cart-total__label">Итого</div>
+            <div className="cart-total__value">{total.toLocaleString("ru-RU")} ₽</div>
+          </div>
+          {deliveryQuoteError ? <div className="cart-muted">{deliveryQuoteError}</div> : null}
+          {!deliveryQuote && !isDeliveryQuoteLoading ? (
+            <div className="cart-muted">Стоимость доставки появится после выбора валидного адреса.</div>
+          ) : null}
+          <Button onClick={() => nav("/checkout")}>Перейти к оплате</Button>
+        </Card>
+      </div>
+    </Page>
+  );
+}
+
+export default CartPage;

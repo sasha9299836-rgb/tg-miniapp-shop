@@ -1,0 +1,14 @@
+{
+  "name": "tg-miniapp-bot",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "start:debug": "node --trace-uncaught --trace-warnings index.js"
+  },
+  "dependencies": {
+    "telegraf": "^4.16.3",
+    "dotenv": "^16.4.7"
+  }
+}

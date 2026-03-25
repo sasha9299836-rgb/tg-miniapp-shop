@@ -1,0 +1,54 @@
+.loyalty-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.loyalty-card {
+  display: grid;
+  gap: 8px;
+}
+
+.loyalty-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.loyalty-card__title {
+  font-weight: 800;
+}
+
+.loyalty-card__discount {
+  font-weight: 800;
+}
+
+.loyalty-card__desc {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.loyalty-card__status {
+  display: inline-flex;
+}
+
+.loyalty-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-stroke);
+  background:
+    linear-gradient(140deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.1)),
+    var(--glass);
+  font-weight: 800;
+  font-size: 12px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.loyalty-pill.is-done {
+  background:
+    linear-gradient(140deg, rgba(160, 255, 200, 0.6), rgba(255, 255, 255, 0.1)),
+    var(--glass);
+}

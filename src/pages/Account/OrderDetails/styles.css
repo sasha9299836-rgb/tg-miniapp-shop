@@ -1,0 +1,146 @@
+.order-details-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.order-details-card {
+  display: grid;
+  gap: 10px;
+}
+
+.order-details-toggle {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.order-details-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.order-details-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.order-status-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid var(--glass-stroke);
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.order-status-badge {
+  width: fit-content;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-stroke);
+  background:
+    linear-gradient(140deg, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.12)),
+    var(--glass);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.order-status-badge--neutral {
+  color: #344054;
+}
+
+.order-status-badge--info {
+  color: #155eef;
+}
+
+.order-status-badge--success {
+  color: #067647;
+}
+
+.order-status-badge--warning {
+  color: #b54708;
+}
+
+.order-status-badge--danger {
+  color: #b42318;
+}
+
+.order-status-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.order-status-title {
+  font-weight: 700;
+}
+
+.order-status-subtitle {
+  color: var(--muted);
+}
+
+.order-details-row span:first-child {
+  color: var(--muted);
+}
+
+.order-details-row span:last-child {
+  text-align: right;
+  font-weight: 600;
+}
+
+.order-details-section-title {
+  font-weight: 700;
+}
+
+.order-details-product {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.order-details-product-image {
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.order-details-product-title {
+  font-weight: 700;
+}
+
+.order-details-product-meta {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.order-details-timeline {
+  display: grid;
+  gap: 8px;
+}
+
+.order-details-timeline-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid var(--glass-stroke);
+}
+
+.order-details-timeline-status {
+  font-weight: 600;
+}
+
+.order-details-timeline-time {
+  color: var(--muted);
+  white-space: nowrap;
+}

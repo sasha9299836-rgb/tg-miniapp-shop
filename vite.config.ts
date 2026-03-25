@@ -1,0 +1,65 @@
+import fs from "node:fs";
+import path from "node:path";
+import { defineConfig, loadEnv } from "vite";
+import react from "@vitejs/plugin-react";
+
+function readEnvFile(filePath: string): Record<string, string> {
+  if (!fs.existsSync(filePath)) return {};
+  const content = fs.readFileSync(filePath, "utf8");
+  const vars: Record<string, string> = {};
+
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const idx = line.indexOf("=");
+    if (idx <= 0) continue;
+    const key = line.slice(0, idx).trim();
+    const value = line.slice(idx + 1).trim();
+    vars[key] = value;
+  }
+
+  return vars;
+}
+
+export default defineConfig(({ mode }) => {
+  const root = process.cwd();
+  const sharedEnv = readEnvFile(path.resolve(root, ".env.shared"));
+  const viteEnv = loadEnv(mode, root, "VITE_");
+  const merged = { ...sharedEnv, ...viteEnv };
+
+  // Expose every VITE_* key from the shared file to import.meta.env at build/dev time.
+  const defineEnv: Record<string, string> = {};
+  for (const [key, value] of Object.entries(merged)) {
+    if (!key.startsWith("VITE_")) continue;
+    defineEnv[`import.meta.env.${key}`] = JSON.stringify(value);
+  }
+
+  const rawBaseUrl = String(merged.VITE_CDEK_PROXY_BASE_URL ?? "").trim();
+  const explicitProxyTarget = String(merged.VITE_CDEK_PROXY_TARGET ?? "").trim();
+  let proxyTarget = explicitProxyTarget;
+  if (!proxyTarget && rawBaseUrl) {
+    try {
+      proxyTarget = new URL(rawBaseUrl).origin;
+    } catch {
+      proxyTarget = "";
+    }
+  }
+  if (!proxyTarget) {
+    proxyTarget = "http://127.0.0.1:8787";
+  }
+
+  return {
+    plugins: [react()],
+    define: defineEnv,
+    server: {
+      allowedHosts: true,
+      proxy: {
+        "/api/cdek": {
+          target: proxyTarget,
+          changeOrigin: true,
+          secure: false,
+        },
+      },
+    },
+  };
+});

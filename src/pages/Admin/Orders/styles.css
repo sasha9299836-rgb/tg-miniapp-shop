@@ -1,0 +1,340 @@
+.admin-orders-toolbar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-orders-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-order-card {
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.admin-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-order-card__header {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.admin-order-card__product {
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+}
+
+.admin-order-card__preview {
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.admin-order-card__preview--empty {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.admin-order-card__title-block {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.admin-order-card__title {
+  font-weight: 700;
+  word-break: break-word;
+}
+
+.admin-order-card__subtitle {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.admin-order-status-pill {
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.admin-order-status-pill--neutral {
+  background: rgba(15, 23, 42, 0.08);
+  color: #334155;
+}
+
+.admin-order-status-pill--info {
+  background: rgba(29, 78, 216, 0.12);
+  color: #1d4ed8;
+}
+
+.admin-order-status-pill--success {
+  background: rgba(22, 163, 74, 0.14);
+  color: #15803d;
+}
+
+.admin-order-status-pill--warning {
+  background: rgba(245, 158, 11, 0.16);
+  color: #b45309;
+}
+
+.admin-order-status-pill--danger {
+  background: rgba(220, 38, 38, 0.14);
+  color: #b91c1c;
+}
+
+.admin-operational-block {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.52);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.admin-operational-block__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-operational-block__title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.admin-operational-block__summary {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.admin-operational-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.admin-badge--neutral {
+  background: rgba(15, 23, 42, 0.08);
+  color: #475569;
+}
+
+.admin-badge--info {
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
+}
+
+.admin-badge--success {
+  background: rgba(22, 163, 74, 0.14);
+  color: #15803d;
+}
+
+.admin-badge--warning {
+  background: rgba(245, 158, 11, 0.16);
+  color: #b45309;
+}
+
+.admin-badge--danger {
+  background: rgba(220, 38, 38, 0.14);
+  color: #b91c1c;
+}
+
+.admin-operational-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.admin-operational-field {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-operational-field__label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.admin-operational-field__value {
+  font-size: 14px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.admin-operational-field__value--mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.admin-operational-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-operational-reject {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-operational-reject__input {
+  width: 100%;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+}
+
+.admin-operational-timeline {
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  padding-top: 10px;
+}
+
+.admin-operational-timeline > summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.admin-operational-timeline__content {
+  margin-top: 10px;
+}
+
+.admin-operational-timeline__list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-operational-timeline__item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px 0;
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.admin-operational-timeline__item:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.admin-operational-timeline__label {
+  font-weight: 600;
+}
+
+.admin-operational-timeline__meta,
+.admin-operational-timeline__time {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.admin-operational-timeline__time {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  text-align: right;
+}
+
+.admin-operational-empty,
+.admin-operational-error {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.admin-operational-error {
+  color: #b42318;
+}
+
+.admin-order-card__details-grid {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.admin-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  z-index: 50;
+}
+
+.admin-confirm-dialog {
+  width: min(100%, 460px);
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+  border-radius: 18px;
+}
+
+.admin-confirm-dialog__title {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.admin-confirm-dialog__text {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.admin-confirm-dialog__input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.admin-confirm-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 720px) {
+  .admin-order-card__header,
+  .admin-operational-timeline__item {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+
+  .admin-order-status-pill,
+  .admin-operational-timeline__time {
+    justify-self: start;
+    text-align: left;
+  }
+
+  .admin-operational-actions .btn,
+  .admin-quick-actions .btn,
+  .admin-confirm-dialog__actions .btn,
+  .admin-orders-toolbar .btn {
+    width: 100%;
+  }
+}

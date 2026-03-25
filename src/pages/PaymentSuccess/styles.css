@@ -1,0 +1,13 @@
+﻿.payment-success__card {
+  padding: 0;
+}
+
+.payment-success__content {
+  padding: 18px 18px 16px;
+  display: grid;
+  gap: 8px;
+}
+
+.payment-success__title {
+  line-height: 1.25;
+}

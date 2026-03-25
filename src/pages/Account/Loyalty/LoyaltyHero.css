@@ -1,0 +1,64 @@
+.loyalty-hero-card {
+  position: relative;
+}
+
+.loyalty-hero {
+  display: grid;
+  gap: 12px;
+  align-items: center;
+  text-align: center;
+}
+
+.loyalty-hero__symbol {
+  display: grid;
+  place-items: center;
+  margin: 0 auto;
+}
+
+.loyalty-hero__meta {
+  display: grid;
+  gap: 4px;
+}
+
+.loyalty-hero__title {
+  font-weight: 800;
+  font-size: 16px;
+}
+
+.loyalty-hero__subtitle {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.loyalty-hero__progress {
+  display: grid;
+  gap: 8px;
+}
+
+.loyalty-hero__progressText {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.loyalty-hero__bar {
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05));
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.loyalty-hero__barFill {
+  height: 100%;
+  background: linear-gradient(90deg, rgba(110, 160, 255, 0.95), rgba(160, 210, 255, 0.8));
+  position: relative;
+}
+
+.loyalty-hero__barFill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  opacity: 0.6;
+}
