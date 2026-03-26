@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAccountStore } from "../../entities/account/model/useAccountStore";
 import { useAdminStore } from "../../entities/account/model/useAdminStore";
 import { adminLogin } from "../../shared/api/adminApi";
-import { isAdminTelegramUserId } from "../../shared/auth/adminAccess";
-import { useTelegramUser } from "../../shared/auth/useTelegramUser";
 import { Card, CardText, CardTitle } from "../../shared/ui/Card";
 import { ListItem } from "../../shared/ui/ListItem";
 import { Page } from "../../shared/ui/Page";
@@ -12,8 +11,7 @@ import "./styles.css";
 
 export function AccountPage() {
   const nav = useNavigate();
-  const tgUser = useTelegramUser();
-  const canSeeAdminLogin = isAdminTelegramUserId(tgUser?.id);
+  const isDbAdmin = useAccountStore((s) => s.profile.isAdmin);
   const { mode, setMode } = useThemeStore();
   const { isAdmin, load, setSessionToken, clearAdmin } = useAdminStore();
   const [code, setCode] = useState("");
@@ -25,13 +23,13 @@ export function AccountPage() {
   }, [load]);
 
   useEffect(() => {
-    if (!canSeeAdminLogin) {
+    if (!isDbAdmin) {
       clearAdmin();
     }
-  }, [canSeeAdminLogin, clearAdmin]);
+  }, [clearAdmin, isDbAdmin]);
 
   const onLogin = async () => {
-    if (isSubmitting || !canSeeAdminLogin) return;
+    if (isSubmitting || !isDbAdmin) return;
 
     setIsSubmitting(true);
     setLoginError(null);
@@ -58,7 +56,7 @@ export function AccountPage() {
           <CardTitle>Аккаунт</CardTitle>
           <CardText>Профиль, лояльность, адреса и заказы.</CardText>
 
-          {canSeeAdminLogin ? (
+          {isDbAdmin ? (
             <div style={{ marginTop: 10 }}>
               <input
                 type="password"
@@ -118,7 +116,7 @@ export function AccountPage() {
         </Card>
 
         <div className="account-list">
-          {isAdmin && canSeeAdminLogin ? (
+          {isAdmin && isDbAdmin ? (
             <ListItem
               title="Админка"
               subtitle="Управление данными"

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAccountStore, type Profile } from "../../../entities/account/model/useAccountStore";
+import { useAdminStore } from "../../../entities/account/model/useAdminStore";
 import {
   loadTelegramUserProfile,
   saveTelegramUserProfile,
@@ -36,6 +37,7 @@ function applyProfileFromDbRow(setProfile: (patch: Partial<Profile>) => void, ro
     phone: row.phone ?? "",
     email: row.email ?? "",
     telegramUsername: row.telegram_username ? `@${row.telegram_username}` : "",
+    isAdmin: Boolean(row.is_admin),
     registeredAt: row.registered_at ?? null,
   });
 }
@@ -43,6 +45,7 @@ function applyProfileFromDbRow(setProfile: (patch: Partial<Profile>) => void, ro
 export function ProfilePage() {
   const nav = useNavigate();
   const { profile, setProfile } = useAccountStore();
+  const setDbAdmin = useAdminStore((s) => s.setDbAdmin);
   const tgUser = useTelegramUser();
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
@@ -68,6 +71,7 @@ export function ProfilePage() {
     void loadTelegramUserProfile(telegramId)
       .then((row) => {
         if (!active || !row) return;
+        setDbAdmin(Boolean(row.is_admin));
         applyProfileFromDbRow(setProfile, row);
       })
       .catch((error) => {
@@ -80,7 +84,7 @@ export function ProfilePage() {
     return () => {
       active = false;
     };
-  }, [setProfile, telegramId]);
+  }, [setDbAdmin, setProfile, telegramId]);
 
   const handleSave = async () => {
     setFormError(null);
@@ -112,6 +116,7 @@ export function ProfilePage() {
         phone: profile.phone,
         email: profile.email,
       });
+      setDbAdmin(Boolean(row.is_admin));
       applyProfileFromDbRow(setProfile, row);
       nav(-1);
     } catch (error) {

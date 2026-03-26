@@ -7,6 +7,7 @@ export type Profile = {
   phone: string;
   telegramUsername: string;
   telegramId: string;
+  isAdmin: boolean;
   registeredAt: string | null;
   email: string;
 };
@@ -19,6 +20,7 @@ type State = {
     telegramUsername: string | null;
     telegramFirstName: string | null;
     telegramLastName: string | null;
+    isAdmin: boolean;
     registeredAt: string | null;
   }) => void;
 };
@@ -31,6 +33,7 @@ export const useAccountStore = create<State>((set) => ({
     phone: "",
     telegramUsername: "",
     telegramId: "",
+    isAdmin: false,
     registeredAt: null,
     email: "",
   },
@@ -41,6 +44,7 @@ export const useAccountStore = create<State>((set) => ({
         ...s.profile,
         telegramId: String(payload.telegramId),
         telegramUsername: payload.telegramUsername ? `@${payload.telegramUsername}` : "",
+        isAdmin: payload.isAdmin,
         registeredAt: payload.registeredAt,
       },
     })),

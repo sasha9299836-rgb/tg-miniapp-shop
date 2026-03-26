@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { adminMe } from "../../../shared/api/adminApi";
-import { isCurrentAdminTelegramUser } from "../../../shared/auth/adminAccess";
 
 export const TG_ADMIN_SESSION_TOKEN_KEY = "tg_admin_session_token";
 
@@ -32,19 +31,23 @@ function writeSessionToken(token: string | null) {
 }
 
 type State = {
+  isDbAdmin: boolean;
   isAdmin: boolean;
   isLoading: boolean;
   load: () => Promise<void>;
+  setDbAdmin: (value: boolean) => void;
   setSessionToken: (token: string) => void;
   clearAdmin: () => void;
 };
 
 export const useAdminStore = create<State>((set) => ({
+  isDbAdmin: false,
   isAdmin: false,
   isLoading: true,
   load: async () => {
     set({ isLoading: true });
-    if (!isCurrentAdminTelegramUser()) {
+    const { isDbAdmin } = useAdminStore.getState();
+    if (!isDbAdmin) {
       writeSessionToken(null);
       set({ isAdmin: false, isLoading: false });
       return;
@@ -67,8 +70,17 @@ export const useAdminStore = create<State>((set) => ({
       set({ isAdmin: false, isLoading: false });
     }
   },
+  setDbAdmin: (value: boolean) => {
+    if (!value) {
+      writeSessionToken(null);
+      set({ isDbAdmin: false, isAdmin: false, isLoading: false });
+      return;
+    }
+    set({ isDbAdmin: true });
+  },
   setSessionToken: (token: string) => {
-    if (!isCurrentAdminTelegramUser()) {
+    const { isDbAdmin } = useAdminStore.getState();
+    if (!isDbAdmin) {
       writeSessionToken(null);
       set({ isAdmin: false, isLoading: false });
       return;

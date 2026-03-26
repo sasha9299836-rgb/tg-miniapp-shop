@@ -3,6 +3,7 @@ import { supabase } from "./supabaseClient";
 export type TgUserRecord = {
   id: string;
   telegram_id: number;
+  is_admin: boolean;
   telegram_username: string | null;
   telegram_first_name: string | null;
   telegram_last_name: string | null;
@@ -59,7 +60,7 @@ export async function upsertTelegramUser(payload: UpsertTelegramUserPayload): Pr
     .from("tg_users")
     .upsert(upsertRow, { onConflict: "telegram_id" })
     .select(
-      "id, telegram_id, telegram_username, telegram_first_name, telegram_last_name, last_name, first_name, middle_name, email, phone, registered_at, updated_at",
+      "id, telegram_id, is_admin, telegram_username, telegram_first_name, telegram_last_name, last_name, first_name, middle_name, email, phone, registered_at, updated_at",
     )
     .single();
 
@@ -82,7 +83,7 @@ export async function loadTelegramUserProfile(telegramId: number): Promise<TgUse
   const { data, error } = await supabase
     .from("tg_users")
     .select(
-      "id, telegram_id, telegram_username, telegram_first_name, telegram_last_name, last_name, first_name, middle_name, email, phone, registered_at, updated_at",
+      "id, telegram_id, is_admin, telegram_username, telegram_first_name, telegram_last_name, last_name, first_name, middle_name, email, phone, registered_at, updated_at",
     )
     .eq("telegram_id", telegramId)
     .maybeSingle();
@@ -122,7 +123,7 @@ export async function saveTelegramUserProfile(payload: SaveTelegramUserProfilePa
     .from("tg_users")
     .upsert(upsertRow, { onConflict: "telegram_id" })
     .select(
-      "id, telegram_id, telegram_username, telegram_first_name, telegram_last_name, last_name, first_name, middle_name, email, phone, registered_at, updated_at",
+      "id, telegram_id, is_admin, telegram_username, telegram_first_name, telegram_last_name, last_name, first_name, middle_name, email, phone, registered_at, updated_at",
     )
     .single();
 

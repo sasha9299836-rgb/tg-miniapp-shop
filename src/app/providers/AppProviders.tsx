@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import { useAccountStore } from "../../entities/account/model/useAccountStore";
+import { useAdminStore } from "../../entities/account/model/useAdminStore";
 import { upsertTelegramUser } from "../../shared/api/telegramUsersApi";
 import { getTelegramUser, initTelegramWebApp } from "./telegram";
 
@@ -59,11 +60,13 @@ export function AppProviders({ children }: { children: ReactNode }) {
           } catch {
             // no-op
           }
+          useAdminStore.getState().setDbAdmin(Boolean(row.is_admin));
           useAccountStore.getState().applyTelegramProfile({
             telegramId: row.telegram_id,
             telegramUsername: row.telegram_username,
             telegramFirstName: row.telegram_first_name,
             telegramLastName: row.telegram_last_name,
+            isAdmin: Boolean(row.is_admin),
             registeredAt: row.registered_at,
           });
           lastBootstrappedTelegramId = row.telegram_id;
