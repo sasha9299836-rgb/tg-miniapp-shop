@@ -1,7 +1,7 @@
-﻿.app-shell {
+.app-shell {
   min-height: 100vh;
   width: 100%;
-  padding-top: var(--safe-top, 0px);
+  padding-top: calc(var(--safe-top, 0px) + var(--app-top-offset, 0px));
 }
 
 .app-topbar {
@@ -22,4 +22,6 @@
   /* Р СР ВµРЎРѓРЎвЂљР С• Р С—Р С•Р Т‘ РЎвЂљР В°Р В±Р В±Р В°РЎР‚ + safe area */
   padding-bottom: calc(86px + var(--safe-bottom, 0px));
 }
+
+
 
