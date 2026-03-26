@@ -1,17 +1,21 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAdminStore } from "../../entities/account/model/useAdminStore";
+import { adminLogin } from "../../shared/api/adminApi";
+import { isAdminTelegramUserId } from "../../shared/auth/adminAccess";
+import { useTelegramUser } from "../../shared/auth/useTelegramUser";
 import { Card, CardText, CardTitle } from "../../shared/ui/Card";
 import { ListItem } from "../../shared/ui/ListItem";
 import { Page } from "../../shared/ui/Page";
 import { useThemeStore } from "../../shared/theme/useThemeStore";
-import { useAdminStore } from "../../entities/account/model/useAdminStore";
-import { adminLogin, adminLoginDebug } from "../../shared/api/adminApi";
 import "./styles.css";
 
 export function AccountPage() {
   const nav = useNavigate();
+  const tgUser = useTelegramUser();
+  const canSeeAdminLogin = isAdminTelegramUserId(tgUser?.id);
   const { mode, setMode } = useThemeStore();
-  const { isAdmin, load, setSessionToken } = useAdminStore();
+  const { isAdmin, load, setSessionToken, clearAdmin } = useAdminStore();
   const [code, setCode] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -20,8 +24,14 @@ export function AccountPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!canSeeAdminLogin) {
+      clearAdmin();
+    }
+  }, [canSeeAdminLogin, clearAdmin]);
+
   const onLogin = async () => {
-    if (isSubmitting) return;
+    if (isSubmitting || !canSeeAdminLogin) return;
 
     setIsSubmitting(true);
     setLoginError(null);
@@ -41,11 +51,6 @@ export function AccountPage() {
     }
   };
 
-  const onDebugLogin = async () => {
-    const res = await adminLoginDebug(code.trim());
-    console.log("debug raw", res);
-  };
-
   return (
     <Page>
       <div className="account-grid">
@@ -53,58 +58,44 @@ export function AccountPage() {
           <CardTitle>Аккаунт</CardTitle>
           <CardText>Профиль, лояльность, адреса и заказы.</CardText>
 
-          <div style={{ marginTop: 10 }}>
-            <input
-              type="password"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="Код доступа"
-              style={{
-                width: "100%",
-                padding: "8px 10px",
-                borderRadius: 10,
-                border: "1px solid rgba(0,0,0,0.12)",
-                font: "inherit",
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => void onLogin()}
-              style={{
-                marginTop: 8,
-                width: "100%",
-                padding: "8px 10px",
-                borderRadius: 10,
-                border: "1px solid rgba(0,0,0,0.12)",
-                background: "#f1f2f4",
-                font: "inherit",
-              }}
-              disabled={!code.trim() || isSubmitting}
-            >
-              {isSubmitting ? "Проверка..." : "Войти в админку"}
-            </button>
-            <button
-              type="button"
-              onClick={() => void onDebugLogin()}
-              style={{
-                marginTop: 8,
-                width: "100%",
-                padding: "8px 10px",
-                borderRadius: 10,
-                border: "1px solid rgba(0,0,0,0.12)",
-                background: "#f8f8f8",
-                font: "inherit",
-              }}
-              disabled={!code.trim() || isSubmitting}
-            >
-              Debug login
-            </button>
-            {loginError ? (
-              <div style={{ marginTop: 8, color: "#b42318", fontSize: 13 }}>
-                {loginError}
-              </div>
-            ) : null}
-          </div>
+          {canSeeAdminLogin ? (
+            <div style={{ marginTop: 10 }}>
+              <input
+                type="password"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="Код доступа"
+                style={{
+                  width: "100%",
+                  padding: "8px 10px",
+                  borderRadius: 10,
+                  border: "1px solid rgba(0,0,0,0.12)",
+                  font: "inherit",
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => void onLogin()}
+                style={{
+                  marginTop: 8,
+                  width: "100%",
+                  padding: "8px 10px",
+                  borderRadius: 10,
+                  border: "1px solid rgba(0,0,0,0.12)",
+                  background: "#f1f2f4",
+                  font: "inherit",
+                }}
+                disabled={!code.trim() || isSubmitting}
+              >
+                {isSubmitting ? "Проверка..." : "Войти в админку"}
+              </button>
+              {loginError ? (
+                <div style={{ marginTop: 8, color: "#b42318", fontSize: 13 }}>
+                  {loginError}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="theme-toggle">
             <button
@@ -127,7 +118,7 @@ export function AccountPage() {
         </Card>
 
         <div className="account-list">
-          {isAdmin ? (
+          {isAdmin && canSeeAdminLogin ? (
             <ListItem
               title="Админка"
               subtitle="Управление данными"
@@ -139,7 +130,7 @@ export function AccountPage() {
           ) : null}
           <ListItem
             title="Личные данные"
-            subtitle="Имя, дата рождения, Telegram, email"
+            subtitle="Имя, Telegram, email"
             onClick={() => nav("/account/profile")}
             position="single"
             divider={false}

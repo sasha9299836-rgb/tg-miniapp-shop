@@ -54,9 +54,3 @@ export async function adminMe(session_token: string): Promise<{ is_admin: boolea
 
   return { is_admin: Boolean(data?.is_admin) };
 }
-
-export async function adminLoginDebug(code: string) {
-  return supabase.functions.invoke("admin_login", {
-    body: { code, debug: true },
-  });
-}

@@ -23,16 +23,18 @@ import { AdminNewPostPage } from "../../pages/Admin/NewPost";
 import { AdminScheduledPostsPage } from "../../pages/Admin/ScheduledPosts";
 import { AdminOrdersPage } from "../../pages/Admin/Orders";
 import { useAdminStore } from "../../entities/account/model/useAdminStore";
+import { isCurrentAdminTelegramUser } from "../../shared/auth/adminAccess";
 
 const AdminGuard = ({ children }: { children: ReactNode }) => {
   const { isAdmin, isLoading, load } = useAdminStore();
+  const isAllowedTelegramUser = isCurrentAdminTelegramUser();
 
   useEffect(() => {
     void load();
   }, [load]);
 
   if (isLoading) return <div style={{ padding: 16 }}>Загрузка...</div>;
-  if (isAdmin) return <>{children}</>;
+  if (isAllowedTelegramUser && isAdmin) return <>{children}</>;
   return <Navigate to="/account" replace />;
 };
 

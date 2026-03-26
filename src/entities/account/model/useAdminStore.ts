@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { adminMe } from "../../../shared/api/adminApi";
+import { isCurrentAdminTelegramUser } from "../../../shared/auth/adminAccess";
 
 export const TG_ADMIN_SESSION_TOKEN_KEY = "tg_admin_session_token";
 
@@ -43,6 +44,11 @@ export const useAdminStore = create<State>((set) => ({
   isLoading: true,
   load: async () => {
     set({ isLoading: true });
+    if (!isCurrentAdminTelegramUser()) {
+      writeSessionToken(null);
+      set({ isAdmin: false, isLoading: false });
+      return;
+    }
     const token = readSessionToken();
     if (!token) {
       set({ isAdmin: false, isLoading: false });
@@ -62,6 +68,11 @@ export const useAdminStore = create<State>((set) => ({
     }
   },
   setSessionToken: (token: string) => {
+    if (!isCurrentAdminTelegramUser()) {
+      writeSessionToken(null);
+      set({ isAdmin: false, isLoading: false });
+      return;
+    }
     writeSessionToken(token);
     set({ isAdmin: true, isLoading: false });
   },
