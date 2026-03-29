@@ -24,7 +24,7 @@ import { AdminScheduledPostsPage } from "../../pages/Admin/ScheduledPosts";
 import { AdminOrdersPage } from "../../pages/Admin/Orders";
 import { useAccountStore } from "../../entities/account/model/useAccountStore";
 import { useAdminStore } from "../../entities/account/model/useAdminStore";
-import { canUseAdminSessionByContext } from "../../shared/auth/adminAccess";
+import { canUseAdminSessionByContext, getAdminAccessDebugState } from "../../shared/auth/adminAccess";
 
 const AdminGuard = ({ children }: { children: ReactNode }) => {
   const isDbAdmin = useAccountStore((s) => s.profile.isAdmin);
@@ -34,6 +34,10 @@ const AdminGuard = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    console.log("[admin-access][AdminGuard]", getAdminAccessDebugState(isDbAdmin));
+  }, [isDbAdmin, canUseAdminAccess, isAdmin, isLoading]);
 
   if (isLoading) return <div style={{ padding: 16 }}>Загрузка...</div>;
   if (canUseAdminAccess && isAdmin) return <>{children}</>;

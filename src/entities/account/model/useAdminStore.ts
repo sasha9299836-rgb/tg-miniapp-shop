@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { adminMe } from "../../../shared/api/adminApi";
-import { canUseAdminSessionByContext } from "../../../shared/auth/adminAccess";
+import { canUseAdminSessionByContext, getAdminAccessDebugState } from "../../../shared/auth/adminAccess";
 
 export const TG_ADMIN_SESSION_TOKEN_KEY = "tg_admin_session_token";
 
@@ -48,7 +48,9 @@ export const useAdminStore = create<State>((set) => ({
   load: async () => {
     set({ isLoading: true });
     const { isDbAdmin } = useAdminStore.getState();
-    if (!canUseAdminSessionByContext(isDbAdmin)) {
+    const canUseByContext = canUseAdminSessionByContext(isDbAdmin);
+    console.log("[admin-access][useAdminStore.load]", getAdminAccessDebugState(isDbAdmin));
+    if (!canUseByContext) {
       writeSessionToken(null);
       set({ isAdmin: false, isLoading: false });
       return;
@@ -81,7 +83,9 @@ export const useAdminStore = create<State>((set) => ({
   },
   setSessionToken: (token: string) => {
     const { isDbAdmin } = useAdminStore.getState();
-    if (!canUseAdminSessionByContext(isDbAdmin)) {
+    const canUseByContext = canUseAdminSessionByContext(isDbAdmin);
+    console.log("[admin-access][useAdminStore.setSessionToken]", getAdminAccessDebugState(isDbAdmin));
+    if (!canUseByContext) {
       writeSessionToken(null);
       set({ isAdmin: false, isLoading: false });
       return;

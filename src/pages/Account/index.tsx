@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAccountStore } from "../../entities/account/model/useAccountStore";
 import { useAdminStore } from "../../entities/account/model/useAdminStore";
 import { adminLogin } from "../../shared/api/adminApi";
-import { canUseAdminSessionByContext } from "../../shared/auth/adminAccess";
+import { canUseAdminSessionByContext, getAdminAccessDebugState } from "../../shared/auth/adminAccess";
 import { Card, CardText, CardTitle } from "../../shared/ui/Card";
 import { ListItem } from "../../shared/ui/ListItem";
 import { Page } from "../../shared/ui/Page";
@@ -23,6 +23,10 @@ export function AccountPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    console.log("[admin-access][AccountPage]", getAdminAccessDebugState(isDbAdmin));
+  }, [isDbAdmin, canUseAdminAccess]);
 
   useEffect(() => {
     if (!canUseAdminAccess) {
