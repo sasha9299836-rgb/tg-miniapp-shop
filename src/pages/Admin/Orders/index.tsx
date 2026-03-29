@@ -285,6 +285,7 @@ function AdminOrderCard(props: OrderCardProps) {
   const trackList = orderShipments
     .filter((shipment) => shipment.cdek_track_number)
     .map((shipment) => `${formatOriginProfileLabel(shipment.origin_profile)}: ${shipment.cdek_track_number}`);
+  const detailsTrackValue = trackList.length ? trackList.join(", ") : (order.cdek_track_number || null);
   const canConfirm = order.status === "payment_proof_submitted";
   const canRecoverLock = Boolean(order.shipment_create_in_progress && !order.cdek_uuid && isLikelyStaleShipmentLock(order.shipment_create_started_at));
   const timelineRows = useMemo(() => buildTimelineRows(order, orderEvents, shipmentHistory), [order, orderEvents, shipmentHistory]);
@@ -490,7 +491,7 @@ function AdminOrderCard(props: OrderCardProps) {
           <div>ФИО: {order.fio}</div>
           <div>Телефон: {order.phone}</div>
           <div>Создан: {formatDate(order.created_at)}</div>
-          <div>Резерв до: {formatDate(order.reserved_until)}</div>
+          {detailsTrackValue ? <div>Трек-номер: {detailsTrackValue}</div> : null}
           <div>
             Адрес: {order.delivery_type === "pickup"
               ? `${order.city ?? ""}, ${order.cdek_pvz_address ?? ""} (${order.cdek_pvz_code ?? ""})`
