@@ -24,9 +24,11 @@ import { AdminScheduledPostsPage } from "../../pages/Admin/ScheduledPosts";
 import { AdminOrdersPage } from "../../pages/Admin/Orders";
 import { useAccountStore } from "../../entities/account/model/useAccountStore";
 import { useAdminStore } from "../../entities/account/model/useAdminStore";
+import { canUseAdminSessionByContext } from "../../shared/auth/adminAccess";
 
 const AdminGuard = ({ children }: { children: ReactNode }) => {
   const isDbAdmin = useAccountStore((s) => s.profile.isAdmin);
+  const canUseAdminAccess = canUseAdminSessionByContext(isDbAdmin);
   const { isAdmin, isLoading, load } = useAdminStore();
 
   useEffect(() => {
@@ -34,7 +36,7 @@ const AdminGuard = ({ children }: { children: ReactNode }) => {
   }, [load]);
 
   if (isLoading) return <div style={{ padding: 16 }}>Загрузка...</div>;
-  if (isDbAdmin && isAdmin) return <>{children}</>;
+  if (canUseAdminAccess && isAdmin) return <>{children}</>;
   return <Navigate to="/account" replace />;
 };
 

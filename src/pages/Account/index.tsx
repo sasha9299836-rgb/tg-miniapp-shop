@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAccountStore } from "../../entities/account/model/useAccountStore";
 import { useAdminStore } from "../../entities/account/model/useAdminStore";
 import { adminLogin } from "../../shared/api/adminApi";
+import { canUseAdminSessionByContext } from "../../shared/auth/adminAccess";
 import { Card, CardText, CardTitle } from "../../shared/ui/Card";
 import { ListItem } from "../../shared/ui/ListItem";
 import { Page } from "../../shared/ui/Page";
@@ -14,6 +15,7 @@ export function AccountPage() {
   const isDbAdmin = useAccountStore((s) => s.profile.isAdmin);
   const { mode, setMode } = useThemeStore();
   const { isAdmin, load, setSessionToken, clearAdmin } = useAdminStore();
+  const canUseAdminAccess = canUseAdminSessionByContext(isDbAdmin);
   const [code, setCode] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -23,13 +25,13 @@ export function AccountPage() {
   }, [load]);
 
   useEffect(() => {
-    if (!isDbAdmin) {
+    if (!canUseAdminAccess) {
       clearAdmin();
     }
-  }, [clearAdmin, isDbAdmin]);
+  }, [canUseAdminAccess, clearAdmin]);
 
   const onLogin = async () => {
-    if (isSubmitting || !isDbAdmin) return;
+    if (isSubmitting || !canUseAdminAccess) return;
 
     setIsSubmitting(true);
     setLoginError(null);
@@ -56,7 +58,7 @@ export function AccountPage() {
           <CardTitle>Аккаунт</CardTitle>
           <CardText>Профиль, лояльность, адреса и заказы.</CardText>
 
-          {isDbAdmin ? (
+          {canUseAdminAccess ? (
             <div style={{ marginTop: 10 }}>
               <input
                 type="password"
@@ -116,7 +118,7 @@ export function AccountPage() {
         </Card>
 
         <div className="account-list">
-          {isAdmin && isDbAdmin ? (
+          {isAdmin && canUseAdminAccess ? (
             <ListItem
               title="Админка"
               subtitle="Управление данными"

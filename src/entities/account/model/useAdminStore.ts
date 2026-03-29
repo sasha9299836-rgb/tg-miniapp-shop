@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { adminMe } from "../../../shared/api/adminApi";
+import { canUseAdminSessionByContext } from "../../../shared/auth/adminAccess";
 
 export const TG_ADMIN_SESSION_TOKEN_KEY = "tg_admin_session_token";
 
@@ -47,7 +48,7 @@ export const useAdminStore = create<State>((set) => ({
   load: async () => {
     set({ isLoading: true });
     const { isDbAdmin } = useAdminStore.getState();
-    if (!isDbAdmin) {
+    if (!canUseAdminSessionByContext(isDbAdmin)) {
       writeSessionToken(null);
       set({ isAdmin: false, isLoading: false });
       return;
@@ -80,7 +81,7 @@ export const useAdminStore = create<State>((set) => ({
   },
   setSessionToken: (token: string) => {
     const { isDbAdmin } = useAdminStore.getState();
-    if (!isDbAdmin) {
+    if (!canUseAdminSessionByContext(isDbAdmin)) {
       writeSessionToken(null);
       set({ isAdmin: false, isLoading: false });
       return;
