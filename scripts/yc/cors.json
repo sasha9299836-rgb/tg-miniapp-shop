@@ -2,18 +2,23 @@
   "CORSRules": [
     {
       "AllowedOrigins": [
+        "https://tg-miniapp-shop2.vercel.app",
+        "https://app.aesisland.ru",
         "http://localhost:5173",
         "http://127.0.0.1:5173"
       ],
       "AllowedMethods": [
         "GET",
         "HEAD",
-        "PUT",
-        "POST",
-        "DELETE"
+        "PUT"
       ],
       "AllowedHeaders": [
-        "*"
+        "Content-Type",
+        "Origin",
+        "Accept",
+        "Authorization",
+        "X-Requested-With",
+        "x-amz-*"
       ],
       "ExposeHeaders": [
         "ETag"
