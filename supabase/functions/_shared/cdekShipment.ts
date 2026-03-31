@@ -226,12 +226,19 @@ function normalizeTrackData(statusPayload: Record<string, unknown> | null) {
     ? entity.status as Record<string, unknown>
     : null;
 
+  const normalizeTrackValue = (value: unknown): string | null => {
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      return trimmed.length ? trimmed : null;
+    }
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return String(value);
+    }
+    return null;
+  };
+
   return {
-    cdekNumber: typeof entity?.cdek_number === "string"
-      ? entity.cdek_number
-      : typeof entity?.track === "string"
-        ? entity.track
-        : null,
+    cdekNumber: normalizeTrackValue(entity?.cdek_number) ?? normalizeTrackValue(entity?.track),
     cdekStatus: typeof entity?.status === "string"
       ? entity.status
       : typeof nestedStatus?.code === "string"
@@ -1016,7 +1023,11 @@ export async function createShipmentForOrder(
       }
 
       let cdekUuid = typeof createJson.uuid === "string" ? createJson.uuid : null;
-      let cdekTrackNumber = typeof createJson.cdekNumber === "string" ? createJson.cdekNumber : null;
+      let cdekTrackNumber = typeof createJson.cdekNumber === "string"
+        ? (createJson.cdekNumber.trim() || null)
+        : (typeof createJson.cdekNumber === "number" && Number.isFinite(createJson.cdekNumber)
+          ? String(createJson.cdekNumber)
+          : null);
       let cdekStatus = typeof createJson.trackingStatus === "string" ? createJson.trackingStatus : null;
       const cdekTariffCode = Number(createJson.selectedTariffCode ?? finalTariffCode ?? 0) || null;
 
