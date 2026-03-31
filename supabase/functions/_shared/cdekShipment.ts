@@ -1022,6 +1022,14 @@ export async function createShipmentForOrder(
         );
       }
 
+      logShipmentEvent("shipment_create_proxy_response_raw", {
+        orderId,
+        originProfile: group.originProfile,
+        status: createRes.status,
+        ok: createRes.ok,
+        response: createJson,
+      });
+
       let cdekUuid = typeof createJson.uuid === "string" ? createJson.uuid : null;
       let cdekTrackNumber = typeof createJson.cdekNumber === "string"
         ? (createJson.cdekNumber.trim() || null)
@@ -1036,6 +1044,14 @@ export async function createShipmentForOrder(
           `${proxyBase}/api/shipping/status/${encodeURIComponent(cdekUuid)}?originProfile=${encodeURIComponent(group.originProfile)}`;
         const statusRes = await fetch(statusUrl, { method: "GET" });
         const statusJson = await statusRes.json().catch(() => null) as Record<string, unknown> | null;
+        logShipmentEvent("shipment_status_proxy_response_raw", {
+          orderId,
+          originProfile: group.originProfile,
+          cdekUuid,
+          status: statusRes.status,
+          ok: statusRes.ok,
+          response: statusJson,
+        });
         if (statusRes.ok && statusJson?.ok) {
           const normalized = normalizeTrackData((statusJson.status ?? null) as Record<string, unknown> | null);
           cdekTrackNumber = normalized.cdekNumber ?? cdekTrackNumber;
