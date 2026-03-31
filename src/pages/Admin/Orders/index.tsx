@@ -8,6 +8,7 @@ import {
   listOrdersByStatuses,
   listOrderItemsByOrderIds,
   listOrderShipmentsByOrderIds,
+  listShipmentStatusHistoryByOrderIds,
   recoverStaleShipmentLock,
   rejectOrderPayment,
   syncActiveShipments,
@@ -225,6 +226,7 @@ type OrderCardProps = {
   order: TgOrder;
   orderItems: TgOrderItem[];
   orderShipments: TgOrderShipment[];
+  historyTrackNumbers: string[];
   originLabel: string;
   previewUrl?: string;
   postMeta?: PostMeta;
@@ -246,6 +248,7 @@ function AdminOrderCard(props: OrderCardProps) {
     order,
     orderItems,
     orderShipments,
+    historyTrackNumbers,
     originLabel,
     previewUrl,
     postMeta,
@@ -281,11 +284,21 @@ function AdminOrderCard(props: OrderCardProps) {
     [order],
   );
 
-  const trackingUrl = getCdekTrackingUrl(order.cdek_track_number);
   const trackList = orderShipments
     .filter((shipment) => shipment.cdek_track_number)
     .map((shipment) => `${formatOriginProfileLabel(shipment.origin_profile)}: ${shipment.cdek_track_number}`);
-  const detailsTrackValue = trackList.length ? trackList.join(", ") : (order.cdek_track_number || null);
+  const fallbackTrackList = historyTrackNumbers.filter((value) => !trackList.some((line) => line.includes(value)));
+  const detailsTrackValue = trackList.length
+    ? trackList.join(", ")
+    : fallbackTrackList.length
+      ? fallbackTrackList.join(", ")
+      : (order.cdek_track_number || null);
+  const primaryTrackNumber = trackList.length
+    ? trackList[0].split(": ").slice(1).join(": ").trim()
+    : fallbackTrackList.length
+      ? fallbackTrackList[0]
+      : (order.cdek_track_number ?? null);
+  const trackingUrl = getCdekTrackingUrl(primaryTrackNumber);
   const canConfirm = order.status === "payment_proof_submitted";
   const canRecoverLock = Boolean(order.shipment_create_in_progress && !order.cdek_uuid && isLikelyStaleShipmentLock(order.shipment_create_started_at));
   const timelineRows = useMemo(() => buildTimelineRows(order, orderEvents, shipmentHistory), [order, orderEvents, shipmentHistory]);
@@ -361,8 +374,8 @@ function AdminOrderCard(props: OrderCardProps) {
         {trackingUrl ? (
           <Button variant="secondary" disabled={isBusy} onClick={() => window.open(trackingUrl, "_blank", "noopener,noreferrer")}>Отслеживание посылки</Button>
         ) : null}
-        {order.cdek_track_number ? (
-          <Button variant="secondary" disabled={isBusy} onClick={() => void onCopyTrackNumber(order.cdek_track_number!)}>Копировать номер отправления</Button>
+        {primaryTrackNumber ? (
+          <Button variant="secondary" disabled={isBusy} onClick={() => void onCopyTrackNumber(primaryTrackNumber)}>Копировать номер отправления</Button>
         ) : null}
       </div>
 
@@ -370,6 +383,11 @@ function AdminOrderCard(props: OrderCardProps) {
         <div style={{ marginTop: 8, color: "var(--muted)" }}>
           <div style={{ color: "var(--text)", fontWeight: 600 }}>{trackList.length > 1 ? "Трек-номера" : "Трек-номер"}</div>
           {trackList.map((line) => <div key={`${order.id}-${line}`}>{line}</div>)}
+        </div>
+      ) : fallbackTrackList.length ? (
+        <div style={{ marginTop: 8, color: "var(--muted)" }}>
+          <div style={{ color: "var(--text)", fontWeight: 600 }}>{fallbackTrackList.length > 1 ? "Трек-номера" : "Трек-номер"}</div>
+          {fallbackTrackList.map((line) => <div key={`${order.id}-${line}`}>{line}</div>)}
         </div>
       ) : order.cdek_track_number ? (
         <div style={{ marginTop: 8, color: "var(--muted)" }}>
@@ -510,6 +528,7 @@ export function AdminOrdersPage() {
   const [postMetaById, setPostMetaById] = useState<Record<string, PostMeta>>({});
   const [orderItemsByOrderId, setOrderItemsByOrderId] = useState<Record<string, TgOrderItem[]>>({});
   const [orderShipmentsByOrderId, setOrderShipmentsByOrderId] = useState<Record<string, TgOrderShipment[]>>({});
+  const [historyTrackNumbersByOrderId, setHistoryTrackNumbersByOrderId] = useState<Record<string, string[]>>({});
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [busyOrderId, setBusyOrderId] = useState<string | null>(null);
@@ -524,9 +543,10 @@ export function AdminOrdersPage() {
     try {
       const orderRows = await listOrdersByStatuses(statusByTab[currentTab]);
       const orderIds = orderRows.map((row) => row.id);
-      const [orderItems, orderShipments] = await Promise.all([
+      const [orderItems, orderShipments, shipmentHistory] = await Promise.all([
         listOrderItemsByOrderIds(orderIds),
         listOrderShipmentsByOrderIds(orderIds),
+        listShipmentStatusHistoryByOrderIds(orderIds),
       ]);
       const groupedOrderItems = orderItems.reduce<Record<string, TgOrderItem[]>>((acc, item) => {
         if (!acc[item.order_id]) acc[item.order_id] = [];
@@ -538,8 +558,18 @@ export function AdminOrdersPage() {
         acc[shipment.order_id].push(shipment);
         return acc;
       }, {});
+      const groupedHistoryTracks = shipmentHistory.reduce<Record<string, string[]>>((acc, entry) => {
+        const trackNumber = String(entry.cdek_track_number ?? "").trim();
+        if (!trackNumber) return acc;
+        if (!acc[entry.order_id]) acc[entry.order_id] = [];
+        if (!acc[entry.order_id].includes(trackNumber)) {
+          acc[entry.order_id].push(trackNumber);
+        }
+        return acc;
+      }, {});
       setOrderItemsByOrderId(groupedOrderItems);
       setOrderShipmentsByOrderId(groupedOrderShipments);
+      setHistoryTrackNumbersByOrderId(groupedHistoryTracks);
 
       const postIds = [...new Set(orderRows.flatMap((row) => {
         const fromItems = (groupedOrderItems[row.id] ?? []).map((item) => item.post_id);
@@ -858,6 +888,7 @@ export function AdminOrdersPage() {
             order={order}
             orderItems={orderItems}
             orderShipments={orderShipments}
+            historyTrackNumbers={historyTrackNumbersByOrderId[order.id] ?? []}
             originLabel={buildOriginLabel(originProfiles)}
             previewUrl={previewByPost[primaryPostId]}
             postMeta={postMetaById[primaryPostId]}

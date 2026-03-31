@@ -642,6 +642,23 @@ export async function getShipmentStatusHistory(orderId: string): Promise<Shipmen
   return (data as ShipmentStatusHistoryEntry[]) ?? [];
 }
 
+export async function listShipmentStatusHistoryByOrderIds(orderIds: string[]): Promise<ShipmentStatusHistoryEntry[]> {
+  const normalized = [...new Set(orderIds.map((value) => String(value ?? "").trim()).filter(Boolean))];
+  if (!normalized.length) return [];
+
+  const { data, error } = await supabase
+    .from("tg_shipment_status_history")
+    .select("*")
+    .in("order_id", normalized)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data as ShipmentStatusHistoryEntry[]) ?? [];
+}
+
 export async function getAdminOrderEvents(orderId: string): Promise<AdminOrderEvent[]> {
   const { data, error } = await supabase
     .from("tg_order_events")
