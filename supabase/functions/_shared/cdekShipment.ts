@@ -24,6 +24,8 @@ type ActiveShipmentSyncItemStatus = "updated" | "unchanged" | "skipped" | "faile
 
 export const SHIPMENT_LOCK_STALE_MINUTES = 15;
 export const ACTIVE_SHIPMENT_SYNC_LIMIT = 20;
+export const TRACK_POLL_MAX_ATTEMPTS = 10;
+export const TRACK_POLL_INTERVAL_MS = 1000;
 
 export type ShipmentProcessResult = {
   ok: true;
@@ -251,6 +253,23 @@ function normalizeTrackData(statusPayload: Record<string, unknown> | null) {
               ? latestStatus.name
               : null,
   };
+}
+
+function getLatestRequestState(statusPayload: Record<string, unknown> | null): string | null {
+  const entity = (statusPayload?.entity ?? statusPayload) as Record<string, unknown> | null;
+  const requests = Array.isArray(entity?.requests) ? entity.requests : [];
+  const latestRequest = requests.length
+    ? requests[requests.length - 1] as Record<string, unknown>
+    : null;
+
+  const rawState = latestRequest?.state;
+  if (typeof rawState !== "string") return null;
+  const normalized = rawState.trim().toUpperCase();
+  return normalized || null;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export function isFinalShipmentStatus(status?: string | null) {
@@ -1039,23 +1058,113 @@ export async function createShipmentForOrder(
       let cdekStatus = typeof createJson.trackingStatus === "string" ? createJson.trackingStatus : null;
       const cdekTariffCode = Number(createJson.selectedTariffCode ?? finalTariffCode ?? 0) || null;
 
-      if (cdekUuid && (!cdekTrackNumber || !cdekStatus)) {
+      if (cdekUuid) {
         const statusUrl =
           `${proxyBase}/api/shipping/status/${encodeURIComponent(cdekUuid)}?originProfile=${encodeURIComponent(group.originProfile)}`;
-        const statusRes = await fetch(statusUrl, { method: "GET" });
-        const statusJson = await statusRes.json().catch(() => null) as Record<string, unknown> | null;
-        logShipmentEvent("shipment_status_proxy_response_raw", {
+        logShipmentEvent("shipment_track_polling_started", {
           orderId,
           originProfile: group.originProfile,
           cdekUuid,
-          status: statusRes.status,
-          ok: statusRes.ok,
-          response: statusJson,
+          maxAttempts: TRACK_POLL_MAX_ATTEMPTS,
+          intervalMs: TRACK_POLL_INTERVAL_MS,
         });
-        if (statusRes.ok && statusJson?.ok) {
-          const normalized = normalizeTrackData((statusJson.status ?? null) as Record<string, unknown> | null);
-          cdekTrackNumber = normalized.cdekNumber ?? cdekTrackNumber;
-          cdekStatus = normalized.cdekStatus ?? cdekStatus;
+
+        let pollSucceeded = false;
+        let lastRequestState: string | null = null;
+
+        for (let attempt = 1; attempt <= TRACK_POLL_MAX_ATTEMPTS; attempt += 1) {
+          const statusRes = await fetch(statusUrl, { method: "GET" });
+          const statusJson = await statusRes.json().catch(() => null) as Record<string, unknown> | null;
+          logShipmentEvent("shipment_status_proxy_response_raw", {
+            orderId,
+            originProfile: group.originProfile,
+            cdekUuid,
+            attempt,
+            status: statusRes.status,
+            ok: statusRes.ok,
+            response: statusJson,
+          });
+
+          if (statusRes.ok && statusJson?.ok) {
+            const rawStatusPayload = (statusJson.status ?? null) as Record<string, unknown> | null;
+            const normalized = normalizeTrackData(rawStatusPayload);
+            const requestState = getLatestRequestState(rawStatusPayload);
+            lastRequestState = requestState ?? lastRequestState;
+            cdekTrackNumber = normalized.cdekNumber ?? cdekTrackNumber;
+            cdekStatus = requestState ?? normalized.cdekStatus ?? cdekStatus;
+
+            logShipmentEvent("shipment_track_poll_attempt", {
+              orderId,
+              originProfile: group.originProfile,
+              cdekUuid,
+              attempt,
+              requestState,
+              cdekStatus,
+              cdekNumber: cdekTrackNumber,
+            });
+
+            if (requestState === "SUCCESSFUL" && cdekTrackNumber) {
+              pollSucceeded = true;
+              logShipmentEvent("shipment_track_polling_success", {
+                orderId,
+                originProfile: group.originProfile,
+                cdekUuid,
+                attempt,
+                requestState,
+                cdekStatus,
+                cdekNumber: cdekTrackNumber,
+              });
+              break;
+            }
+
+            if (requestState === "INVALID" || requestState === "FAILED") {
+              logShipmentEvent("shipment_track_polling_failed", {
+                orderId,
+                originProfile: group.originProfile,
+                cdekUuid,
+                attempt,
+                requestState,
+                cdekStatus,
+                cdekNumber: cdekTrackNumber,
+              });
+              throw new ShipmentProcessError(
+                "SHIPMENT_TRACK_POLL_FAILED",
+                502,
+                {
+                  originProfile: group.originProfile,
+                  requestState,
+                  cdekStatus,
+                  cdekNumber: cdekTrackNumber,
+                },
+              );
+            }
+          } else {
+            logShipmentEvent("shipment_track_poll_attempt_network_error", {
+              orderId,
+              originProfile: group.originProfile,
+              cdekUuid,
+              attempt,
+              status: statusRes.status,
+              response: statusJson ?? null,
+            });
+          }
+
+          if (attempt < TRACK_POLL_MAX_ATTEMPTS) {
+            await sleep(TRACK_POLL_INTERVAL_MS);
+          }
+        }
+
+        if (!pollSucceeded) {
+          cdekStatus = cdekStatus ?? lastRequestState ?? "POLL_TIMEOUT";
+          logShipmentEvent("shipment_track_polling_timeout", {
+            orderId,
+            originProfile: group.originProfile,
+            cdekUuid,
+            attempts: TRACK_POLL_MAX_ATTEMPTS,
+            requestState: lastRequestState,
+            cdekStatus,
+            cdekNumber: cdekTrackNumber,
+          });
         }
       }
 
