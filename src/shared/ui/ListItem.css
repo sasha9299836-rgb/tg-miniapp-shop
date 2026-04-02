@@ -1,22 +1,14 @@
-.ui-li {
+﻿.ui-li {
   width: 100%;
-  border: 0;
+  border: 1px solid var(--border);
   text-align: left;
-
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-
-  background:
-    linear-gradient(160deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.08)),
-    var(--glass);
-  border: 1px solid var(--glass-stroke);
-  box-shadow: var(--glass-shadow);
-  backdrop-filter: blur(22px) saturate(160%);
-  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
   color: var(--text);
-
   position: relative;
   padding: 16px 16px;
   overflow: hidden;
@@ -27,9 +19,7 @@
 }
 
 .ui-li:active {
-  background:
-    linear-gradient(160deg, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.14)),
-    var(--glass);
+  background: color-mix(in srgb, var(--surface) 84%, var(--surface-alt) 16%);
 }
 
 .ui-li__body {
@@ -38,16 +28,16 @@
 
 .ui-li__title {
   font-size: 16px;
-  font-weight: 750;
-  letter-spacing: -0.3px;
-  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  line-height: 1.2;
 }
 
 .ui-li__subtitle {
   margin-top: 6px;
   font-size: 13px;
-  opacity: 0.76;
-  line-height: 1.25;
+  color: var(--muted);
+  line-height: 1.35;
   white-space: pre-line;
 }
 
@@ -60,13 +50,13 @@
 
 .ui-li__rightContent {
   font-size: 13px;
-  opacity: 0.9;
+  color: var(--muted);
 }
 
 .ui-li__chevron {
   font-size: 22px;
   line-height: 18px;
-  opacity: 0.45;
+  color: var(--muted);
   margin-top: -2px;
 }
 
@@ -76,14 +66,15 @@
   right: 16px;
   bottom: 0;
   height: 1px;
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--border);
 }
 
 .ui-li--first {
-  border-top-left-radius: 28px;
-  border-top-right-radius: 28px;
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
 }
+
 .ui-li--last {
-  border-bottom-left-radius: 28px;
-  border-bottom-right-radius: 28px;
+  border-bottom-left-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-lg);
 }

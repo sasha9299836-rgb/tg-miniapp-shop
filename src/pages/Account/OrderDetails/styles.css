@@ -1,4 +1,4 @@
-.order-details-grid {
+﻿.order-details-grid {
   display: grid;
   gap: 12px;
 }
@@ -37,40 +37,36 @@
   gap: 8px;
   padding: 12px;
   border-radius: 16px;
-  border: 1px solid var(--glass-stroke);
-  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
 }
 
 .order-status-badge {
   width: fit-content;
   padding: 6px 12px;
   border-radius: 999px;
-  border: 1px solid var(--glass-stroke);
-  background:
-    linear-gradient(140deg, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.12)),
-    var(--glass);
+  border: 1px solid var(--border);
+  background: var(--surface);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
-.order-status-badge--neutral {
-  color: #344054;
-}
-
+.order-status-badge--neutral { color: var(--muted); }
 .order-status-badge--info {
-  color: #155eef;
+  color: var(--accent-strong);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border) 55%);
 }
-
 .order-status-badge--success {
-  color: #067647;
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 36%, var(--border) 64%);
 }
-
 .order-status-badge--warning {
-  color: #b54708;
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 38%, var(--border) 62%);
 }
-
 .order-status-badge--danger {
-  color: #b42318;
+  color: var(--error);
+  border-color: color-mix(in srgb, var(--error) 38%, var(--border) 62%);
 }
 
 .order-status-copy {
@@ -93,6 +89,7 @@
 .order-details-row span:last-child {
   text-align: right;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .order-details-section-title {
@@ -132,8 +129,8 @@
   gap: 12px;
   padding: 8px 10px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.45);
-  border: 1px solid var(--glass-stroke);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
 }
 
 .order-details-timeline-status {

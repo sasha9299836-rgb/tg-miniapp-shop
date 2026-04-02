@@ -11,7 +11,8 @@
 }
 
 .cart-title {
-  font-size: 18px;
+  font-size: 20px;
+  line-height: 1.2;
   margin: 0;
 }
 
@@ -43,7 +44,7 @@
 }
 
 .cart-item__title {
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .cart-item__desc {
@@ -55,7 +56,9 @@
 .cart-item__price {
   color: var(--text);
   margin-top: 6px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .cart-item__actions {
@@ -63,7 +66,7 @@
 }
 
 .cart-section__title {
-  font-weight: 800;
+  font-weight: 700;
   margin-bottom: 8px;
 }
 
@@ -79,7 +82,7 @@
 
 .cart-pvz__badge {
   color: var(--muted);
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .cart-muted {
@@ -98,7 +101,7 @@
 }
 
 .cart-recipient__name {
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .cart-recipient__line {
@@ -129,16 +132,17 @@
 }
 
 .cart-total__label {
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .cart-total__value {
-  font-weight: 900;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .cart-total__sum .cart-total__label,
 .cart-total__sum .cart-total__value {
-  font-weight: 950;
+  font-weight: 700;
 }
 
 .cart-actions {

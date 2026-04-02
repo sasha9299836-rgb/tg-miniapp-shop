@@ -3,8 +3,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-
-  padding: 12px 14px calc(12px + var(--safe-bottom, 0px));
+  padding: 10px 14px calc(10px + var(--safe-bottom, 0px));
   z-index: 50;
 }
 
@@ -12,36 +11,28 @@
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 8px;
+  border-radius: 22px;
+  padding: 10px 8px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+}
 
-  border-radius: 26px;
-  padding: 12px 10px;
-
-  background:
-    linear-gradient(160deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.12)),
-    var(--glass);
-  border: 1px solid var(--glass-stroke);
-
-  backdrop-filter: blur(28px) saturate(160%);
-  -webkit-backdrop-filter: blur(28px) saturate(160%);
-
-  box-shadow:
-    var(--glass-shadow),
-    inset 0 1px 0 var(--glass-highlight);
+:root[data-theme="dark"] .tabbar__inner {
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  box-shadow: none;
 }
 
 .tab {
   text-decoration: none;
   color: var(--muted);
-
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-
-  border-radius: 18px;
-  padding: 10px 6px;
-
-  transition: transform 0.12s ease, background 0.2s ease, color 0.2s ease;
+  border-radius: 14px;
+  padding: 9px 6px;
+  transition: transform 0.16s ease, background-color 0.2s ease, color 0.2s ease;
 }
 
 .tab:active {
@@ -50,11 +41,8 @@
 
 .tab--active {
   color: var(--text);
-  background:
-    linear-gradient(140deg, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.2)),
-    linear-gradient(135deg, rgba(43, 92, 255, 0.5), rgba(53, 209, 255, 0.4));
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  box-shadow: 0 12px 26px rgba(40, 90, 200, 0.25);
+  background: color-mix(in srgb, var(--accent-soft) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border) 55%);
 }
 
 .tab__iconWrap {
@@ -92,21 +80,19 @@
   height: 16px;
   padding: 0 4px;
   border-radius: 999px;
-  background: #0b0b0c;
+  background: var(--accent-strong);
   color: #fff;
   font-size: 10px;
   font-weight: 800;
   line-height: 16px;
   text-align: center;
-  border: 1px solid rgba(255, 255, 255, 0.65);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+  border: 1px solid color-mix(in srgb, var(--surface) 85%, transparent);
 }
 
 .tab__label {
   font-size: 11px;
   line-height: 11px;
-  letter-spacing: -0.2px;
+  letter-spacing: -0.1px;
   font-weight: 650;
-  opacity: 0.95;
+  opacity: 0.98;
 }
-

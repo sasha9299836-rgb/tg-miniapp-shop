@@ -1,4 +1,4 @@
-.loyalty-grid {
+﻿.loyalty-grid {
   display: grid;
   gap: 10px;
 }
@@ -16,11 +16,14 @@
 }
 
 .loyalty-card__title {
-  font-weight: 800;
+  font-size: 16px;
+  font-weight: 700;
 }
 
 .loyalty-card__discount {
-  font-weight: 800;
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .loyalty-card__desc {
@@ -37,18 +40,16 @@
   align-items: center;
   padding: 7px 12px;
   border-radius: 999px;
-  border: 1px solid var(--glass-stroke);
-  background:
-    linear-gradient(140deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.1)),
-    var(--glass);
-  font-weight: 800;
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+  color: var(--text);
+  font-weight: 600;
   font-size: 12px;
   line-height: 1.1;
   white-space: nowrap;
 }
 
 .loyalty-pill.is-done {
-  background:
-    linear-gradient(140deg, rgba(160, 255, 200, 0.6), rgba(255, 255, 255, 0.1)),
-    var(--glass);
+  border-color: color-mix(in srgb, var(--success) 40%, var(--border) 60%);
+  background: color-mix(in srgb, var(--success) 12%, var(--surface) 88%);
 }

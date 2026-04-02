@@ -1,4 +1,4 @@
-.checkout-page {
+﻿.checkout-page {
   display: grid;
   gap: 12px;
 }
@@ -9,7 +9,7 @@
 }
 
 .checkout-section__title {
-  font-weight: 950;
+  font-weight: 700;
 }
 
 .checkout-delivery {
@@ -31,16 +31,17 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-weight: 700;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .checkout-total__divider {
-  border-bottom: 1px solid var(--glass-stroke);
+  border-bottom: 1px solid var(--border);
   padding-bottom: 8px;
 }
 
 .checkout-total__sum {
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .checkout-actions {
@@ -57,14 +58,14 @@
 
 .checkout-address-select {
   width: 100%;
-  border: 1px solid var(--glass-stroke);
-  border-radius: 18px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  min-height: 46px;
   padding: 12px 14px;
   font-size: 14px;
-  background:
-    linear-gradient(140deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.08)),
-    var(--glass);
+  background: var(--surface);
   color: var(--text);
+  box-shadow: var(--shadow-sm);
 }
 
 .checkout-address-hint {

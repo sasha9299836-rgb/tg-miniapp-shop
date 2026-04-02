@@ -665,6 +665,11 @@ export async function createShipmentForOrder(
   cdekProxyBaseUrl: string,
   orderId: string,
 ): Promise<ShipmentProcessResult> {
+  logShipmentEvent("TRACK_FLOW_ENTERED", {
+    orderId,
+    functionName: "createShipmentForOrder",
+  });
+
   const { data: order, error: orderErr } = await supabase
     .from("tg_orders")
     .select(`
@@ -1061,6 +1066,12 @@ export async function createShipmentForOrder(
       if (cdekUuid) {
         const statusUrl =
           `${proxyBase}/api/shipping/status/${encodeURIComponent(cdekUuid)}?originProfile=${encodeURIComponent(group.originProfile)}`;
+        logShipmentEvent("TRACK_POLL_LOOP_STARTED", {
+          orderId,
+          originProfile: group.originProfile,
+          cdekUuid,
+          statusUrl,
+        });
         logShipmentEvent("shipment_track_polling_started", {
           orderId,
           originProfile: group.originProfile,
@@ -1073,6 +1084,14 @@ export async function createShipmentForOrder(
         let lastRequestState: string | null = null;
 
         for (let attempt = 1; attempt <= TRACK_POLL_MAX_ATTEMPTS; attempt += 1) {
+          if (attempt === 1) {
+            logShipmentEvent("TRACK_POLL_ATTEMPT", {
+              orderId,
+              originProfile: group.originProfile,
+              cdekUuid,
+              attempt,
+            });
+          }
           const statusRes = await fetch(statusUrl, { method: "GET" });
           const statusJson = await statusRes.json().catch(() => null) as Record<string, unknown> | null;
           logShipmentEvent("shipment_status_proxy_response_raw", {
@@ -1168,6 +1187,13 @@ export async function createShipmentForOrder(
         }
       }
 
+      logShipmentEvent("TRACK_DB_UPDATE_STARTED", {
+        orderId,
+        originProfile: group.originProfile,
+        cdekUuid,
+        cdekStatus,
+        cdekTrackNumber,
+      });
       await upsertOrderShipment(supabase, {
         orderId,
         originProfile: group.originProfile,
@@ -1185,6 +1211,13 @@ export async function createShipmentForOrder(
         cdekTariffCode,
         packagingPreset: packagingPresetResolved,
         package: packageSnapshot,
+      });
+      logShipmentEvent("TRACK_DB_UPDATE_DONE", {
+        orderId,
+        originProfile: group.originProfile,
+        cdekUuid,
+        cdekStatus,
+        cdekTrackNumber,
       });
     }
 
