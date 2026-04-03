@@ -11,10 +11,8 @@ import {
 } from "../../../shared/api/ordersApi";
 import { supabase } from "../../../shared/api/supabaseClient";
 import { getPackagingFeeRub } from "../../../shared/config/packaging";
-import { getCdekTrackingUrl, getUnifiedOrderStatus } from "../../../shared/lib/shipmentStatus";
-import { Button } from "../../../shared/ui/Button";
+import { getUnifiedOrderStatus } from "../../../shared/lib/shipmentStatus";
 import { Card, CardText, CardTitle } from "../../../shared/ui/Card";
-import { ListItem } from "../../../shared/ui/ListItem";
 import { Page } from "../../../shared/ui/Page";
 import "./styles.css";
 
@@ -135,7 +133,6 @@ export function OrdersPage() {
               cdekStatus: order.cdek_status,
               cdekTrackNumber: order.cdek_track_number,
             });
-            const trackingUrl = getCdekTrackingUrl(order.cdek_track_number);
             const orderShipments = shipmentsByOrderId[order.id] ?? [];
             const shipmentTracks = orderShipments
               .filter((shipment) => shipment.cdek_track_number)
@@ -167,39 +164,37 @@ export function OrdersPage() {
                 : "Заказ товара";
 
             return (
-              <div key={order.id} className="orders-list-item">
-                <ListItem
-                  title={orderTitle}
-                  subtitle={[
-                    `Сумма: ${totalRub.toLocaleString("ru-RU")} ₽ • ${formatDateTimeNoSeconds(order.created_at)}`,
-                    `Статус заказа: ${unifiedStatus.shortLabel}`,
-                    ...trackSubtitleLines,
-                  ]
-                    .filter(Boolean)
-                    .join("\n")}
-                  right={(
-                    <div className="orders-right">
-                      <span className={`orders-pill orders-pill--${unifiedStatus.tone}`}>{unifiedStatus.shortLabel}</span>
-                      <button
-                        type="button"
-                        className="orders-open-button"
-                        onClick={() => nav(`/orders/${order.id}`)}
-                      >
-                        Открыть
-                      </button>
+              <div
+                key={order.id}
+                className={`orders-card ${idx === 0 ? "orders-card--first" : ""} ${idx === orders.length - 1 ? "orders-card--last" : ""}`}
+              >
+                <div className="orders-card__content">
+                  <div className="orders-card__left">
+                    <div className="orders-card__title">{orderTitle}</div>
+                    <div className="orders-card__meta">
+                      {`Сумма: ${totalRub.toLocaleString("ru-RU")} ₽ • ${formatDateTimeNoSeconds(order.created_at)}`}
                     </div>
-                  )}
-                  chevron={false}
-                  divider={idx !== orders.length - 1}
-                  position={idx === 0 ? "first" : idx === orders.length - 1 ? "last" : "middle"}
-                />
-                {trackingUrl ? (
-                  <div className="orders-list-item__actions">
-                    <Button variant="secondary" onClick={() => window.open(trackingUrl, "_blank")}>
-                      Отследить
-                    </Button>
+                    <div className="orders-card__status-text">{`Статус заказа: ${unifiedStatus.shortLabel}`}</div>
+                    {trackSubtitleLines.length ? (
+                      <div className="orders-card__tracks">
+                        {trackSubtitleLines.map((line) => (
+                          <div key={`${order.id}-${line}`} className="orders-card__track-line">{line}</div>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
-                ) : null}
+
+                  <div className="orders-card__right">
+                    <span className={`orders-pill orders-pill--${unifiedStatus.tone}`}>{unifiedStatus.shortLabel}</span>
+                    <button
+                      type="button"
+                      className="orders-open-button"
+                      onClick={() => nav(`/orders/${order.id}`)}
+                    >
+                      Открыть
+                    </button>
+                  </div>
+                </div>
               </div>
             );
           })}
@@ -209,9 +204,9 @@ export function OrdersPage() {
 
         {errorText ? <div style={{ color: "#b42318" }}>{errorText}</div> : null}
 
-        <Button variant="secondary" onClick={() => nav(-1)}>
+        <button type="button" className="orders-back-button" onClick={() => nav(-1)}>
           Назад
-        </Button>
+        </button>
       </div>
     </Page>
   );

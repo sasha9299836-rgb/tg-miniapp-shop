@@ -23,29 +23,58 @@
   gap: 10px;
 }
 
-.orders-list-item {
-  display: grid;
-  gap: 8px;
+.orders-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
 }
 
-.orders-list-item__actions {
+.orders-card__content {
   display: flex;
-  justify-content: flex-end;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
 }
 
-.orders-status-copy {
+.orders-card__left {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
+.orders-card__right {
+  flex-shrink: 0;
+  min-width: 132px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.orders-card__title {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  line-height: 1.2;
+}
+
+.orders-card__meta,
+.orders-card__status-text,
+.orders-card__track-line {
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.orders-card__tracks {
   display: grid;
   gap: 2px;
-}
-
-.orders-list .ui-li {
-  border-radius: var(--radius-md);
-}
-
-.orders-list .ui-li__divider {
-  left: 20px;
-  right: 20px;
-  background: var(--border);
 }
 
 .orders-pill {
@@ -86,12 +115,6 @@
   background: color-mix(in srgb, var(--error) 11%, var(--surface) 89%);
 }
 
-.orders-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 .orders-open-button {
   border: 1px solid var(--border);
   background: color-mix(in srgb, var(--surface-alt) 88%, var(--surface) 12%);
@@ -111,4 +134,34 @@
 
 .orders-open-button:active {
   transform: translateY(1px);
+}
+
+.orders-back-button {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.15s ease;
+}
+
+.orders-back-button:hover {
+  background: color-mix(in srgb, var(--surface) 82%, var(--surface-alt) 18%);
+}
+
+.orders-back-button:active {
+  transform: translateY(1px);
+}
+
+@media (max-width: 520px) {
+  .orders-card__content {
+    gap: 12px;
+  }
+
+  .orders-card__right {
+    min-width: 112px;
+  }
 }
