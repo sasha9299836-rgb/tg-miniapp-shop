@@ -85,3 +85,30 @@
   border-color: color-mix(in srgb, var(--error) 40%, var(--border) 60%);
   background: color-mix(in srgb, var(--error) 11%, var(--surface) 89%);
 }
+
+.orders-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.orders-open-button {
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-alt) 88%, var(--surface) 12%);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+
+.orders-open-button:hover {
+  background: color-mix(in srgb, var(--surface-alt) 75%, var(--surface) 25%);
+}
+
+.orders-open-button:active {
+  transform: translateY(1px);
+}

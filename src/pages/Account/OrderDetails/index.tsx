@@ -1,7 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { getCurrentTgUserId } from "../../../shared/auth/tgUser";
-import { formatPackagingLabel, getPackagingFeeRub } from "../../../shared/config/packaging";
+import { getPackagingFeeRub } from "../../../shared/config/packaging";
 import {
   formatCdekStatus,
   getCdekTrackingUrl,
@@ -36,7 +36,7 @@ function formatOrderStatus(status: TgOrder["status"] | string) {
       return "Проверка оплаты";
     case "payment_confirmed":
     case "paid":
-      return "Оплачен";
+      return "Оплата подтверждена";
     case "ready_for_pickup":
       return "Готов к выдаче";
     case "completed":
@@ -102,6 +102,8 @@ export function OrderDetailsPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [isOrderHistoryOpen, setIsOrderHistoryOpen] = useState(false);
+  const [copyTrackFeedback, setCopyTrackFeedback] = useState<string | null>(null);
 
   useEffect(() => {
     if (!orderId) {
@@ -210,6 +212,21 @@ export function OrderDetailsPage() {
         : [];
   const trackingUrl = getCdekTrackingUrl(trackLines[0]);
 
+  useEffect(() => {
+    if (!copyTrackFeedback) return;
+    const timeout = window.setTimeout(() => setCopyTrackFeedback(null), 1800);
+    return () => window.clearTimeout(timeout);
+  }, [copyTrackFeedback]);
+
+  const onCopyTrackNumber = async (trackNumber: string) => {
+    try {
+      await navigator.clipboard.writeText(trackNumber);
+      setCopyTrackFeedback("Скопировано");
+    } catch {
+      setCopyTrackFeedback("Не удалось скопировать");
+    }
+  };
+
   return (
     <Page>
       <div className="order-details-grid">
@@ -243,39 +260,35 @@ export function OrderDetailsPage() {
             </Card>
 
             <Card className="ui-card--padded order-details-card">
-              <div className="order-details-section-title">{trackLines.length > 1 ? "Трек-номера" : "Трек-номер"}</div>
+              <div className="order-details-section-title">{trackLines.length > 1 ? "Трек-номера CDEK" : "Трек-номер CDEK"}</div>
               {trackLines.length ? (
                 <div className="order-details-timeline">
                   {trackLines.map((line) => (
                     <div key={line} className="order-details-timeline-item">
-                      <div className="order-details-timeline-status">{line}</div>
+                      <div className="order-details-track-row">
+                        <div className="order-details-timeline-status">{line}</div>
+                        {trackLines.length === 1 ? (
+                          <button
+                            type="button"
+                            className="order-details-copy-button"
+                            onClick={() => void onCopyTrackNumber(line)}
+                          >
+                            Копировать
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                   ))}
                 </div>
               ) : (
                 <div style={{ color: "var(--muted)" }}>Трек-номер пока не назначен.</div>
               )}
+              {copyTrackFeedback ? <div className="order-details-copy-feedback">{copyTrackFeedback}</div> : null}
               {trackingUrl ? (
                 <div className="order-details-actions">
                   <Button variant="secondary" onClick={() => window.open(trackingUrl, "_blank")}>Отследить на сайте СДЭК</Button>
                 </div>
               ) : null}
-            </Card>
-
-            <Card className="ui-card--padded order-details-card">
-              <div className="order-details-section-title">История статусов заказа</div>
-              {timelineRows.length ? (
-                <div className="order-details-timeline">
-                  {timelineRows.map((event) => (
-                    <div key={`${event.status}-${event.changed_at}-${event.source}`} className="order-details-timeline-item">
-                      <div className="order-details-timeline-status">{formatOrderStatus(event.status)}</div>
-                      <div className="order-details-timeline-time">{formatDateTime(event.changed_at)}</div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={{ color: "var(--muted)" }}>События по заказу пока отсутствуют.</div>
-              )}
             </Card>
 
             <Card className="ui-card--padded order-details-card">
@@ -315,7 +328,9 @@ export function OrderDetailsPage() {
                   <div className="order-details-row"><span>Товаров в заказе</span><span>{orderPostIds.length || 1}</span></div>
                   <div className="order-details-row"><span>Сумма товара</span><span>{priceRub.toLocaleString("ru-RU")} ₽</span></div>
                   <div className="order-details-row"><span>Доставка</span><span>{deliveryFee.toLocaleString("ru-RU")} ₽</span></div>
-                  <div className="order-details-row"><span>{formatPackagingLabel(order.packaging_type)}</span><span>{packagingFee.toLocaleString("ru-RU")} ₽</span></div>
+                  {packagingFee > 0 ? (
+                    <div className="order-details-row"><span>Коробка</span><span>{packagingFee.toLocaleString("ru-RU")} ₽</span></div>
+                  ) : null}
                   <div className="order-details-row"><span>Итого</span><span>{total.toLocaleString("ru-RU")} ₽</span></div>
                   <div className="order-details-row"><span>Оплата</span><span>Перевод</span></div>
                   <div className="order-details-row"><span>Подтверждение оплаты</span><span>{order.payment_proof_key ? "Загружено" : "Не загружено"}</span></div>
@@ -323,6 +338,28 @@ export function OrderDetailsPage() {
                     <div className="order-details-row"><span>Резерв до</span><span>{formatDateTime(order.reserved_until)}</span></div>
                   ) : null}
                 </>
+              ) : null}
+            </Card>
+
+            <Card className="ui-card--padded order-details-card">
+              <button type="button" className="order-details-toggle" onClick={() => setIsOrderHistoryOpen((prev) => !prev)}>
+                <span>История статусов заказа</span>
+                <span>{isOrderHistoryOpen ? "▾" : "▸"}</span>
+              </button>
+
+              {isOrderHistoryOpen ? (
+                timelineRows.length ? (
+                  <div className="order-details-timeline">
+                    {timelineRows.map((event) => (
+                      <div key={`${event.status}-${event.changed_at}-${event.source}`} className="order-details-timeline-item">
+                        <div className="order-details-timeline-status">{formatOrderStatus(event.status)}</div>
+                        <div className="order-details-timeline-time">{formatDateTime(event.changed_at)}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ color: "var(--muted)" }}>События по заказу пока отсутствуют.</div>
+                )
               ) : null}
             </Card>
           </>

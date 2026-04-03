@@ -32,6 +32,41 @@
   justify-content: flex-start;
 }
 
+.order-details-track-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.order-details-copy-button {
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-alt) 82%, var(--surface) 18%);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+
+.order-details-copy-button:hover {
+  background: color-mix(in srgb, var(--surface-alt) 68%, var(--surface) 32%);
+}
+
+.order-details-copy-button:active {
+  transform: translateY(1px);
+}
+
+.order-details-copy-feedback {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .order-status-card {
   display: grid;
   gap: 8px;
