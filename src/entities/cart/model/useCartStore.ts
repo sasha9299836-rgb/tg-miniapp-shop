@@ -16,11 +16,13 @@ export const useCartStore = create<State>((set, get) => ({
     const items = get().items;
     const existing = items.find((i) => i.productId === productId);
     if (existing) {
-      set({
-        items: items.map((i) =>
-          i.productId === productId ? { ...i, qty: i.qty + 1 } : i
-        ),
-      });
+      if (existing.qty !== 1) {
+        set({
+          items: items.map((i) =>
+            i.productId === productId ? { ...i, qty: 1 } : i
+          ),
+        });
+      }
       return;
     }
     set({ items: [...items, { productId, qty: 1 }] });

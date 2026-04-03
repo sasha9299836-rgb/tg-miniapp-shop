@@ -25,7 +25,6 @@ import { supabase } from "../../../shared/api/supabaseClient";
 import {
   formatCdekStatus,
   getAdminOperationalStatus,
-  getCdekTrackingUrl,
   isLikelyStaleShipmentLock,
 } from "../../../shared/lib/shipmentStatus";
 import { getAdminActionErrorMessage, getBatchShipmentSyncErrorMessage } from "../../../shared/lib/adminErrors";
@@ -224,6 +223,7 @@ function getShipmentCreateErrorMessage(code: string): string {
 
 type OrderCardProps = {
   order: TgOrder;
+  telegramUsername: string | null;
   orderItems: TgOrderItem[];
   orderShipments: TgOrderShipment[];
   historyTrackNumbers: string[];
@@ -246,6 +246,7 @@ type OrderCardProps = {
 function AdminOrderCard(props: OrderCardProps) {
   const {
     order,
+    telegramUsername,
     orderItems,
     orderShipments,
     historyTrackNumbers,
@@ -298,7 +299,10 @@ function AdminOrderCard(props: OrderCardProps) {
     : fallbackTrackList.length
       ? fallbackTrackList[0]
       : (order.cdek_track_number ?? null);
-  const trackingUrl = getCdekTrackingUrl(primaryTrackNumber);
+  const normalizedTelegramUsername = String(telegramUsername ?? "").trim().replace(/^@+/, "");
+  const telegramUrl = normalizedTelegramUsername
+    ? `https://t.me/${encodeURIComponent(normalizedTelegramUsername)}`
+    : null;
   const canConfirm = order.status === "payment_proof_submitted";
   const canRecoverLock = Boolean(order.shipment_create_in_progress && !order.cdek_uuid && isLikelyStaleShipmentLock(order.shipment_create_started_at));
   const timelineRows = useMemo(() => buildTimelineRows(order, orderEvents, shipmentHistory), [order, orderEvents, shipmentHistory]);
@@ -371,10 +375,7 @@ function AdminOrderCard(props: OrderCardProps) {
           <Button variant="secondary" disabled={isBusy} onClick={() => onRequestReject(order)}>Отклонить оплату</Button>
         ) : null}
         <Button variant="secondary" disabled={isBusy} onClick={() => onOpenOrder(order.id)}>Открыть заказ</Button>
-        {trackingUrl ? (
-          <Button variant="secondary" disabled={isBusy} onClick={() => window.open(trackingUrl, "_blank", "noopener,noreferrer")}>Отслеживание посылки</Button>
-        ) : null}
-        {primaryTrackNumber ? (
+        {isExpanded && primaryTrackNumber ? (
           <Button variant="secondary" disabled={isBusy} onClick={() => void onCopyTrackNumber(primaryTrackNumber)}>Копировать номер отправления</Button>
         ) : null}
       </div>
@@ -505,6 +506,18 @@ function AdminOrderCard(props: OrderCardProps) {
 
       {isExpanded ? (
         <div className="admin-order-card__details-grid">
+          <div>
+            Телеграм: {telegramUrl ? (
+              <a
+                href={telegramUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: "var(--accent-strong)", textDecoration: "underline" }}
+              >
+                @{normalizedTelegramUsername}
+              </a>
+            ) : "не указан"}
+          </div>
           <div>Сумма: {order.price_rub ?? 0} ₽</div>
           <div>ФИО: {order.fio}</div>
           <div>Телефон: {order.phone}</div>
@@ -529,6 +542,7 @@ export function AdminOrdersPage() {
   const [orderItemsByOrderId, setOrderItemsByOrderId] = useState<Record<string, TgOrderItem[]>>({});
   const [orderShipmentsByOrderId, setOrderShipmentsByOrderId] = useState<Record<string, TgOrderShipment[]>>({});
   const [historyTrackNumbersByOrderId, setHistoryTrackNumbersByOrderId] = useState<Record<string, string[]>>({});
+  const [telegramUsernameByOrderId, setTelegramUsernameByOrderId] = useState<Record<string, string | null>>({});
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [busyOrderId, setBusyOrderId] = useState<string | null>(null);
@@ -570,6 +584,26 @@ export function AdminOrdersPage() {
       setOrderItemsByOrderId(groupedOrderItems);
       setOrderShipmentsByOrderId(groupedOrderShipments);
       setHistoryTrackNumbersByOrderId(groupedHistoryTracks);
+
+      const tgUserIds = [...new Set(orderRows.map((row) => String(row.tg_user_id ?? "").trim()).filter(Boolean))];
+      const telegramByUserId: Record<string, string | null> = {};
+      if (tgUserIds.length) {
+        const { data: users, error: usersErr } = await supabase
+          .from("tg_users")
+          .select("telegram_id, telegram_username")
+          .in("telegram_id", tgUserIds);
+        if (usersErr) throw usersErr;
+        (users ?? []).forEach((row) => {
+          const entry = row as { telegram_id: string | number; telegram_username: string | null };
+          telegramByUserId[String(entry.telegram_id)] = entry.telegram_username ? String(entry.telegram_username) : null;
+        });
+      }
+      const telegramByOrderId = orderRows.reduce<Record<string, string | null>>((acc, row) => {
+        const key = String(row.tg_user_id ?? "").trim();
+        acc[row.id] = key ? (telegramByUserId[key] ?? null) : null;
+        return acc;
+      }, {});
+      setTelegramUsernameByOrderId(telegramByOrderId);
 
       const postIds = [...new Set(orderRows.flatMap((row) => {
         const fromItems = (groupedOrderItems[row.id] ?? []).map((item) => item.post_id);
@@ -886,6 +920,7 @@ export function AdminOrdersPage() {
           <AdminOrderCard
             key={order.id}
             order={order}
+            telegramUsername={telegramUsernameByOrderId[order.id] ?? null}
             orderItems={orderItems}
             orderShipments={orderShipments}
             historyTrackNumbers={historyTrackNumbersByOrderId[order.id] ?? []}
