@@ -7,6 +7,7 @@ import {
   saveTelegramUserProfile,
   type TgUserRecord,
 } from "../../../shared/api/telegramUsersApi";
+import { listAddressPresets } from "../../../shared/api/addressPresetsApi";
 import { getKnownTgUserId } from "../../../shared/auth/tgUser";
 import { useTelegramUser } from "../../../shared/auth/useTelegramUser";
 import { normalizeFio } from "../../../shared/lib/formatFio";
@@ -42,6 +43,18 @@ function applyProfileFromDbRow(setProfile: (patch: Partial<Profile>) => void, ro
   });
 }
 
+function splitFio(value: string): { lastName: string; firstName: string; middleName: string } {
+  const parts = String(value ?? "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  return {
+    lastName: parts[0] ?? "",
+    firstName: parts[1] ?? "",
+    middleName: parts.slice(2).join(" "),
+  };
+}
+
 export function ProfilePage() {
   const nav = useNavigate();
   const { profile, setProfile } = useAccountStore();
@@ -69,10 +82,50 @@ export function ProfilePage() {
     let active = true;
     setIsLoadingProfile(true);
     void loadTelegramUserProfile(telegramId)
-      .then((row) => {
-        if (!active || !row) return;
-        setDbAdmin(Boolean(row.is_admin));
-        applyProfileFromDbRow(setProfile, row);
+      .then(async (row) => {
+        if (!active) return;
+        if (row) {
+          setDbAdmin(Boolean(row.is_admin));
+          applyProfileFromDbRow(setProfile, row);
+
+          const isProfileEmpty = !String(row.last_name ?? "").trim() &&
+            !String(row.first_name ?? "").trim() &&
+            !String(row.middle_name ?? "").trim() &&
+            !String(row.phone ?? "").trim();
+
+          if (isProfileEmpty) {
+            try {
+              const presets = await listAddressPresets(telegramId);
+              if (!active || !presets.length) return;
+              const source = presets.find((preset) => preset.is_default) ?? presets[0];
+              const parsed = splitFio(source.recipient_fio);
+              setProfile({
+                lastName: parsed.lastName,
+                firstName: parsed.firstName,
+                middleName: parsed.middleName,
+                phone: String(source.recipient_phone ?? "").trim(),
+              });
+            } catch (error) {
+              console.log("[tg-user-profile-prefill-from-address] error", error);
+            }
+          }
+          return;
+        }
+
+        try {
+          const presets = await listAddressPresets(telegramId);
+          if (!active || !presets.length) return;
+          const source = presets.find((preset) => preset.is_default) ?? presets[0];
+          const parsed = splitFio(source.recipient_fio);
+          setProfile({
+            lastName: parsed.lastName,
+            firstName: parsed.firstName,
+            middleName: parsed.middleName,
+            phone: String(source.recipient_phone ?? "").trim(),
+          });
+        } catch (error) {
+          console.log("[tg-user-profile-prefill-from-address] error", error);
+        }
       })
       .catch((error) => {
         console.log("[tg-user-profile-load] page error", error);

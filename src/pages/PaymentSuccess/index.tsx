@@ -25,7 +25,7 @@ export function PaymentSuccessPage() {
 
         <Button
           onClick={() => {
-            cart.clear();
+            void cart.clear();
             nav("/account/orders");
           }}
         >

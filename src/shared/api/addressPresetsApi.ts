@@ -8,6 +8,7 @@ export type TgAddressPreset = {
   name: string;
   recipient_fio: string;
   recipient_phone: string;
+  recipient_email?: string | null;
   city: string;
   city_code?: string | null;
   pvz: string;

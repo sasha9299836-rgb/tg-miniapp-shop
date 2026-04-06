@@ -128,3 +128,40 @@
   border-color: color-mix(in srgb, var(--accent) 44%, var(--border) 56%);
   color: var(--text);
 }
+
+.payment-exit-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.38);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  z-index: 2000;
+}
+
+.payment-exit-dialog {
+  width: min(100%, 420px);
+  border-radius: 16px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  display: grid;
+  gap: 10px;
+}
+
+.payment-exit-dialog__title {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.payment-exit-dialog__text {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.payment-exit-dialog__actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 2px;
+}

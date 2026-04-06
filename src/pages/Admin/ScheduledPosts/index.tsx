@@ -45,20 +45,23 @@ function TabBadge({ value }: { value: number }) {
     <span
       style={{
         position: "absolute",
-        top: -6,
-        right: -6,
-        minWidth: 16,
-        height: 16,
-        padding: "0 4px",
+        top: -7,
+        right: -8,
+        minWidth: 18,
+        height: 18,
+        padding: "0 5px",
         borderRadius: 999,
-        background: "#0b0b0c",
+        background: "var(--accent-strong)",
         color: "#fff",
         fontSize: 10,
         fontWeight: 800,
-        lineHeight: "16px",
+        lineHeight: 1,
+        fontVariantNumeric: "tabular-nums",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
         textAlign: "center",
-        border: "1px solid rgba(255,255,255,0.65)",
-        boxShadow: "0 4px 10px rgba(0,0,0,0.15)",
+        border: "1px solid color-mix(in srgb, var(--surface) 85%, transparent)",
       }}
     >
       {value}

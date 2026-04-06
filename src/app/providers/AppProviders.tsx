@@ -1,6 +1,8 @@
 import { useEffect, type ReactNode } from "react";
 import { useAccountStore } from "../../entities/account/model/useAccountStore";
 import { useAdminStore } from "../../entities/account/model/useAdminStore";
+import { useCartStore } from "../../entities/cart/model/useCartStore";
+import { useFavoritesStore } from "../../entities/favorites/model/useFavoritesStore";
 import { upsertTelegramUser } from "../../shared/api/telegramUsersApi";
 import { getTelegramUser, initTelegramWebApp } from "./telegram";
 
@@ -69,6 +71,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
             isAdmin: Boolean(row.is_admin),
             registeredAt: row.registered_at,
           });
+          void useFavoritesStore.getState().load();
+          void useCartStore.getState().load();
           lastBootstrappedTelegramId = row.telegram_id;
         }
       } catch (error) {

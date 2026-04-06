@@ -17,15 +17,7 @@
   position: relative;
   z-index: 1;
   display: grid;
-  gap: 10px;
-}
-
-.home-hero__eyebrow {
-  font-size: 11px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--muted);
-  font-weight: 700;
+  gap: 8px;
 }
 
 .home-hero__title {
@@ -40,14 +32,14 @@
   font-size: 14px;
   color: var(--muted);
   line-height: 1.45;
-  max-width: 240px;
+  max-width: 320px;
 }
 
 .home-hero__actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
-  margin-top: 8px;
+  margin-top: 4px;
 }
 
 .home-hero__btn {

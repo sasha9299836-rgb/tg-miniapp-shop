@@ -199,12 +199,56 @@
 
 .item-actions {
   display: grid;
-  gap: 10px;
+  grid-template-columns: 40px minmax(0, 1fr) 40px 40px;
+  align-items: center;
+  gap: 8px;
   margin-top: 16px;
 }
 
-.item-action {
+.item-action-main {
   width: 100%;
+  min-height: 40px;
+}
+
+.item-action-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-alt) 70%, var(--surface) 30%);
+  color: var(--text);
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.18s ease;
+}
+
+.item-action-icon:active {
+  transform: scale(0.96);
+}
+
+.item-action-icon--back svg {
+  width: 14px;
+  height: 12px;
+  fill: currentColor;
+  transform: rotate(180deg);
+  display: block;
+}
+
+.item-action-icon--share svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+  display: block;
+}
+
+.item-action-icon.is-on {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border) 45%);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface) 86%);
+  color: color-mix(in srgb, var(--accent-strong) 80%, var(--text) 20%);
 }
 
 .item-viewer {

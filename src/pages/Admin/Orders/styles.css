@@ -29,8 +29,27 @@
 }
 
 .admin-order-card__product {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+}
+
+.admin-order-card__items {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.admin-order-card__item-row {
   display: flex;
   gap: 10px;
+  min-width: 0;
+}
+
+.admin-order-card__item-content {
+  display: grid;
+  gap: 3px;
   min-width: 0;
 }
 
@@ -40,6 +59,7 @@
   border-radius: 10px;
   object-fit: cover;
   flex-shrink: 0;
+  border: 1px solid var(--border);
 }
 
 .admin-order-card__preview--empty {
@@ -57,9 +77,19 @@
   word-break: break-word;
 }
 
+.admin-order-card__price {
+  font-size: 14px;
+  font-weight: 600;
+}
+
 .admin-order-card__subtitle {
   color: var(--muted);
   font-size: 13px;
+}
+
+.admin-order-card__order-total {
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .admin-order-status-pill {

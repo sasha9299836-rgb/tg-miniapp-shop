@@ -1,8 +1,10 @@
-﻿import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useProductsStore } from "../../entities/product/model/useProductsStore";
 import { useFavoritesStore } from "../../entities/favorites/model/useFavoritesStore";
 import { useCartStore } from "../../entities/cart/model/useCartStore";
+import { getCatalogProductsByPostIds } from "../../shared/api/adminPostsApi";
+import type { Product } from "../../shared/types/product";
 import { EmptyState } from "../../shared/ui/EmptyState";
 import { Button } from "../../shared/ui/Button";
 import { Card } from "../../shared/ui/Card";
@@ -14,14 +16,50 @@ export function FavoritesPage() {
   const { products, load } = useProductsStore();
   const fav = useFavoritesStore();
   const cart = useCartStore();
+  const [itemsByFavorites, setItemsByFavorites] = useState<Product[]>([]);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
-  const items = useMemo(() => products.filter((p) => fav.ids.includes(p.id)), [products, fav.ids]);
+  useEffect(() => {
+    void fav.load();
+    void cart.load();
+  }, []);
 
-  if (!fav.ids.length) {
+  useEffect(() => {
+    const mapped = products.map((product) => ({ id: product.id, postId: product.postId }));
+    fav.registerCatalogItems(mapped);
+    cart.registerCatalogItems(mapped);
+  }, [products]);
+
+  useEffect(() => {
+    const run = async () => {
+      if (!fav.postIds.length) {
+        setItemsByFavorites([]);
+        return;
+      }
+      try {
+        const rows = await getCatalogProductsByPostIds(fav.postIds);
+        setItemsByFavorites(rows);
+        const mapped = rows.map((product) => ({ id: product.id, postId: product.postId }));
+        fav.registerCatalogItems(mapped);
+        cart.registerCatalogItems(mapped);
+      } catch {
+        setItemsByFavorites([]);
+      }
+    };
+    void run();
+  }, [fav.postIds]);
+
+  const items = useMemo(() => {
+    const map = new Map(itemsByFavorites.map((item) => [item.postId, item]));
+    return fav.postIds
+      .map((postId) => map.get(postId))
+      .filter(Boolean) as Product[];
+  }, [itemsByFavorites, fav.postIds]);
+
+  if (!fav.postIds.length) {
     return (
       <Page>
         <div className="favorites-page">
@@ -45,35 +83,43 @@ export function FavoritesPage() {
       <div className="favorites-page">
         <div className="favorites-header">
           <h1 className="favorites-title">Избранное</h1>
-          <Button variant="secondary" className="favorites-clear" onClick={() => fav.clear()}>
+          <Button variant="secondary" className="favorites-clear" onClick={() => void fav.clear()}>
             Удалить все
           </Button>
         </div>
 
         <div className="favorites-grid">
-          {items.map((p) => (
-            <Card key={p.id} className="ui-card--padded favorites-item">
+          {items.map((product) => (
+            <Card key={product.postId ?? product.id} className="ui-card--padded favorites-item">
               <div
                 className="favorites-item__row"
-                onClick={() => nav(`/item/${p.id}`)}
+                onClick={() => nav(`/item/${product.id}`)}
                 role="button"
                 tabIndex={0}
               >
-                <img src={p.images?.[0]} alt={p.title} className="favorites-item__image" />
+                <img src={product.images?.[0]} alt={product.title} className="favorites-item__image" />
                 <div>
-                  <div className="favorites-item__title">{p.title}</div>
-                  {p.description ? (
-                    <div className="favorites-item__desc">{p.description}</div>
+                  <div className="favorites-item__title">{product.title}</div>
+                  {product.description ? (
+                    <div className="favorites-item__desc">{product.description}</div>
                   ) : null}
                   <div className="favorites-item__price">
-                    {p.price.toLocaleString("ru-RU")} ₽
+                    {product.price.toLocaleString("ru-RU")} ₽
                   </div>
+                  {product.saleStatus !== "available" ? (
+                    <div className="favorites-item__desc">Продано / недоступно</div>
+                  ) : null}
                 </div>
               </div>
 
               <div className="favorites-item__actions">
-                <Button variant="secondary" onClick={() => fav.remove(p.id)}>Удалить</Button>
-                <Button onClick={() => cart.add(p.id)}>В корзину</Button>
+                <Button variant="secondary" onClick={() => void fav.remove({ id: product.id, postId: product.postId })}>Удалить</Button>
+                <Button
+                  onClick={() => void cart.add({ id: product.id, postId: product.postId })}
+                  disabled={product.saleStatus !== "available"}
+                >
+                  {product.saleStatus === "available" ? "В корзину" : "Недоступно"}
+                </Button>
               </div>
             </Card>
           ))}

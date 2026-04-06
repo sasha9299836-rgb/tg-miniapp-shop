@@ -18,7 +18,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => null) as { order_id?: string; reason?: string } | null;
     const orderId = String(body?.order_id ?? "").trim();
     const reason = String(body?.reason ?? "").trim();
-    if (!orderId || !reason) return json({ error: "BAD_PAYLOAD" }, 400);
+    if (!orderId) return json({ error: "BAD_PAYLOAD" }, 400);
 
     const result = await rejectOrderPaymentForOrder(supabase, orderId, reason);
     return json(result);

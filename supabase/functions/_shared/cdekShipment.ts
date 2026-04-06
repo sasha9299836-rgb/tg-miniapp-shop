@@ -91,6 +91,39 @@ export type ActiveShipmentSyncBatchResult = {
 
 type ShipmentStatusEventSource = "webhook" | "manual_sync" | "scheduled_sync";
 type OrderStatusReconciliationSource = ShipmentStatusEventSource | "create_followup";
+type ShipmentStatusTimelineSource = ShipmentStatusEventSource | "create_poll";
+type ShipmentStatusTimelineEvent = {
+  eventKey: string;
+  cdekStatus: string | null;
+  statusCode: string | null;
+  statusName: string | null;
+  statusDateTime: string | null;
+  city: string | null;
+};
+
+function toIsoDateTimeOrNull(value: string | null): string | null {
+  if (!value) return null;
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return value;
+  return new Date(timestamp).toISOString();
+}
+
+function extractRawStatusPayloadFromProxyResponse(
+  statusJson: Record<string, unknown> | null,
+): Record<string, unknown> | null {
+  if (!statusJson || typeof statusJson !== "object") return null;
+  const nestedStatus = statusJson.status;
+  if (nestedStatus && typeof nestedStatus === "object" && !Array.isArray(nestedStatus)) {
+    return nestedStatus as Record<string, unknown>;
+  }
+  if (statusJson.entity && typeof statusJson.entity === "object" && !Array.isArray(statusJson.entity)) {
+    return statusJson;
+  }
+  if (Array.isArray(statusJson.statuses) || Array.isArray(statusJson.requests)) {
+    return statusJson;
+  }
+  return null;
+}
 
 function isOrderStatus(value: unknown): value is OrderStatus {
   return value === "created" ||
@@ -122,19 +155,63 @@ async function insertShipmentStatusHistory(
     cdekUuid: string | null;
     cdekStatus: string | null;
     cdekTrackNumber: string | null;
-    eventSource: ShipmentStatusEventSource;
+    eventSource: ShipmentStatusTimelineSource;
+    eventKey?: string | null;
+    statusCode?: string | null;
+    statusName?: string | null;
+    statusDateTime?: string | null;
+    statusDateTimeCompat?: string | null;
+    city?: string | null;
   },
-) {
-  const { error } = await supabase.from("tg_shipment_status_history").insert({
+): Promise<boolean> {
+  const dedupeStatusDateTime = params.statusDateTimeCompat ?? params.statusDateTime ?? null;
+  if (!params.orderId || !params.cdekUuid || !params.cdekStatus || !dedupeStatusDateTime) {
+    logShipmentEvent("shipment_status_history_skipped", {
+      orderId: params.orderId,
+      cdekUuid: params.cdekUuid,
+      cdekStatus: params.cdekStatus,
+      statusDateTime: dedupeStatusDateTime,
+      reason: "missing_dedupe_key",
+    });
+    return false;
+  }
+
+  const payload = {
     order_id: params.orderId,
     cdek_uuid: params.cdekUuid,
     cdek_status: params.cdekStatus,
     cdek_track_number: params.cdekTrackNumber,
     event_source: params.eventSource,
-  });
+    event_key: params.eventKey ?? null,
+    status_code: params.statusCode ?? null,
+    status_name: params.statusName ?? null,
+    status_date_time: params.statusDateTime ?? null,
+    status_datetime: dedupeStatusDateTime,
+    city: params.city ?? null,
+  };
+
+  const { data, error } = await supabase
+    .from("tg_shipment_status_history")
+    .upsert(payload, {
+      onConflict: "order_id,cdek_uuid,cdek_status,status_datetime",
+      ignoreDuplicates: true,
+    })
+    .select("id")
+    .limit(1);
 
   if (error) {
     throw new ShipmentProcessError("SHIPMENT_STATUS_HISTORY_SAVE_FAILED", 500, error.message);
+  }
+
+  const inserted = Array.isArray(data) && data.length > 0;
+  if (!inserted) {
+    logShipmentEvent("shipment_status_history_duplicate_skipped", {
+      orderId: params.orderId,
+      cdekUuid: params.cdekUuid,
+      cdekStatus: params.cdekStatus,
+      statusDateTime: dedupeStatusDateTime,
+    });
+    return false;
   }
 
   logShipmentEvent("shipment_status_history_saved", {
@@ -143,7 +220,252 @@ async function insertShipmentStatusHistory(
     cdekStatus: params.cdekStatus,
     cdekTrackNumber: params.cdekTrackNumber,
     eventSource: params.eventSource,
+    eventKey: params.eventKey ?? null,
+    statusCode: params.statusCode ?? null,
+    statusName: params.statusName ?? null,
+    statusDateTime: params.statusDateTime ?? null,
+    city: params.city ?? null,
   });
+  return true;
+}
+
+function normalizeTimelineString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+}
+
+function normalizeTimelineScalar(value: unknown): string | null {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length ? trimmed : null;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+  return null;
+}
+
+function buildShipmentTimelineEventKey(params: {
+  orderId: string;
+  cdekUuid: string | null;
+  statusCode: string | null;
+  statusName: string | null;
+  statusDateTime: string | null;
+  index: number;
+}) {
+  return [
+    params.orderId,
+    params.cdekUuid ?? "no_uuid",
+    params.statusCode ?? "no_code",
+    params.statusName ?? "no_name",
+    params.statusDateTime ?? "no_datetime",
+    String(params.index),
+  ].join("|");
+}
+
+function extractShipmentTimelineEvents(
+  orderId: string,
+  cdekUuid: string | null,
+  statusPayload: Record<string, unknown> | null,
+): ShipmentStatusTimelineEvent[] {
+  const entity = (statusPayload?.entity ?? statusPayload) as Record<string, unknown> | null;
+  const statuses = Array.isArray(entity?.statuses)
+    ? entity.statuses
+    : Array.isArray(statusPayload?.statuses)
+      ? statusPayload.statuses
+      : Array.isArray(entity?.events)
+        ? entity.events
+        : Array.isArray(statusPayload?.events)
+          ? statusPayload.events
+          : [];
+
+  return statuses
+    .map((entry, index) => {
+      const status = entry && typeof entry === "object" ? entry as Record<string, unknown> : null;
+      if (!status) return null;
+
+      const statusCode = normalizeTimelineScalar(status.code)
+        ?? normalizeTimelineScalar(status.status_code)
+        ?? normalizeTimelineScalar(status.state);
+      const statusName = normalizeTimelineString(status.name)
+        ?? normalizeTimelineString(status.status_name)
+        ?? normalizeTimelineString(status.title)
+        ?? normalizeTimelineString(status.description);
+      const statusDateTime = toIsoDateTimeOrNull(
+        normalizeTimelineString(status.date_time)
+          ?? normalizeTimelineString(status.status_date_time)
+          ?? normalizeTimelineString(status.date)
+          ?? normalizeTimelineString(status.datetime)
+          ?? normalizeTimelineString(status.timestamp)
+          ?? normalizeTimelineString(status.time)
+          ?? normalizeTimelineString(status.created_at),
+      );
+      const city = normalizeTimelineString(status.city)
+        ?? normalizeTimelineString(status.location)
+        ?? normalizeTimelineString(status.city_name);
+
+      if (!statusCode && !statusName && !statusDateTime) {
+        return null;
+      }
+
+      return {
+        eventKey: buildShipmentTimelineEventKey({
+          orderId,
+          cdekUuid,
+          statusCode,
+          statusName,
+          statusDateTime,
+          index,
+        }),
+        cdekStatus: statusCode ?? statusName,
+        statusCode,
+        statusName,
+        statusDateTime,
+        city,
+      } satisfies ShipmentStatusTimelineEvent;
+    })
+    .filter((entry): entry is ShipmentStatusTimelineEvent => Boolean(entry));
+}
+
+async function persistShipmentStatusTimeline(
+  supabase: any,
+  params: {
+    orderId: string;
+    cdekUuid: string | null;
+    cdekTrackNumber: string | null;
+    rawStatusPayload: Record<string, unknown> | null;
+    eventSource: ShipmentStatusTimelineSource;
+  },
+) {
+  const events = extractShipmentTimelineEvents(params.orderId, params.cdekUuid, params.rawStatusPayload);
+  if (!events.length) return;
+  let insertedCount = 0;
+
+  for (const event of events) {
+    const inserted = await insertShipmentStatusHistory(supabase, {
+      orderId: params.orderId,
+      cdekUuid: params.cdekUuid,
+      cdekStatus: event.cdekStatus,
+      cdekTrackNumber: params.cdekTrackNumber,
+      eventSource: params.eventSource,
+      eventKey: event.eventKey,
+      statusCode: event.statusCode,
+      statusName: event.statusName,
+      statusDateTime: event.statusDateTime,
+      statusDateTimeCompat: event.statusDateTime,
+      city: event.city,
+    });
+    if (inserted) insertedCount += 1;
+  }
+
+  logShipmentEvent("STATUS_HISTORY_INSERT", {
+    orderId: params.orderId,
+    cdekUuid: params.cdekUuid,
+    insertedCount,
+    totalEvents: events.length,
+    eventSource: params.eventSource,
+  });
+
+  logShipmentEvent("shipment_status_timeline_persisted", {
+    orderId: params.orderId,
+    cdekUuid: params.cdekUuid,
+    eventSource: params.eventSource,
+    eventsSaved: insertedCount,
+    eventsTotal: events.length,
+  });
+}
+
+async function persistShipmentStatusSnapshot(
+  supabase: any,
+  params: {
+    orderId: string;
+    originProfile: OriginProfile;
+    cdekUuid: string | null;
+    cdekTrackNumber: string | null;
+    cdekStatus: string | null;
+    cdekTariffCode: number | null;
+    rawStatusPayload: Record<string, unknown> | null;
+    eventSource: ShipmentStatusTimelineSource;
+  },
+) {
+  logShipmentEvent("SNAPSHOT_PERSIST_START", {
+    orderId: params.orderId,
+    originProfile: params.originProfile,
+    cdekUuid: params.cdekUuid,
+    eventSource: params.eventSource,
+  });
+
+  try {
+    const syncedAt = new Date().toISOString();
+    const hasRawPayload = Boolean(params.rawStatusPayload);
+
+    logShipmentEvent("SNAPSHOT_PERSIST_INPUT", {
+      orderId: params.orderId,
+      originProfile: params.originProfile,
+      cdekUuid: params.cdekUuid,
+      cdekStatus: params.cdekStatus,
+      cdekTrackNumber: params.cdekTrackNumber,
+      hasRawPayload,
+      rawPayloadKeys: hasRawPayload ? Object.keys(params.rawStatusPayload as Record<string, unknown>) : [],
+    });
+
+    if (!hasRawPayload) {
+      logShipmentEvent("SNAPSHOT_PERSIST_SKIPPED", {
+        orderId: params.orderId,
+        originProfile: params.originProfile,
+        cdekUuid: params.cdekUuid,
+        reason: "raw_payload_missing",
+      });
+    }
+
+    await upsertOrderShipment(supabase, {
+      orderId: params.orderId,
+      originProfile: params.originProfile,
+      cdekUuid: params.cdekUuid,
+      cdekTrackNumber: params.cdekTrackNumber,
+      cdekStatus: params.cdekStatus,
+      cdekTariffCode: params.cdekTariffCode,
+      lastCdekStatusPayload: hasRawPayload ? params.rawStatusPayload : undefined,
+      lastCdekStatusSyncedAt: hasRawPayload ? syncedAt : undefined,
+    });
+
+    if (hasRawPayload) {
+      try {
+        await persistShipmentStatusTimeline(supabase, {
+          orderId: params.orderId,
+          cdekUuid: params.cdekUuid,
+          cdekTrackNumber: params.cdekTrackNumber,
+          rawStatusPayload: params.rawStatusPayload,
+          eventSource: params.eventSource,
+        });
+      } catch (timelineError) {
+        logShipmentEvent("shipment_status_timeline_persist_non_blocking_error", {
+          orderId: params.orderId,
+          originProfile: params.originProfile,
+          cdekUuid: params.cdekUuid,
+          error: toErrorMessage(timelineError),
+          details: toSafeErrorDetails(timelineError),
+        });
+      }
+    }
+
+    logShipmentEvent("SNAPSHOT_PERSIST_UPDATE_DONE", {
+      orderId: params.orderId,
+      originProfile: params.originProfile,
+      cdekUuid: params.cdekUuid,
+      hasRawPayload,
+    });
+  } catch (error) {
+    logShipmentEvent("SNAPSHOT_PERSIST_ERROR", {
+      orderId: params.orderId,
+      originProfile: params.originProfile,
+      cdekUuid: params.cdekUuid,
+      error: toErrorMessage(error),
+      details: toSafeErrorDetails(error),
+    });
+    throw error;
+  }
 }
 
 export class ShipmentProcessError extends Error {
@@ -576,18 +898,28 @@ async function upsertOrderShipment(
     cdekTrackNumber: string | null;
     cdekStatus: string | null;
     cdekTariffCode: number | null;
+    lastCdekStatusPayload?: Record<string, unknown> | null;
+    lastCdekStatusSyncedAt?: string | null;
   },
 ) {
+  const upsertPayload: Record<string, unknown> = {
+    order_id: params.orderId,
+    origin_profile: params.originProfile,
+    cdek_uuid: params.cdekUuid,
+    cdek_track_number: params.cdekTrackNumber,
+    cdek_status: params.cdekStatus,
+    cdek_tariff_code: params.cdekTariffCode,
+  };
+  if (params.lastCdekStatusPayload !== undefined) {
+    upsertPayload.last_cdek_status_payload = params.lastCdekStatusPayload;
+  }
+  if (params.lastCdekStatusSyncedAt !== undefined) {
+    upsertPayload.last_cdek_status_synced_at = params.lastCdekStatusSyncedAt;
+  }
+
   const { error } = await supabase
     .from("tg_order_shipments")
-    .upsert({
-      order_id: params.orderId,
-      origin_profile: params.originProfile,
-      cdek_uuid: params.cdekUuid,
-      cdek_track_number: params.cdekTrackNumber,
-      cdek_status: params.cdekStatus,
-      cdek_tariff_code: params.cdekTariffCode,
-    }, {
+    .upsert(upsertPayload, {
       onConflict: "order_id,origin_profile",
     });
   if (error) throw new ShipmentProcessError("ORDER_SHIPMENTS_SAVE_FAILED", 500, error.message);
@@ -1062,6 +1394,7 @@ export async function createShipmentForOrder(
           : null);
       let cdekStatus = typeof createJson.trackingStatus === "string" ? createJson.trackingStatus : null;
       const cdekTariffCode = Number(createJson.selectedTariffCode ?? finalTariffCode ?? 0) || null;
+      let lastRawStatusPayload: Record<string, unknown> | null = null;
 
       if (cdekUuid) {
         const statusUrl =
@@ -1105,7 +1438,8 @@ export async function createShipmentForOrder(
           });
 
           if (statusRes.ok && statusJson?.ok) {
-            const rawStatusPayload = (statusJson.status ?? null) as Record<string, unknown> | null;
+            const rawStatusPayload = extractRawStatusPayloadFromProxyResponse(statusJson);
+            lastRawStatusPayload = rawStatusPayload;
             const normalized = normalizeTrackData(rawStatusPayload);
             const requestState = getLatestRequestState(rawStatusPayload);
             lastRequestState = requestState ?? lastRequestState;
@@ -1194,13 +1528,15 @@ export async function createShipmentForOrder(
         cdekStatus,
         cdekTrackNumber,
       });
-      await upsertOrderShipment(supabase, {
+      await persistShipmentStatusSnapshot(supabase, {
         orderId,
         originProfile: group.originProfile,
         cdekUuid,
         cdekTrackNumber,
         cdekStatus,
         cdekTariffCode,
+        rawStatusPayload: cdekUuid ? lastRawStatusPayload : null,
+        eventSource: "create_poll",
       });
 
       createdShipments.push({
@@ -1304,7 +1640,8 @@ export async function syncShipmentStatusForOrder(
       origin_profile,
       cdek_uuid,
       cdek_track_number,
-      cdek_status
+      cdek_status,
+      cdek_tariff_code
     `)
     .eq("id", orderId)
     .maybeSingle();
@@ -1328,28 +1665,25 @@ export async function syncShipmentStatusForOrder(
       if (!statusRes.ok || !statusJson?.ok) {
         throw new ShipmentProcessError("SHIPMENT_STATUS_SYNC_FAILED", 502, statusJson ?? { status: statusRes.status });
       }
-      const normalized = normalizeTrackData((statusJson.status ?? null) as Record<string, unknown> | null);
+      const rawStatusPayload = extractRawStatusPayloadFromProxyResponse(statusJson);
+      const normalized = normalizeTrackData(rawStatusPayload);
       const nextTrack = normalized.cdekNumber ?? shipment.cdek_track_number;
       const nextStatus = normalized.cdekStatus ?? shipment.cdek_status;
       const changed = nextTrack !== shipment.cdek_track_number || nextStatus !== shipment.cdek_status;
 
+      await persistShipmentStatusSnapshot(supabase, {
+        orderId,
+        originProfile: shipment.origin_profile,
+        cdekUuid: shipment.cdek_uuid,
+        cdekTrackNumber: nextTrack,
+        cdekStatus: nextStatus,
+        cdekTariffCode: shipment.cdek_tariff_code,
+        rawStatusPayload,
+        eventSource,
+      });
+
       if (changed) {
         updatedCount += 1;
-        await upsertOrderShipment(supabase, {
-          orderId,
-          originProfile: shipment.origin_profile,
-          cdekUuid: shipment.cdek_uuid,
-          cdekTrackNumber: nextTrack,
-          cdekStatus: nextStatus,
-          cdekTariffCode: shipment.cdek_tariff_code,
-        });
-        await insertShipmentStatusHistory(supabase, {
-          orderId,
-          cdekUuid: shipment.cdek_uuid,
-          cdekStatus: nextStatus,
-          cdekTrackNumber: nextTrack,
-          eventSource,
-        });
       }
 
       if (!primaryShipment) {
@@ -1455,12 +1789,24 @@ export async function syncShipmentStatusForOrder(
     throw new ShipmentProcessError("SHIPMENT_STATUS_SYNC_FAILED", 502, statusJson ?? { status: statusRes.status });
   }
 
-  const normalized = normalizeTrackData((statusJson.status ?? null) as Record<string, unknown> | null);
+  const rawStatusPayload = extractRawStatusPayloadFromProxyResponse(statusJson);
+  const normalized = normalizeTrackData(rawStatusPayload);
   const nextTrack = normalized.cdekNumber ?? (typeof row.cdek_track_number === "string" ? row.cdek_track_number : null);
   const nextStatus = normalized.cdekStatus ?? (typeof row.cdek_status === "string" ? row.cdek_status : null);
   const changed =
     nextTrack !== (typeof row.cdek_track_number === "string" ? row.cdek_track_number : null) ||
     nextStatus !== (typeof row.cdek_status === "string" ? row.cdek_status : null);
+
+  await persistShipmentStatusSnapshot(supabase, {
+    orderId,
+    originProfile,
+    cdekUuid: String(row.cdek_uuid),
+    cdekTrackNumber: nextTrack,
+    cdekStatus: nextStatus,
+    cdekTariffCode: Number(row.cdek_tariff_code ?? 0) || null,
+    rawStatusPayload,
+    eventSource,
+  });
 
   const { error: updateErr } = await supabase
     .from("tg_orders")
@@ -1473,16 +1819,6 @@ export async function syncShipmentStatusForOrder(
     .eq("cdek_uuid", String(row.cdek_uuid));
 
   if (updateErr) throw new ShipmentProcessError("SHIPMENT_STATUS_SAVE_FAILED", 500, updateErr.message);
-
-  if (changed) {
-    await insertShipmentStatusHistory(supabase, {
-      orderId,
-      cdekUuid: String(row.cdek_uuid),
-      cdekStatus: nextStatus,
-      cdekTrackNumber: nextTrack,
-      eventSource,
-    });
-  }
 
   await applyOrderStatusReconciliation(supabase, {
     orderId,
@@ -1515,29 +1851,47 @@ export async function syncActiveShipments(
   supabase: any,
   cdekProxyBaseUrl: string,
   limit = ACTIVE_SHIPMENT_SYNC_LIMIT,
+  excludeOrderIds: Iterable<string> = [],
 ): Promise<ActiveShipmentSyncBatchResult> {
   const safeLimit = Math.max(1, Math.min(Number(limit) || ACTIVE_SHIPMENT_SYNC_LIMIT, 100));
+  const excluded = new Set(
+    Array.from(excludeOrderIds)
+      .map((value) => String(value ?? "").trim())
+      .filter(Boolean),
+  );
+  const scanWindow = Math.max(safeLimit * 3, 50);
+  const maxScanPages = 40;
 
   logShipmentEvent("shipment_batch_sync_started", {
     limit: safeLimit,
+    excluded: excluded.size,
   });
 
-  const { data: shipmentRows, error } = await supabase
-    .from("tg_order_shipments")
-    .select("order_id, cdek_uuid, cdek_status, updated_at")
-    .not("cdek_uuid", "is", null)
-    .or("cdek_status.is.null,cdek_status.not.in.(DELIVERED,CANCELLED)")
-    .order("updated_at", { ascending: true })
-    .limit(safeLimit * 2);
+  const rows: Record<string, unknown>[] = [];
+  for (let page = 0; page < maxScanPages; page += 1) {
+    const offset = page * scanWindow;
+    const { data: shipmentRows, error } = await supabase
+      .from("tg_order_shipments")
+      .select("order_id, cdek_uuid, cdek_status, updated_at")
+      .not("cdek_uuid", "is", null)
+      .or("cdek_status.is.null,cdek_status.not.in.(DELIVERED,CANCELLED)")
+      .order("updated_at", { ascending: true })
+      .range(offset, offset + scanWindow - 1);
 
-  if (error) {
-    throw new ShipmentProcessError("ACTIVE_SHIPMENT_BATCH_LOOKUP_FAILED", 500, error.message);
+    if (error) {
+      throw new ShipmentProcessError("ACTIVE_SHIPMENT_BATCH_LOOKUP_FAILED", 500, error.message);
+    }
+
+    const pageRows = Array.isArray(shipmentRows) ? shipmentRows as Record<string, unknown>[] : [];
+    if (!pageRows.length) break;
+    rows.push(...pageRows);
+    if (pageRows.length < scanWindow) break;
   }
-  const rows = Array.isArray(shipmentRows) ? shipmentRows as Record<string, unknown>[] : [];
+
   const uniqueOrderIds: string[] = [];
   for (const row of rows) {
     const orderId = String(row.order_id ?? "").trim();
-    if (!orderId || uniqueOrderIds.includes(orderId)) continue;
+    if (!orderId || excluded.has(orderId) || uniqueOrderIds.includes(orderId)) continue;
     uniqueOrderIds.push(orderId);
     if (uniqueOrderIds.length >= safeLimit) break;
   }
@@ -1597,6 +1951,7 @@ export async function syncActiveShipments(
 
   logShipmentEvent("shipment_batch_sync_completed", {
     limit: safeLimit,
+    excluded: excluded.size,
     processed: result.processed,
     updated: result.updated,
     unchanged: result.unchanged,
@@ -1611,6 +1966,9 @@ export async function processShipmentWebhook(
   supabase: any,
   payload: unknown,
 ): Promise<ShipmentWebhookResult> {
+  const rawWebhookPayload = payload && typeof payload === "object"
+    ? payload as Record<string, unknown>
+    : null;
   const normalized = normalizeWebhookShipmentData(payload);
 
   logShipmentEvent("shipment_webhook_received", {
@@ -1652,23 +2010,16 @@ export async function processShipmentWebhook(
       nextTrack !== (typeof shipment.cdek_track_number === "string" ? shipment.cdek_track_number : null) ||
       nextStatus !== (typeof shipment.cdek_status === "string" ? shipment.cdek_status : null);
 
-    if (changed) {
-      await upsertOrderShipment(supabase, {
-        orderId,
-        originProfile: isOriginProfile(shipment.origin_profile) ? shipment.origin_profile : "ODN",
-        cdekUuid: normalized.cdekUuid,
-        cdekTrackNumber: nextTrack,
-        cdekStatus: nextStatus,
-        cdekTariffCode: Number(shipment.cdek_tariff_code ?? 0) || null,
-      });
-      await insertShipmentStatusHistory(supabase, {
-        orderId,
-        cdekUuid: normalized.cdekUuid,
-        cdekStatus: nextStatus,
-        cdekTrackNumber: nextTrack,
-        eventSource: "webhook",
-      });
-    }
+    await persistShipmentStatusSnapshot(supabase, {
+      orderId,
+      originProfile: isOriginProfile(shipment.origin_profile) ? shipment.origin_profile : "ODN",
+      cdekUuid: normalized.cdekUuid,
+      cdekTrackNumber: nextTrack,
+      cdekStatus: nextStatus,
+      cdekTariffCode: Number(shipment.cdek_tariff_code ?? 0) || null,
+      rawStatusPayload: rawWebhookPayload,
+      eventSource: "webhook",
+    });
 
     const { data: primaryRows, error: primaryErr } = await supabase
       .from("tg_order_shipments")
@@ -1723,9 +2074,12 @@ export async function processShipmentWebhook(
     .select(`
       id,
       status,
+      post_id,
+      origin_profile,
       cdek_uuid,
       cdek_track_number,
-      cdek_status
+      cdek_status,
+      cdek_tariff_code
     `)
     .eq("cdek_uuid", normalized.cdekUuid)
     .maybeSingle();
@@ -1757,6 +2111,32 @@ export async function processShipmentWebhook(
   const changed =
     nextTrack !== (typeof row.cdek_track_number === "string" ? row.cdek_track_number : null) ||
     nextStatus !== (typeof row.cdek_status === "string" ? row.cdek_status : null);
+
+  let originProfileForPersistence = isOriginProfile(row.origin_profile) ? row.origin_profile : null;
+  if (!originProfileForPersistence && row.post_id) {
+    const { data: post, error: postErr } = await supabase
+      .from("tg_posts")
+      .select("post_type")
+      .eq("id", String(row.post_id))
+      .maybeSingle();
+    if (postErr) throw new ShipmentProcessError("POST_LOOKUP_FAILED", 500, postErr.message);
+    originProfileForPersistence = deriveOriginProfile(
+      String(((post ?? null) as Record<string, unknown> | null)?.post_type ?? "warehouse"),
+    );
+  }
+
+  if (originProfileForPersistence) {
+    await persistShipmentStatusSnapshot(supabase, {
+      orderId: String(row.id),
+      originProfile: originProfileForPersistence,
+      cdekUuid: normalized.cdekUuid,
+      cdekTrackNumber: nextTrack,
+      cdekStatus: nextStatus,
+      cdekTariffCode: Number(row.cdek_tariff_code ?? 0) || null,
+      rawStatusPayload: rawWebhookPayload,
+      eventSource: "webhook",
+    });
+  }
 
   logShipmentEvent("shipment_webhook_matched", {
     orderId: String(row.id),
@@ -1800,14 +2180,6 @@ export async function processShipmentWebhook(
   if (updateErr) {
     throw new ShipmentProcessError("SHIPMENT_WEBHOOK_SAVE_FAILED", 500, updateErr.message);
   }
-
-  await insertShipmentStatusHistory(supabase, {
-    orderId: String(row.id),
-    cdekUuid: normalized.cdekUuid,
-    cdekStatus: nextStatus,
-    cdekTrackNumber: nextTrack,
-    eventSource: "webhook",
-  });
 
   await applyOrderStatusReconciliation(supabase, {
     orderId: String(row.id),

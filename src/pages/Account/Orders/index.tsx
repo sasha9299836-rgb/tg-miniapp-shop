@@ -162,6 +162,9 @@ export function OrdersPage() {
                   ? `Заказ ${primaryTitle}`
                   : `Заказ ${inferredType ?? primaryTitle}${primaryBrand ? ` ${primaryBrand}` : ""}`
                 : "Заказ товара";
+            const canReturnToPayment = order.status === "created" || order.status === "awaiting_payment_proof";
+            const actionLabel = canReturnToPayment ? "Оплатить" : "Открыть";
+            const actionHref = canReturnToPayment ? `/payment?order=${encodeURIComponent(order.id)}` : `/orders/${order.id}`;
 
             return (
               <div
@@ -189,9 +192,9 @@ export function OrdersPage() {
                     <button
                       type="button"
                       className="orders-open-button"
-                      onClick={() => nav(`/orders/${order.id}`)}
+                      onClick={() => nav(actionHref)}
                     >
-                      Открыть
+                      {actionLabel}
                     </button>
                   </div>
                 </div>

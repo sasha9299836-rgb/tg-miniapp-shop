@@ -1,8 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+﻿import { useEffect, useMemo, useState } from "react";
+import { useBlocker, useLocation, useNavigate } from "react-router-dom";
 import { getCurrentTgUserId } from "../../shared/auth/tgUser";
 import { getPaymentProofPutPresign } from "../../shared/api/paymentProofApi";
-import { getOrder, readLastOrderId, submitPaymentProof, type TgOrder } from "../../shared/api/ordersApi";
+import {
+  cancelPendingOrder,
+  clearLastOrderId,
+  getOrder,
+  readLastOrderId,
+  submitPaymentProof,
+  type TgOrder,
+} from "../../shared/api/ordersApi";
 import { formatPackagingLabel, getPackagingFeeRub } from "../../shared/config/packaging";
 import { Button } from "../../shared/ui/Button";
 import { Card, CardText, CardTitle } from "../../shared/ui/Card";
@@ -33,6 +40,7 @@ export function PaymentPage() {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCancellingOrder, setIsCancellingOrder] = useState(false);
   const [isProofSubmitted, setIsProofSubmitted] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
 
@@ -92,7 +100,16 @@ export function PaymentPage() {
   const packagingFee = Number(order?.packaging_fee_rub ?? getPackagingFeeRub(order?.packaging_type));
   const total = priceRub + deliveryFee + packagingFee;
   const reservationExpired = Boolean(order?.reserved_until) && remainingSec <= 0;
-  const canSubmit = Boolean(orderId && order && file && !reservationExpired && order.reserved_until);
+  const canSubmit = Boolean(orderId && order && !reservationExpired && order.reserved_until);
+
+  const hasPendingPaymentOrder = Boolean(
+    orderId &&
+      order &&
+      !isProofSubmitted &&
+      (order.status === "created" || order.status === "awaiting_payment_proof"),
+  );
+
+  const navigationBlocker = useBlocker(hasPendingPaymentOrder);
 
   const onSubmitPaymentProof = async () => {
     if (!orderId || !order) {
@@ -104,7 +121,7 @@ export function PaymentPage() {
       return;
     }
     if (!file) {
-      setErrorText("Выберите файл подтверждения оплаты.");
+      setErrorText("Нужно прикрепить файл или фото подтверждения оплаты");
       return;
     }
     if (isSubmitting) return;
@@ -134,6 +151,7 @@ export function PaymentPage() {
 
       await submitPaymentProof(orderId, tgUserId, key);
       setIsProofSubmitted(true);
+      clearLastOrderId();
     } catch (error) {
       console.error("submit proof failed", error);
       const message = error instanceof Error ? error.message : "UNKNOWN";
@@ -148,6 +166,46 @@ export function PaymentPage() {
       }
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const onStayInCheckout = () => {
+    if (navigationBlocker.state === "blocked") {
+      navigationBlocker.reset();
+    }
+  };
+
+  const onCancelOrderAndLeave = async () => {
+    if (!orderId || !order || isCancellingOrder) return;
+
+    const tgUserId = getCurrentTgUserId();
+    if (!Number.isInteger(tgUserId) || tgUserId <= 0) {
+      setErrorText("Не удалось определить пользователя.");
+      return;
+    }
+
+    setIsCancellingOrder(true);
+    setErrorText(null);
+
+    try {
+      await cancelPendingOrder(orderId, tgUserId);
+      clearLastOrderId();
+
+      if (navigationBlocker.state === "blocked") {
+        navigationBlocker.proceed();
+      } else {
+        nav("/catalog", { replace: true });
+      }
+    } catch (error) {
+      console.error("cancel pending order failed", error);
+      const message = error instanceof Error ? error.message : "UNKNOWN";
+      if (message === "ORDER_ALREADY_IN_PROCESS" || message === "ORDER_STATUS_NOT_CANCELLABLE") {
+        setErrorText("Заказ уже перешел в обработку и не может быть отменен.");
+      } else {
+        setErrorText("Не удалось отменить заказ. Попробуйте еще раз.");
+      }
+    } finally {
+      setIsCancellingOrder(false);
     }
   };
 
@@ -238,15 +296,34 @@ export function PaymentPage() {
         </Card>
 
         <div className="payment-actions">
-          <Button onClick={() => void onSubmitPaymentProof()} disabled={!canSubmit || isSubmitting || isLoading}>
+          <Button onClick={() => void onSubmitPaymentProof()} disabled={!canSubmit || isSubmitting || isLoading || isCancellingOrder}>
             {isSubmitting ? "Отправка..." : "Я оплатил(а)"}
           </Button>
-          <Button variant="secondary" onClick={() => nav(-1)}>Назад</Button>
+          <Button variant="secondary" onClick={() => nav(-1)} disabled={isCancellingOrder}>Назад</Button>
         </div>
 
         {isLoading ? <div>Загрузка заказа...</div> : null}
         {errorText ? <div style={{ color: "#b42318" }}>{errorText}</div> : null}
       </div>
+
+      {navigationBlocker.state === "blocked" ? (
+        <div className="payment-exit-overlay" onClick={onStayInCheckout}>
+          <div className="payment-exit-dialog glass" onClick={(event) => event.stopPropagation()}>
+            <div className="payment-exit-dialog__title">Покинуть окно оплаты?</div>
+            <div className="payment-exit-dialog__text">
+              Вы можете продолжить оформление или отменить заказ.
+            </div>
+            <div className="payment-exit-dialog__actions">
+              <Button variant="secondary" onClick={onStayInCheckout} disabled={isCancellingOrder}>
+                Продолжить оформление
+              </Button>
+              <Button onClick={() => void onCancelOrderAndLeave()} disabled={isCancellingOrder}>
+                {isCancellingOrder ? "Отмена..." : "Отменить заказ"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </Page>
   );
 }

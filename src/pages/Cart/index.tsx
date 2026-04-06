@@ -28,8 +28,32 @@ export function CartPage() {
   const [isDeliveryQuoteLoading, setIsDeliveryQuoteLoading] = useState(false);
 
   useEffect(() => {
-    load();
+    void load();
+    void cart.load();
   }, [load]);
+
+  useEffect(() => {
+    const mapped = products.map((product) => ({ id: product.id, postId: product.postId }));
+    cart.registerCatalogItems(mapped);
+  }, [products]);
+
+  useEffect(() => {
+    const availablePostIds = products
+      .filter((product) => product.saleStatus === "available")
+      .map((product) => String(product.postId ?? "").trim())
+      .filter(Boolean);
+
+    if (!availablePostIds.length && !products.length) return;
+
+    void cart.pruneUnavailable(availablePostIds).then((removed) => {
+      if (removed > 0) {
+        const note = cart.consumeNotice();
+        if (note) {
+          setDeliveryQuoteError(note);
+        }
+      }
+    });
+  }, [products]);
 
   useEffect(() => {
     const loadPresets = async () => {
@@ -173,7 +197,7 @@ export function CartPage() {
               </div>
 
               <div className="cart-item__actions">
-                <Button variant="secondary" onClick={() => cart.remove(line.productId)}>Удалить</Button>
+                <Button variant="secondary" onClick={() => void cart.remove({ id: line.productId, postId: line.product.postId })}>Удалить</Button>
               </div>
             </Card>
           ))}

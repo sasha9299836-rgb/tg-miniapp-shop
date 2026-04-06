@@ -33,6 +33,17 @@ export function CatalogPage() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    void fav.load();
+    void cart.load();
+  }, []);
+
+  useEffect(() => {
+    const mapped = products.map((product) => ({ id: product.id, postId: product.postId }));
+    fav.registerCatalogItems(mapped);
+    cart.registerCatalogItems(mapped);
+  }, [products]);
+
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
     const base = !s ? products : products.filter((p) => p.title.toLowerCase().includes(s));
@@ -93,9 +104,10 @@ export function CatalogPage() {
               key={p.id}
               product={p}
               onOpen={() => nav(`/item/${p.id}`)}
-              onAddToCart={() => cart.add(p.id)}
-              onToggleFav={() => fav.toggle(p.id)}
-              isFav={fav.has(p.id)}
+              onAddToCart={() => void cart.add({ id: p.id, postId: p.postId })}
+              onToggleFav={() => void fav.toggle({ id: p.id, postId: p.postId })}
+              isFav={fav.has({ id: p.id, postId: p.postId })}
+              isInCart={cart.has({ id: p.id, postId: p.postId })}
             />
           ))}
         </div>

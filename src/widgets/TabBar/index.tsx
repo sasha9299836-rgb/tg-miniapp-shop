@@ -2,6 +2,7 @@
 import { NavLink } from "react-router-dom";
 import { useFavoritesStore } from "../../entities/favorites/model/useFavoritesStore";
 import { useCartStore } from "../../entities/cart/model/useCartStore";
+import { triggerHapticTabPress } from "../../shared/lib/telegramHaptics";
 import "./styles.css";
 
 type Tab = { to: string; label: string; icon: ReactNode };
@@ -21,7 +22,7 @@ const tabs: Tab[] = [
     label: "Каталог",
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden>
-        <path d="M4 5h7v7H4zM13 5h7v7h-7zM4 12h7v7H4zM13 12h7v7h-7z" />
+        <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" />
       </svg>
     ),
   },
@@ -30,7 +31,7 @@ const tabs: Tab[] = [
     label: "Избранное",
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden>
-        <path d="M12 21.2l-1.2-1.08C5.3 15.2 2 12.3 2 8.6 2 6 4.1 4 6.7 4c1.8 0 3.6.95 4.5 2.4.9-1.45 2.7-2.4 4.5-2.4 2.6 0 4.8 2 4.8 4.6 0 3.7-3.3 6.6-8.8 11.5L12 21.2z" />
+        <path d="M16.4 4C14.6 4 13 4.9 12 6.3C11 4.9 9.4 4 7.6 4C4.5 4 2 6.5 2 9.6C2 14 12 22 12 22S22 14 22 9.6C22 6.5 19.5 4 16.4 4Z" />
       </svg>
     ),
   },
@@ -39,8 +40,9 @@ const tabs: Tab[] = [
     label: "Корзина",
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden>
-        <path d="M6 6h12l-1.2 10.2a2 2 0 0 1-2 1.8H9.2a2 2 0 0 1-2-1.8L6 6z" />
-        <path d="M8 6V5a4 4 0 0 1 8 0v1" />
+        <path d="M7 6h13l-1.6 8.5a2 2 0 0 1-2 1.6H9a2 2 0 0 1-2-1.6L5.5 4H3" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="10" cy="19" r="1.5" fill="currentColor" />
+        <circle cx="17" cy="19" r="1.5" fill="currentColor" />
       </svg>
     ),
   },
@@ -57,7 +59,7 @@ const tabs: Tab[] = [
 ];
 
 export const TabBar = () => {
-  const favCount = useFavoritesStore((s) => s.ids.length);
+  const favCount = useFavoritesStore((s) => s.postIds.length);
   const cartCount = useCartStore((s) => s.totalQty());
 
   return (
@@ -73,6 +75,7 @@ export const TabBar = () => {
               key={t.to}
               to={t.to}
               className={({ isActive }) => (isActive ? "tab tab--active" : "tab")}
+              onClick={() => triggerHapticTabPress()}
             >
               <div className="tab__iconWrap" aria-hidden>
                 <div className="tab__icon">

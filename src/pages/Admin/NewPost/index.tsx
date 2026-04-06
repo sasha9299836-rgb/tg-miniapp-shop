@@ -26,7 +26,7 @@ import {
   type TgPostPackagingPreset,
   type TgPostType,
 } from "../../../shared/api/adminPostsApi";
-import { getYcPresignedPut } from "../../../shared/api/ycApi";
+import { deleteYcObject, getYcPresignedPut } from "../../../shared/api/ycApi";
 
 const CONDITION_OPTIONS = [
   "10/10 Новая вещь",
@@ -60,6 +60,8 @@ const PACKAGING_OPTIONS: Array<{ value: TgPostPackagingPreset; label: string }> 
   { value: "A3", label: "Пакет А3" },
   { value: "A2", label: "Пакет А2" },
 ];
+
+const ALLOWED_NALICHIE_STATUSES = new Set(["in_stock", "in_transit"]);
 
 function getOriginProfileByPostType(postType: TgPostType): TgPostOriginProfile {
   return postType === "consignment" ? "YAN" : "ODN";
@@ -196,6 +198,28 @@ export function AdminNewPostPage() {
     await Promise.all([hydrateMainPhotosFromDb(postId), hydrateDefectPhotosFromDb(postId)]);
   };
 
+  const resetFormToEmpty = () => {
+    fetchRequestId.current += 1;
+    setPostType("warehouse");
+    setNalichieIdInput("");
+    setItemData(null);
+    setCurrentPost(null);
+    setMainPhotos([]);
+    setDefectPhotos([]);
+    setTitle("");
+    setBrand("");
+    setDescription("");
+    setCondition(CONDITION_OPTIONS[0]);
+    setSize("");
+    setPrice("");
+    setHasDefects(false);
+    setDefectsText("");
+    setScheduleAtInput("");
+    setPackagingPreset("A3");
+    setFieldError(null);
+    setIsAutoFetching(false);
+  };
+
   const hydrateFromPost = (post: TgPost) => {
     setCurrentPost(post);
     setPostType(post.post_type ?? "warehouse");
@@ -249,6 +273,16 @@ export function AdminNewPostPage() {
         setMainPhotos([]);
         setDefectPhotos([]);
         setFieldError("Товар с таким nalichie_id не найден в наличии.");
+        return;
+      }
+
+      const itemStatus = String(foundItem.status ?? "").trim();
+      if (!ALLOWED_NALICHIE_STATUSES.has(itemStatus)) {
+        setItemData(null);
+        setCurrentPost(null);
+        setMainPhotos([]);
+        setDefectPhotos([]);
+        setFieldError("Товар недоступен для создания поста. Разрешены только in_stock и in_transit.");
         return;
       }
 
@@ -382,6 +416,12 @@ export function AdminNewPostPage() {
   const persistDraft = async (): Promise<TgPost> => {
     const validationError = validateDraftForm();
     if (validationError) throw new Error(validationError);
+    if (postType === "warehouse") {
+      const itemStatus = String(itemData?.status ?? "").trim();
+      if (!itemData || !ALLOWED_NALICHIE_STATUSES.has(itemStatus)) {
+        throw new Error("Выбранный товар недоступен для публикации. Разрешены только in_stock и in_transit.");
+      }
+    }
 
     const saved = await createOrUpdateDraftPost({
       item_id: postType === "warehouse" ? (currentPost?.item_id ?? normalizedNalichieId) : null,
@@ -414,6 +454,8 @@ export function AdminNewPostPage() {
     setIsSaving(true);
     try {
       await persistDraft();
+      resetFormToEmpty();
+      if (isEditMode) nav("/admin/posts/new", { replace: true });
       setSuccessText("Черновик сохранен.");
     } catch (error) {
       setErrorText(`Ошибка сохранения: ${(error as Error).message}`);
@@ -481,23 +523,37 @@ export function AdminNewPostPage() {
   const onDeleteMainPhoto = async (localId: string) => {
     const photo = mainPhotos.find((entry) => entry.localId === localId);
     if (!photo) return;
-    if (photo.dbId && currentPost) {
-      await deletePostPhoto(String(photo.dbId));
-      await hydrateMainPhotosFromDb(currentPost.id);
-      return;
+    setErrorText(null);
+    setSuccessText(null);
+    try {
+      await deleteYcObject(photo.key);
+      if (photo.dbId && currentPost) {
+        await deletePostPhoto(String(photo.dbId));
+        await hydrateMainPhotosFromDb(currentPost.id);
+        return;
+      }
+      setMainPhotos((prev) => prev.filter((entry) => entry.localId !== localId));
+    } catch (error) {
+      setErrorText(`Ошибка удаления фото: ${(error as Error).message}`);
     }
-    setMainPhotos((prev) => prev.filter((entry) => entry.localId !== localId));
   };
 
   const onDeleteDefectPhoto = async (localId: string) => {
     const photo = defectPhotos.find((entry) => entry.localId === localId);
     if (!photo) return;
-    if (photo.dbId && currentPost) {
-      await deletePostDefectPhoto(Number(photo.dbId));
-      await hydrateDefectPhotosFromDb(currentPost.id);
-      return;
+    setErrorText(null);
+    setSuccessText(null);
+    try {
+      await deleteYcObject(photo.key);
+      if (photo.dbId && currentPost) {
+        await deletePostDefectPhoto(Number(photo.dbId));
+        await hydrateDefectPhotosFromDb(currentPost.id);
+        return;
+      }
+      setDefectPhotos((prev) => prev.filter((entry) => entry.localId !== localId));
+    } catch (error) {
+      setErrorText(`Ошибка удаления фото: ${(error as Error).message}`);
     }
-    setDefectPhotos((prev) => prev.filter((entry) => entry.localId !== localId));
   };
 
   const onSchedule = async () => {
@@ -512,9 +568,9 @@ export function AdminNewPostPage() {
     setIsScheduling(true);
     try {
       const targetPost = currentPost ?? await persistDraft();
-      const updated = await schedulePost(targetPost.id, iso);
-      hydrateFromPost(updated);
-      await hydrateAllPhotosFromDb(updated.id);
+      await schedulePost(targetPost.id, iso);
+      resetFormToEmpty();
+      if (isEditMode) nav("/admin/posts/new", { replace: true });
       setSuccessText(currentPost?.status === "scheduled" ? "Время публикации изменено." : "Пост запланирован.");
     } catch (error) {
       setErrorText(`Ошибка планирования: ${(error as Error).message}`);
@@ -534,9 +590,9 @@ export function AdminNewPostPage() {
     setIsPublishingNow(true);
     try {
       const targetPost = currentPost ?? await persistDraft();
-      const updated = await publishPostNow(targetPost.id);
-      hydrateFromPost(updated);
-      await hydrateAllPhotosFromDb(updated.id);
+      await publishPostNow(targetPost.id);
+      resetFormToEmpty();
+      if (isEditMode) nav("/admin/posts/new", { replace: true });
       setSuccessText("Пост опубликован.");
     } catch (error) {
       setErrorText(`Ошибка публикации: ${(error as Error).message}`);

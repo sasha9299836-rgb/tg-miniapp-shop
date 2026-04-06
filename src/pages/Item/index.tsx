@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useProductsStore } from "../../entities/product/model/useProductsStore";
 import { useFavoritesStore } from "../../entities/favorites/model/useFavoritesStore";
+import { useCartStore } from "../../entities/cart/model/useCartStore";
 import { Button } from "../../shared/ui/Button";
+import { FavoriteButton } from "../../shared/ui/FavoriteButton";
 import { Page } from "../../shared/ui/Page";
 import "./styles.css";
 
@@ -12,6 +14,7 @@ export function ItemPage() {
   const productId = Number(id);
   const { products, load, getById } = useProductsStore();
   const fav = useFavoritesStore();
+  const cart = useCartStore();
 
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [viewerImages, setViewerImages] = useState<string[]>([]);
@@ -23,8 +26,26 @@ export function ItemPage() {
     if (!products.length) void load();
   }, [products.length, load]);
 
+  useEffect(() => {
+    void fav.load();
+    void cart.load();
+  }, []);
+
+  useEffect(() => {
+    const mapped = products.map((entry) => ({ id: entry.id, postId: entry.postId }));
+    fav.registerCatalogItems(mapped);
+    cart.registerCatalogItems(mapped);
+  }, [products]);
+
   const product = getById(productId);
-  const isFav = useMemo(() => (product ? fav.has(product.id) : false), [fav, product]);
+  const isFav = useMemo(
+    () => (product ? fav.has({ id: product.id, postId: product.postId }) : false),
+    [fav, product],
+  );
+  const isInCart = useMemo(
+    () => (product ? cart.has({ id: product.id, postId: product.postId }) : false),
+    [cart, product],
+  );
   const images = useMemo(() => (product?.images?.length ? product.images : []), [product?.images]);
   const defectImages = useMemo(() => (product?.defectImages?.length ? product.defectImages : []), [product?.defectImages]);
   const total = images.length;
@@ -71,6 +92,41 @@ export function ItemPage() {
   const goBack = () => {
     if (window.history.length > 1) nav(-1);
     else nav("/catalog");
+  };
+
+  const buildShareUrl = () => {
+    const origin = window.location.origin;
+    return `${origin}/item/${productId}`;
+  };
+
+  const onShare = async () => {
+    if (!product) return;
+
+    const shareUrl = buildShareUrl();
+    const shareText = `${product.title} - ${shareUrl}`;
+    const shareLink = `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(product.title)}`;
+    const tg = window.Telegram?.WebApp as {
+      openTelegramLink?: (url: string) => void;
+      switchInlineQuery?: (query: string, choose_chat_types?: string[]) => void;
+    } | undefined;
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+    } catch {
+      // optional fallback
+    }
+
+    if (typeof tg?.openTelegramLink === "function") {
+      tg.openTelegramLink(shareLink);
+      return;
+    }
+
+    if (typeof tg?.switchInlineQuery === "function") {
+      tg.switchInlineQuery(shareText, ["users", "groups", "channels"]);
+      return;
+    }
+
+    window.open(shareLink, "_blank", "noopener,noreferrer");
   };
 
   if (!product) {
@@ -145,13 +201,42 @@ export function ItemPage() {
           </div>
         ) : null}
 
-        <div className="item-actions" role="navigation" aria-label="Действия товара">
-          <Button variant="secondary" className="item-action" onClick={goBack}>Назад</Button>
-          <Button variant="secondary" className="item-action" onClick={() => nav("/cart")}>Корзина</Button>
-          <Button variant="secondary" className="item-action" onClick={() => fav.toggle(product.id)}>
-            {isFav ? "В избранном" : "Добавить в избранное"}
+        <div className="item-actions" role="navigation" aria-label={"\u0414\u0435\u0439\u0441\u0442\u0432\u0438\u044F \u0442\u043E\u0432\u0430\u0440\u0430"}>
+          <button
+            type="button"
+            className="item-action-icon item-action-icon--back"
+            onClick={goBack}
+            aria-label={"\u041D\u0430\u0437\u0430\u0434"}
+            title={"\u041D\u0430\u0437\u0430\u0434"}
+          >
+            <svg viewBox="0 0 46 40" aria-hidden>
+              <path d="M46 20.038c0-.7-.3-1.5-.8-2.1l-16-17c-1.1-1-3.2-1.4-4.4-.3-1.2 1.1-1.2 3.3 0 4.4l11.3 11.9H3c-1.7 0-3 1.3-3 3s1.3 3 3 3h33.1l-11.3 11.9c-1 1-1.2 3.3 0 4.4 1.2 1.1 3.3.8 4.4-.3l16-17c.5-.5.8-1.1.8-1.9z" />
+            </svg>
+          </button>
+          <Button variant="primary" className="item-action-main" onClick={() => void cart.add({ id: product.id, postId: product.postId })}>
+            {isInCart
+              ? "\u0412 \u043A\u043E\u0440\u0437\u0438\u043D\u0435"
+              : "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0432 \u043A\u043E\u0440\u0437\u0438\u043D\u0443"}
           </Button>
-          <Button variant="primary" className="item-action" onClick={() => nav("/checkout")}>Оформление</Button>
+          <FavoriteButton
+            isActive={isFav}
+            onToggle={() => void fav.toggle({ id: product.id, postId: product.postId })}
+            className="item-action-icon"
+            ariaLabel={"Избранное"}
+            title={"Избранное"}
+          />
+          <button
+            type="button"
+            className="item-action-icon item-action-icon--share"
+            onClick={() => void onShare()}
+            aria-label={"\u041F\u0435\u0440\u0435\u0441\u043B\u0430\u0442\u044C"}
+            title={"\u041F\u0435\u0440\u0435\u0441\u043B\u0430\u0442\u044C"}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden>
+              <path fill="none" d="M0 0h24v24H0z" />
+              <path d="M13 14h-2a8.999 8.999 0 0 0-7.968 4.81A10.136 10.136 0 0 1 3 18C3 12.477 7.477 8 13 8V3l10 8-10 8v-5z" />
+            </svg>
+          </button>
         </div>
       </div>
 

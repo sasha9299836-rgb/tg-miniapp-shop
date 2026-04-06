@@ -85,7 +85,13 @@ export type ShipmentStatusHistoryEntry = {
   cdek_uuid: string | null;
   cdek_status: string | null;
   cdek_track_number: string | null;
-  event_source: "webhook" | "manual_sync" | "scheduled_sync";
+  event_source: "webhook" | "manual_sync" | "scheduled_sync" | "create_poll";
+  event_key?: string | null;
+  status_code?: string | null;
+  status_name?: string | null;
+  status_date_time?: string | null;
+  status_datetime?: string | null;
+  city?: string | null;
   created_at: string;
 };
 
@@ -137,6 +143,8 @@ export type TgOrderShipment = {
   cdek_track_number: string | null;
   cdek_status: string | null;
   cdek_tariff_code: number | null;
+  last_cdek_status_payload?: Record<string, unknown> | null;
+  last_cdek_status_synced_at?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -173,6 +181,14 @@ export function readLastOrderId(): string | null {
     return raw && raw.trim() ? raw.trim() : null;
   } catch {
     return null;
+  }
+}
+
+export function clearLastOrderId() {
+  try {
+    window.localStorage.removeItem(TG_LAST_ORDER_ID_KEY);
+  } catch {
+    // ignore
   }
 }
 
@@ -348,6 +364,21 @@ export async function submitPaymentProof(orderId: string, tgUserId: number, proo
     const message = error.message ?? "";
     if (message.includes("ORDER_RESERVATION_EXPIRED")) throw new Error("ORDER_RESERVATION_EXPIRED");
     if (message.includes("ORDER_STATUS_NOT_SUBMITTABLE")) throw new Error("ORDER_STATUS_NOT_SUBMITTABLE");
+    throw error;
+  }
+}
+
+export async function cancelPendingOrder(orderId: string, tgUserId: number): Promise<void> {
+  const { error } = await supabase.rpc("tg_cancel_pending_order", {
+    p_order_id: orderId,
+    p_tg_user_id: tgUserId,
+  });
+  if (error) {
+    const message = error.message ?? "";
+    if (message.includes("ORDER_NOT_FOUND")) throw new Error("ORDER_NOT_FOUND");
+    if (message.includes("ORDER_ACCESS_DENIED")) throw new Error("ORDER_ACCESS_DENIED");
+    if (message.includes("ORDER_ALREADY_IN_PROCESS")) throw new Error("ORDER_ALREADY_IN_PROCESS");
+    if (message.includes("ORDER_STATUS_NOT_CANCELLABLE")) throw new Error("ORDER_STATUS_NOT_CANCELLABLE");
     throw error;
   }
 }
@@ -586,12 +617,12 @@ export async function syncShipmentStatus(orderId: string): Promise<SyncShipmentS
   return data;
 }
 
-export async function syncActiveShipments(limit = 20): Promise<SyncActiveShipmentsBatchResult> {
+export async function syncActiveShipments(limit = 50, maxTotal = 500): Promise<SyncActiveShipmentsBatchResult> {
   const adminToken = readAdminToken();
   const { data, error } = await supabase.functions.invoke<SyncActiveShipmentsBatchResult>(
     "tg_sync_active_shipments",
     {
-      body: { limit },
+      body: { limit, max_total: maxTotal },
       headers: buildAdminSessionHeaders(adminToken),
     },
   );
@@ -673,7 +704,7 @@ export async function getAdminOrderEvents(orderId: string): Promise<AdminOrderEv
   return (data as AdminOrderEvent[]) ?? [];
 }
 
-export async function rejectOrderPayment(orderId: string, reason: string): Promise<void> {
+export async function rejectOrderPayment(orderId: string, reason = ""): Promise<void> {
   const adminToken = readAdminToken();
   const { data, error } = await supabase.functions.invoke<RejectOrderPaymentResult>(
     "tg_reject_order_payment",

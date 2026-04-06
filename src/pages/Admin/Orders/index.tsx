@@ -35,6 +35,7 @@ type Tab = "proof" | "expired" | "confirmed" | "rejected";
 type PostMeta = {
   nalichie_id: number | null;
   title: string | null;
+  brand: string | null;
   post_type: "warehouse" | "consignment" | null;
   origin_profile: "ODN" | "YAN" | null;
 };
@@ -45,6 +46,15 @@ type TimelineRow = {
   time: string;
   kind: "order" | "shipment";
   meta?: string | null;
+};
+
+type OrderProductLine = {
+  key: string;
+  title: string;
+  brand: string | null;
+  priceRub: number;
+  previewUrl: string | null;
+  warehouseLabel: string;
 };
 
 type ConfirmationDialogState =
@@ -121,12 +131,9 @@ function formatOriginProfileLabel(originProfile: string): string {
   return originProfile;
 }
 
-function buildOriginLabel(originProfiles: string[]): string {
-  const unique = [...new Set(originProfiles.filter(Boolean))];
-  if (!unique.length) return "Склад";
-  if (unique.length === 1) return formatOriginProfileLabel(unique[0]);
-  if (unique.includes("ODN") && unique.includes("YAN")) return "Одинцово + Янино";
-  return unique.map(formatOriginProfileLabel).join(" + ");
+function resolveWarehouseLabel(profile: string | null | undefined): string {
+  if (!profile) return "Склад не указан";
+  return formatOriginProfileLabel(profile);
 }
 
 function buildTimelineRows(order: TgOrder, orderEvents: AdminOrderEvent[], shipmentHistory: ShipmentStatusHistoryEntry[]): TimelineRow[] {
@@ -224,12 +231,9 @@ function getShipmentCreateErrorMessage(code: string): string {
 type OrderCardProps = {
   order: TgOrder;
   telegramUsername: string | null;
-  orderItems: TgOrderItem[];
   orderShipments: TgOrderShipment[];
   historyTrackNumbers: string[];
-  originLabel: string;
-  previewUrl?: string;
-  postMeta?: PostMeta;
+  productLines: OrderProductLine[];
   isBusy: boolean;
   isExpanded: boolean;
   onOpenOrder: (orderId: string) => void;
@@ -247,12 +251,9 @@ function AdminOrderCard(props: OrderCardProps) {
   const {
     order,
     telegramUsername,
-    orderItems,
     orderShipments,
     historyTrackNumbers,
-    originLabel,
-    previewUrl,
-    postMeta,
+    productLines,
     isBusy,
     isExpanded,
     onOpenOrder,
@@ -307,6 +308,10 @@ function AdminOrderCard(props: OrderCardProps) {
   const canRecoverLock = Boolean(order.shipment_create_in_progress && !order.cdek_uuid && isLikelyStaleShipmentLock(order.shipment_create_started_at));
   const timelineRows = useMemo(() => buildTimelineRows(order, orderEvents, shipmentHistory), [order, orderEvents, shipmentHistory]);
   const historySummary = useMemo(() => getHistorySummary(shipmentHistory, order), [shipmentHistory, order]);
+  const itemsTotalRub = order.price_rub != null
+    ? Number(order.price_rub)
+    : productLines.reduce((sum, line) => sum + Number(line.priceRub ?? 0), 0);
+  const orderTotalRub = itemsTotalRub + Number(order.delivery_total_fee_rub ?? 0);
 
   useEffect(() => {
     if (!timelineOpen || orderEvents.length || shipmentHistory.length || timelineLoading) {
@@ -348,24 +353,34 @@ function AdminOrderCard(props: OrderCardProps) {
     <div className="glass admin-order-card">
       <div className="admin-order-card__header">
         <div className="admin-order-card__product">
-          {previewUrl ? (
-            <img src={previewUrl} alt="Товар" className="admin-order-card__preview" />
-          ) : (
-            <div className="admin-order-card__preview admin-order-card__preview--empty" />
-          )}
-          <div className="admin-order-card__title-block">
-            <div className="admin-order-card__title">
-              Заказ {order.id.slice(0, 8)} · {postMeta?.title ?? "Пост"}
-            </div>
-            <div className="admin-order-card__subtitle">
-              {originLabel} · {order.delivery_type === "pickup" ? "Пункт выдачи" : "До двери"} · Товаров: {Math.max(1, orderItems.length)}
-            </div>
+          <div className="admin-order-card__items">
+            {productLines.map((line) => (
+              <div key={line.key} className="admin-order-card__item-row">
+                {line.previewUrl ? (
+                  <img src={line.previewUrl} alt="Товар" className="admin-order-card__preview" />
+                ) : (
+                  <div className="admin-order-card__preview admin-order-card__preview--empty" />
+                )}
+                <div className="admin-order-card__item-content">
+                  <div className="admin-order-card__title">
+                    {line.brand && !line.title.toLowerCase().includes(line.brand.toLowerCase())
+                      ? `${line.title} ${line.brand}`
+                      : line.title}
+                  </div>
+                  <div className="admin-order-card__price">{line.priceRub.toLocaleString("ru-RU")} ₽</div>
+                  <div className="admin-order-card__subtitle">{line.warehouseLabel}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="admin-order-card__order-total">
+            Сумма заказа: {orderTotalRub.toLocaleString("ru-RU")} ₽
           </div>
         </div>
-        <span className={`admin-order-status-pill admin-order-status-pill--${operational.tone}`}>
-          {operational.shortLabel}
-        </span>
       </div>
+      <span className={`admin-order-status-pill admin-order-status-pill--${operational.tone}`}>
+        {operational.shortLabel}
+      </span>
 
       <div className="admin-quick-actions">
         {canConfirm ? (
@@ -463,7 +478,7 @@ function AdminOrderCard(props: OrderCardProps) {
             {canConfirm ? (
               <div className="admin-operational-reject">
                 <input
-                  placeholder="Причина отклонения"
+                  placeholder="Причина отклонения (необязательно)"
                   value={rejectReason}
                   disabled={isBusy}
                   onChange={(event) => onRejectReasonChange(event.target.value)}
@@ -622,7 +637,7 @@ export function AdminOrdersPage() {
             .order("photo_no", { ascending: true }),
           supabase
             .from("tg_posts")
-            .select("id, nalichie_id, title, post_type, origin_profile")
+            .select("id, nalichie_id, title, brand, post_type, origin_profile")
             .in("id", postIds),
         ]);
 
@@ -639,12 +654,14 @@ export function AdminOrdersPage() {
             id: string;
             nalichie_id: number | null;
             title: string | null;
+            brand: string | null;
             post_type: "warehouse" | "consignment" | null;
             origin_profile: "ODN" | "YAN" | null;
           };
           postMeta[entry.id] = {
             nalichie_id: entry.nalichie_id == null ? null : Number(entry.nalichie_id),
             title: entry.title ?? null,
+            brand: entry.brand ?? null,
             post_type: entry.post_type ?? "warehouse",
             origin_profile: entry.origin_profile ?? null,
           };
@@ -736,10 +753,6 @@ export function AdminOrdersPage() {
 
   const onReject = async (orderId: string) => {
     const reason = (rejectReason[orderId] ?? "").trim();
-    if (!reason) {
-      setErrorText("Укажите причину отклонения.");
-      return;
-    }
     setErrorText(null);
     setSuccessText(null);
     setBusyOrderId(orderId);
@@ -850,11 +863,6 @@ export function AdminOrdersPage() {
     }
 
     if (confirmationDialog.kind === "reject_payment") {
-      const reason = (rejectReason[confirmationDialog.order.id] ?? "").trim();
-      if (!reason) {
-        setErrorText("Укажите причину отклонения.");
-        return;
-      }
       setConfirmationDialog(null);
       await onReject(confirmationDialog.order.id);
       return;
@@ -886,8 +894,8 @@ export function AdminOrdersPage() {
     <Page title="Заказы" subtitle={subtitle}>
       <div className="admin-orders-toolbar">
         <Button variant={tab === "proof" ? "primary" : "secondary"} onClick={() => setTab("proof")}>Ждут подтверждения</Button>
-        <Button variant={tab === "expired" ? "primary" : "secondary"} onClick={() => setTab("expired")}>Истекли</Button>
         <Button variant={tab === "confirmed" ? "primary" : "secondary"} onClick={() => setTab("confirmed")}>Подтвержденные</Button>
+        <Button variant={tab === "expired" ? "primary" : "secondary"} onClick={() => setTab("expired")}>Истекли</Button>
         <Button variant={tab === "rejected" ? "primary" : "secondary"} onClick={() => setTab("rejected")}>Отклоненные</Button>
         <Button variant="secondary" disabled={isBatchSyncRunning || isLoading} onClick={() => openConfirmation({ kind: "batch_sync" })}>
           {isBatchSyncRunning ? "Обновление выполняется..." : "Обновить статусы доставки"}
@@ -902,31 +910,40 @@ export function AdminOrdersPage() {
         {orders.map((order) => (
           (() => {
             const orderItems = orderItemsByOrderId[order.id] ?? [];
-            const primaryPostId = orderItems[0]?.post_id ?? order.post_id;
             const orderShipments = orderShipmentsByOrderId[order.id] ?? [];
-            const originProfiles = orderShipments.length
-              ? orderShipments.map((shipment) => shipment.origin_profile)
-              : [
-                ...new Set(
-                  orderItems
-                    .map((item) => postMetaById[item.post_id]?.origin_profile)
-                    .filter(Boolean) as string[],
+            const shipmentOriginProfile = orderShipments[0]?.origin_profile ?? null;
+            const productLines: OrderProductLine[] = orderItems.length
+              ? orderItems.map((item, index) => {
+                const meta = postMetaById[item.post_id];
+                const title = String(meta?.title ?? "").trim() || `Товар ${index + 1}`;
+                const brand = String(meta?.brand ?? "").trim() || null;
+                return {
+                  key: `${order.id}-${item.post_id}-${index}`,
+                  title,
+                  brand,
+                  priceRub: Number(item.price_rub ?? 0),
+                  previewUrl: previewByPost[item.post_id] ?? null,
+                  warehouseLabel: resolveWarehouseLabel(meta?.origin_profile ?? order.origin_profile ?? shipmentOriginProfile),
+                };
+              })
+              : [{
+                key: `${order.id}-fallback`,
+                title: String(postMetaById[order.post_id ?? ""]?.title ?? "").trim() || "Товар",
+                brand: String(postMetaById[order.post_id ?? ""]?.brand ?? "").trim() || null,
+                priceRub: Number(order.price_rub ?? 0),
+                previewUrl: order.post_id ? (previewByPost[order.post_id] ?? null) : null,
+                warehouseLabel: resolveWarehouseLabel(
+                  postMetaById[order.post_id ?? ""]?.origin_profile ?? order.origin_profile ?? shipmentOriginProfile,
                 ),
-              ];
-            if (!originProfiles.length && order.origin_profile) {
-              originProfiles.push(order.origin_profile);
-            }
+              }];
             return (
           <AdminOrderCard
             key={order.id}
             order={order}
             telegramUsername={telegramUsernameByOrderId[order.id] ?? null}
-            orderItems={orderItems}
             orderShipments={orderShipments}
             historyTrackNumbers={historyTrackNumbersByOrderId[order.id] ?? []}
-            originLabel={buildOriginLabel(originProfiles)}
-            previewUrl={previewByPost[primaryPostId]}
-            postMeta={postMetaById[primaryPostId]}
+            productLines={productLines}
             isBusy={busyOrderId === order.id}
             isExpanded={expandedOrderId === order.id}
             onOpenOrder={(orderId) => setExpandedOrderId((current) => current === orderId ? null : orderId)}
@@ -953,7 +970,7 @@ export function AdminOrdersPage() {
             {confirmationDialog.kind === "reject_payment" ? (
               <input
                 className="admin-confirm-dialog__input"
-                placeholder="Причина отклонения"
+                placeholder="Причина отклонения (необязательно)"
                 value={rejectReason[confirmationDialog.order.id] ?? ""}
                 onChange={(event) => setRejectReason((prev) => ({ ...prev, [confirmationDialog.order.id]: event.target.value }))}
                 disabled={Boolean(busyOrderId)}

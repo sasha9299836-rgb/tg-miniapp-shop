@@ -1,6 +1,7 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import type { Product } from "../../shared/types/product";
+import { FavoriteButton } from "../../shared/ui/FavoriteButton";
 import "./styles.css";
 
 export function ProductCard({
@@ -9,31 +10,32 @@ export function ProductCard({
   onAddToCart,
   onToggleFav,
   isFav,
+  isInCart,
 }: {
   product: Product;
   onOpen: () => void;
   onAddToCart: () => void;
   onToggleFav: () => void;
   isFav: boolean;
+  isInCart: boolean;
 }) {
   const images = useMemo(() => (product.images?.length ? product.images : []), [product.images]);
   const total = images.length;
   const [index, setIndex] = useState(0);
   const [isActive, setIsActive] = useState(false);
-  const [favPulse, setFavPulse] = useState(false);
   const [cartPulse, setCartPulse] = useState(false);
   const dragRef = useRef({ down: false, startX: 0, moved: false });
 
   const safeIndex = total ? index % total : 0;
   const current = total ? images[safeIndex] : undefined;
   const showOldPrice = typeof product.oldPrice === "number" && product.oldPrice > product.price;
-
-  useEffect(() => {
-    if (!isFav) return;
-    setFavPulse(true);
-    const t = window.setTimeout(() => setFavPulse(false), 320);
-    return () => window.clearTimeout(t);
-  }, [isFav]);
+  const cardTitle = useMemo(() => {
+    const title = String(product.title ?? "").trim();
+    const brand = String(product.brand ?? "").trim();
+    if (!brand) return title;
+    if (title.toLowerCase().includes(brand.toLowerCase())) return title;
+    return `${title} ${brand}`.trim();
+  }, [product.brand, product.title]);
 
   const setSlide = (next: number) => {
     if (!total) return;
@@ -94,7 +96,7 @@ export function ProductCard({
   const handleCartClick = () => {
     onAddToCart();
     setCartPulse(true);
-    window.setTimeout(() => setCartPulse(false), 220);
+    window.setTimeout(() => setCartPulse(false), 360);
   };
 
   return (
@@ -147,7 +149,7 @@ export function ProductCard({
       </div>
 
       <div className="pcard__body" onClick={handleOpen} role="button" tabIndex={0}>
-        <div className="pcard__title">{product.title}</div>
+        <div className="pcard__title">{cardTitle}</div>
         <div className="pcard__priceRow">
           <div className="pcard__price">{product.price.toLocaleString("ru-RU")}₽</div>
           {showOldPrice ? (
@@ -159,7 +161,7 @@ export function ProductCard({
       <div className="pcard__actions">
         <button
           type="button"
-          className={`pcard__cartWide ${cartPulse ? "is-animate" : ""}`}
+          className={`pcard__cartWide ${isInCart ? "is-on" : ""} ${cartPulse ? "is-animate" : ""}`}
           onClick={handleCartClick}
           aria-label="Добавить в корзину"
         >
@@ -170,16 +172,13 @@ export function ProductCard({
           </svg>
         </button>
 
-        <button
-          type="button"
-          className={`pcard__iconButton pcard__fav ${isFav ? "is-on" : ""} ${favPulse ? "is-animate" : ""}`}
-          onClick={onToggleFav}
-          aria-label="Добавить в избранное"
-        >
-          <svg className="pcard__favIcon" viewBox="0 0 24 24" aria-hidden>
-            <path d="M12 21.2l-1.2-1.08C5.3 15.2 2 12.3 2 8.6 2 6 4.1 4 6.7 4c1.8 0 3.6.95 4.5 2.4.9-1.45 2.7-2.4 4.5-2.4 2.6 0 4.8 2 4.8 4.6 0 3.7-3.3 6.6-8.8 11.5L12 21.2z" />
-          </svg>
-        </button>
+        <FavoriteButton
+          isActive={isFav}
+          onToggle={onToggleFav}
+          className="pcard__iconButton pcard__fav"
+          ariaLabel={"\u0418\u0437\u0431\u0440\u0430\u043D\u043D\u043E\u0435"}
+          title={"\u0418\u0437\u0431\u0440\u0430\u043D\u043D\u043E\u0435"}
+        />
       </div>
     </div>
   );

@@ -18,6 +18,7 @@ import {
   upsertAddressPreset,
   type TgAddressPreset,
 } from "../../../shared/api/addressPresetsApi";
+import { loadTelegramUserProfile, type TgUserRecord } from "../../../shared/api/telegramUsersApi";
 import "./styles.css";
 
 type AddressForm = {
@@ -136,11 +137,20 @@ function normalizePvz(parsed: unknown): PickupPoint[] {
     .filter((item): item is PickupPoint => Boolean(item));
 }
 
+function buildFioFromProfile(profile: TgUserRecord | null): string {
+  if (!profile) return "";
+  const parts = [profile.last_name, profile.first_name, profile.middle_name]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean);
+  return parts.join(" ").trim();
+}
+
 export function AddressesPage() {
   const nav = useNavigate();
   const tgUserId = getCurrentTgUserId();
 
   const [addresses, setAddresses] = useState<TgAddressPreset[]>([]);
+  const [userProfile, setUserProfile] = useState<TgUserRecord | null>(null);
   const [mode, setMode] = useState<"list" | "details">("list");
   const [isEditing, setIsEditing] = useState(false);
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
@@ -214,7 +224,11 @@ export function AddressesPage() {
       setIsLoading(true);
       setErrorText(null);
       try {
-        await reloadAddresses();
+        const [profile] = await Promise.all([
+          loadTelegramUserProfile(tgUserId),
+          reloadAddresses(),
+        ]);
+        setUserProfile(profile);
       } catch (error) {
         console.error("addresses load failed", getErrorDetails(error), error);
         setErrorText("Не удалось загрузить адреса.");
@@ -314,9 +328,14 @@ export function AddressesPage() {
   };
 
   const startCreate = () => {
+    const isFirstAddress = addresses.length === 0;
+    const prefillFio = isFirstAddress ? buildFioFromProfile(userProfile) : "";
+    const prefillPhone = isFirstAddress ? String(userProfile?.phone ?? "").trim() : "";
     const mapped: AddressForm = {
       ...EMPTY_FORM,
       name: `Профиль ${addresses.length + 1}`,
+      recipientFio: prefillFio,
+      recipientPhone: prefillPhone,
     };
     setMode("details");
     setIsEditing(true);

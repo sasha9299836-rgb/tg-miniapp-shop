@@ -15,6 +15,10 @@ export type YcPresignResponse = {
   publicUrl: string;
 };
 
+type YcDeleteObjectResponse = {
+  ok: boolean;
+};
+
 export async function ycPresignPut(payload: YcPresignPutPayload): Promise<YcPresignResponse> {
   const { data, error } = await supabase.functions.invoke<YcPresignResponse>("yc_presign_put", {
     body: payload,
@@ -44,4 +48,20 @@ export async function getYcPresignedPut(
     ext: extFromName,
     kind,
   });
+}
+
+export async function deleteYcObject(storageKey: string): Promise<void> {
+  const key = String(storageKey ?? "").trim();
+  if (!key) {
+    throw new Error("Пустой storage key для удаления файла.");
+  }
+
+  const { data, error } = await supabase.functions.invoke<YcDeleteObjectResponse>("yc_delete_object", {
+    body: { key },
+  });
+
+  if (error) throw error;
+  if (!data?.ok) {
+    throw new Error("Не удалось удалить файл из хранилища.");
+  }
 }

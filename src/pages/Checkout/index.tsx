@@ -61,7 +61,27 @@ export function CheckoutPage() {
 
   useEffect(() => {
     if (!products.length) void loadProducts();
+    void cart.load();
   }, [products.length, loadProducts]);
+
+  useEffect(() => {
+    const mapped = products.map((product) => ({ id: product.id, postId: product.postId }));
+    cart.registerCatalogItems(mapped);
+  }, [products]);
+
+  useEffect(() => {
+    const availablePostIds = products
+      .filter((product) => product.saleStatus === "available")
+      .map((product) => String(product.postId ?? "").trim())
+      .filter(Boolean);
+    if (!availablePostIds.length && !products.length) return;
+    void cart.pruneUnavailable(availablePostIds).then((removed) => {
+      if (removed > 0) {
+        const note = cart.consumeNotice();
+        if (note) setErrorText(note);
+      }
+    });
+  }, [products]);
 
   useEffect(() => {
     const loadAddresses = async () => {

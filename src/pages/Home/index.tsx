@@ -4,7 +4,6 @@ import { useProductsStore } from "../../entities/product/model/useProductsStore"
 import { useFavoritesStore } from "../../entities/favorites/model/useFavoritesStore";
 import { useCartStore } from "../../entities/cart/model/useCartStore";
 import { Page } from "../../shared/ui/Page";
-import { Card } from "../../shared/ui/Card";
 import { ProductCard } from "../../widgets/ProductCard";
 import "./styles.css";
 
@@ -18,10 +17,20 @@ export function HomePage() {
     if (!products.length) load();
   }, [products.length, load]);
 
+  useEffect(() => {
+    void fav.load();
+    void cart.load();
+  }, []);
+
+  useEffect(() => {
+    const mapped = products.map((product) => ({ id: product.id, postId: product.postId }));
+    fav.registerCatalogItems(mapped);
+    cart.registerCatalogItems(mapped);
+  }, [products]);
+
   const catalogItems = useMemo(() => {
     if (!products.length) return [];
-    const doubled = [...products, ...products];
-    return doubled
+    return [...products]
       .slice(0, 8)
       .sort(() => Math.random() - 0.5);
   }, [products]);
@@ -35,34 +44,22 @@ export function HomePage() {
     >
       <section className="home-hero">
         <div className="home-hero__content">
-          <div className="home-hero__eyebrow">EDITORIAL DROP</div>
           <div className="home-hero__title">Лучшие вещи в одной коллекции</div>
           <div className="home-hero__text">
             Собираем новые категории и рекомендации на базе ваших интересов.
           </div>
           <div className="home-hero__actions">
-            <button type="button" className="home-hero__btn" onClick={() => nav("/catalog")}
+            <button type="button" className="home-hero__btn" onClick={() => nav("/account/addresses")}
             >
-              Смотреть каталог
+              Добавить адресс доставки
             </button>
-            <button type="button" className="home-hero__btn is-ghost" onClick={() => nav("/favorites")}
+            <button type="button" className="home-hero__btn" onClick={() => {}}
             >
-              Мои избранные
+              Правила магазина
             </button>
           </div>
         </div>
         <div className="home-hero__orb" />
-      </section>
-
-      <section className="home-stats">
-        <Card className="home-stat ui-card--padded">
-          <div className="home-stat__value">42</div>
-          <div className="home-stat__label">Брендов в подборке</div>
-        </Card>
-        <Card className="home-stat ui-card--padded">
-          <div className="home-stat__value">3</div>
-          <div className="home-stat__label">Новые дропы в месяц</div>
-        </Card>
       </section>
 
       <section className="home-section">
@@ -84,9 +81,10 @@ export function HomePage() {
                   key={`${p.id}-${idx}`}
                   product={p}
                   onOpen={() => nav(`/item/${p.id}`)}
-                  onAddToCart={() => cart.add(p.id)}
-                  onToggleFav={() => fav.toggle(p.id)}
-                  isFav={fav.has(p.id)}
+                  onAddToCart={() => void cart.add({ id: p.id, postId: p.postId })}
+                  onToggleFav={() => void fav.toggle({ id: p.id, postId: p.postId })}
+                  isFav={fav.has({ id: p.id, postId: p.postId })}
+                  isInCart={cart.has({ id: p.id, postId: p.postId })}
                 />
               ))}
         </div>

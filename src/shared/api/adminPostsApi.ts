@@ -3,6 +3,7 @@ import type { Product } from "../types/product";
 
 export type NalichieItem = {
   id: number;
+  status?: string | null;
   opisanie_veshi: string | null;
   tip_veshi: string | null;
   brend: string | null;
@@ -106,8 +107,9 @@ function syntheticIdFromUuid(uuid: string): number {
 export async function fetchNalichieById(itemId: number): Promise<NalichieItem | null> {
   const { data, error } = await supabase
     .from("nalichie")
-    .select("id, opisanie_veshi, tip_veshi, brend, razmer, obh_summa, sezon, defekt_marker, defekt_text, data_pokupki, data_postupleniya, vikup_rub, valuta_vikupa, kol_vo_valuti, kurs, dostavka")
+    .select("id, status, opisanie_veshi, tip_veshi, brend, razmer, obh_summa, sezon, defekt_marker, defekt_text, data_pokupki, data_postupleniya, vikup_rub, valuta_vikupa, kol_vo_valuti, kurs, dostavka")
     .eq("id", itemId)
+    .in("status", ["in_stock", "in_transit"])
     .maybeSingle();
 
   if (error) throw error;
@@ -115,6 +117,7 @@ export async function fetchNalichieById(itemId: number): Promise<NalichieItem | 
 
   return {
     id: Number(data.id),
+    status: data.status == null ? null : String(data.status),
     opisanie_veshi: data.opisanie_veshi ?? null,
     tip_veshi: data.tip_veshi ?? null,
     brend: data.brend ?? null,
@@ -145,6 +148,7 @@ export async function fetchNalichieByIdViaRpc(nalichieId: number): Promise<Nalic
 
   return {
     id: Number(row.id),
+    status: row.status == null ? null : String(row.status),
     opisanie_veshi: row.opisanie_veshi ?? null,
     tip_veshi: row.tip_veshi ?? null,
     brend: row.brend ?? null,
@@ -478,6 +482,54 @@ export async function getPublishedCatalogProducts(): Promise<Product[]> {
     hasDefects: post.has_defects,
     defectsText: post.defects_text,
     defectImages: defectsByPost.get(post.id) ?? [],
+    saleStatus: post.sale_status,
+  }));
+}
+
+export async function getCatalogProductsByPostIds(postIds: string[]): Promise<Product[]> {
+  const normalized = [...new Set(postIds.map((value) => String(value ?? "").trim()).filter(Boolean))];
+  if (!normalized.length) return [];
+
+  const { data: postsData, error: postsError } = await supabase
+    .from("tg_posts")
+    .select("*")
+    .in("id", normalized)
+    .eq("status", "published");
+  if (postsError) throw postsError;
+
+  const posts = (postsData as TgPost[]) ?? [];
+  if (!posts.length) return [];
+
+  const { data: photosData, error: photosError } = await supabase
+    .from("tg_post_photos")
+    .select("post_id, url, photo_no")
+    .in("post_id", normalized)
+    .order("photo_no", { ascending: true });
+  if (photosError) throw photosError;
+
+  const photosByPost = new Map<string, string[]>();
+  (photosData ?? []).forEach((row) => {
+    const entry = row as { post_id: string; url: string };
+    const current = photosByPost.get(entry.post_id) ?? [];
+    current.push(entry.url);
+    photosByPost.set(entry.post_id, current);
+  });
+
+  return posts.map((post) => ({
+    id: post.item_id ?? syntheticIdFromUuid(post.id),
+    postId: post.id,
+    title: post.title,
+    price: post.price,
+    images: photosByPost.get(post.id) ?? [],
+    isNew: false,
+    description: post.description,
+    brand: post.brand,
+    subtitle: post.description,
+    size: post.size,
+    condition: post.condition,
+    hasDefects: post.has_defects,
+    defectsText: post.defects_text,
+    defectImages: [],
     saleStatus: post.sale_status,
   }));
 }
