@@ -56,6 +56,15 @@ export function ItemPage() {
   const viewerImage = viewerTotal ? viewerImages[viewerIndex] : undefined;
 
   const hasDefectsSection = Boolean(product?.hasDefects || product?.defectsText?.trim() || defectImages.length);
+  const itemHeaderTitle = useMemo(() => {
+    if (!product) return "";
+    const itemType = String(product.title ?? "").trim();
+    const brand = String(product.brand ?? "").trim();
+    if (!itemType) return brand;
+    if (!brand) return itemType;
+    if (itemType.toLowerCase().includes(brand.toLowerCase())) return itemType;
+    return `${itemType} ${brand}`.trim();
+  }, [product]);
 
   useEffect(() => {
     if (!isViewerOpen) return;
@@ -163,14 +172,18 @@ export function ItemPage() {
           ) : null}
         </div>
 
-        <div className="item-brand">{product.brand || "Без бренда"}</div>
+        <div className="item-brand">{itemHeaderTitle || "Без названия"}</div>
         <div className="item-subtitle">{product.subtitle || product.description || "Описание будет добавлено."}</div>
         <div className="item-price item-price--big">{product.price.toLocaleString("ru-RU")} ₽</div>
 
         <div className="item-accordion item-accordion--plain">
           <button type="button" className="item-accordion__head" onClick={() => setIsDescOpen((v) => !v)}>
             <span>Описание</span>
-            <span className={`item-accordion__chevron ${isDescOpen ? "is-open" : ""}`}>{">"}</span>
+            <span className={`item-accordion__chevron ${isDescOpen ? "is-open" : ""}`}>
+              <svg className="item-accordion__chevronIcon" viewBox="0 0 24 24" aria-hidden>
+                <path d="M8 5L16 12L8 19" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
           </button>
           {isDescOpen ? <div className="item-accordion__body">{product.description || "Описание отсутствует."}</div> : null}
         </div>
@@ -243,7 +256,11 @@ export function ItemPage() {
       {isViewerOpen ? (
         <div className="item-viewer" onClick={() => setIsViewerOpen(false)}>
           <div className="item-viewer__content" onClick={(e) => e.stopPropagation()}>
-            <button type="button" className="item-viewer__close" onClick={() => setIsViewerOpen(false)} aria-label="Закрыть просмотр">×</button>
+            <button type="button" className="item-viewer__close" onClick={() => setIsViewerOpen(false)} aria-label="Закрыть просмотр">
+              <svg className="item-viewer__closeIcon" viewBox="0 0 24 24" aria-hidden>
+                <path d="M6 6L18 18M18 6L6 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </button>
             {viewerTotal > 1 ? <div className="item-viewer__count">{viewerIndex + 1} / {viewerTotal}</div> : null}
             {viewerImage ? <img className="item-viewer__img" src={viewerImage} alt={product.title} /> : null}
             {viewerTotal > 1 ? (
