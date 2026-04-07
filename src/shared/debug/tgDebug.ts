@@ -23,10 +23,6 @@ const SESSION_EXPIRES_KEY = "tg_user_session_expires_at";
 
 const listeners = new Set<() => void>();
 
-function emit() {
-  listeners.forEach((listener) => listener());
-}
-
 function randomHex(bytes = 8): string {
   const data = new Uint8Array(bytes);
   crypto.getRandomValues(data);
@@ -120,6 +116,23 @@ const state: TgDebugState = {
   lastCollectionsErrorCode: null,
 };
 
+let snapshot: TgDebugState & { debugEnabled: boolean } = {
+  ...state,
+  debugEnabled: isDebugPanelEnabledEffective(),
+};
+
+function rebuildSnapshot() {
+  snapshot = {
+    ...state,
+    debugEnabled: isDebugPanelEnabledEffective(),
+  };
+}
+
+function emit() {
+  rebuildSnapshot();
+  listeners.forEach((listener) => listener());
+}
+
 export function isTgDebugModeEnabled() {
   return isDebugPanelEnabledEffective();
 }
@@ -169,10 +182,7 @@ function subscribe(listener: () => void) {
 }
 
 function getSnapshot() {
-  return {
-    ...state,
-    debugEnabled: isDebugPanelEnabledEffective(),
-  };
+  return snapshot;
 }
 
 export function useTgDebugSnapshot() {
