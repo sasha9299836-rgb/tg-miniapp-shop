@@ -39,10 +39,7 @@ export function isBrowserAdminDebugMode(): boolean {
 }
 
 export function canUseAdminSessionByContext(isDbAdmin: boolean): boolean {
-  if (isRealTelegramMiniAppContext()) {
-    return isDbAdmin;
-  }
-  return true;
+  return isRealTelegramMiniAppContext() && isDbAdmin;
 }
 
 export function getAdminAccessDebugState(isDbAdmin: boolean) {

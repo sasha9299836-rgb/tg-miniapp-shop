@@ -16,6 +16,7 @@ type AddResult = "ADDED" | "ALREADY_EXISTS" | "LIMIT_REACHED" | "BAD_PAYLOAD";
 
 async function buildTelegramUserSessionHeaders(): Promise<Record<string, string>> {
   const token = await ensureTelegramUserSessionToken();
+  console.log("[user-collections] session header build", { hasToken: Boolean(token) });
   if (!token) throw new Error(TG_IDENTITY_REQUIRED_ERROR);
   return { "x-tg-user-session": token };
 }

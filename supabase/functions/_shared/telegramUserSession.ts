@@ -72,6 +72,11 @@ export async function requireTelegramUserSession(
   req: Request,
 ) {
   const sessionToken = getUserSessionToken(req);
+  console.log(JSON.stringify({
+    scope: "telegram_user_session",
+    event: "session_header_checked",
+    hasSessionToken: Boolean(sessionToken),
+  }));
   if (!sessionToken) {
     return { ok: false as const, response: json({ error: "UNAUTHORIZED" }, 401) };
   }
@@ -83,18 +88,35 @@ export async function requireTelegramUserSession(
     .maybeSingle();
 
   if (error) {
+    console.log(JSON.stringify({
+      scope: "telegram_user_session",
+      event: "session_lookup_failed",
+    }));
     return { ok: false as const, response: json({ error: "SESSION_CHECK_FAILED" }, 500) };
   }
 
   const session = (data ?? null) as TelegramUserSessionRow | null;
   if (!session) {
+    console.log(JSON.stringify({
+      scope: "telegram_user_session",
+      event: "session_not_found",
+    }));
     return { ok: false as const, response: json({ error: "UNAUTHORIZED" }, 401) };
   }
 
   const expiresAtMs = new Date(session.expires_at).getTime();
   if (!Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now()) {
+    console.log(JSON.stringify({
+      scope: "telegram_user_session",
+      event: "session_expired",
+    }));
     return { ok: false as const, response: json({ error: "UNAUTHORIZED" }, 401) };
   }
+  console.log(JSON.stringify({
+    scope: "telegram_user_session",
+    event: "session_valid",
+    tgUserId: Number(session.tg_user_id),
+  }));
 
   return {
     ok: true as const,

@@ -19,9 +19,19 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "METHOD_NOT_ALLOWED" }, 405);
 
   try {
+    console.log(JSON.stringify({
+      scope: "tg_user_collections_secure",
+      event: "request_received",
+      hasSessionHeader: Boolean((req.headers.get("x-tg-user-session") ?? "").trim()),
+    }));
     const supabase = createSupabaseAdminClient();
     const userSession = await requireTelegramUserSession(supabase, req);
     if (!userSession.ok) return userSession.response;
+    console.log(JSON.stringify({
+      scope: "tg_user_collections_secure",
+      event: "session_resolved",
+      tgUserId: userSession.tgUserId,
+    }));
 
     const body = await req.json().catch(() => null) as RequestBody | null;
     const scope = String(body?.scope ?? "").trim() as Scope;

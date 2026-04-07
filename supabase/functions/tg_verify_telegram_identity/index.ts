@@ -24,20 +24,45 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => null) as VerifyTelegramIdentityBody | null;
     const initData = String(body?.initData ?? "").trim();
+    console.log(JSON.stringify({
+      scope: "tg_verify_telegram_identity",
+      event: "request_received",
+      hasInitData: Boolean(initData),
+      initDataLength: initData.length,
+    }));
     if (!initData) return json({ error: "INIT_DATA_REQUIRED" }, 400);
 
     const botToken = getRequiredSecret("TELEGRAM_BOT_TOKEN", "TG_BOT_TOKEN", "BOT_TOKEN");
     const initDataMaxAgeSeconds = resolveInitDataMaxAgeSeconds(Deno.env.get("TG_INITDATA_MAX_AGE_SECONDS"));
     const verification = await verifyTelegramInitData(initData, botToken, initDataMaxAgeSeconds);
     if (!verification.ok) {
-      return json({ error: "INVALID_TELEGRAM_IDENTITY" }, 401);
+      console.log(JSON.stringify({
+        scope: "tg_verify_telegram_identity",
+        event: "verification_failed",
+        reason: verification.reason,
+      }));
+      return json({ error: "INVALID_TELEGRAM_IDENTITY", reason: verification.reason }, 401);
     }
+    console.log(JSON.stringify({
+      scope: "tg_verify_telegram_identity",
+      event: "verification_passed",
+      telegramId: verification.user.id,
+    }));
 
     const supabase = createSupabaseAdminClient();
     const session = await createTelegramUserSession(supabase, verification.user.id);
     if (!session.ok) {
+      console.log(JSON.stringify({
+        scope: "tg_verify_telegram_identity",
+        event: "session_create_failed",
+      }));
       return json({ error: "SESSION_CREATE_FAILED", details: session.error }, 500);
     }
+    console.log(JSON.stringify({
+      scope: "tg_verify_telegram_identity",
+      event: "session_issued",
+      telegramId: verification.user.id,
+    }));
 
     return json({
       ok: true,

@@ -64,28 +64,47 @@ async function waitForTelegramInitData(timeoutMs: number): Promise<string> {
 
 export async function ensureTelegramUserSessionToken(): Promise<string> {
   const existing = getTelegramUserSessionToken();
-  if (existing) return existing;
+  if (existing) {
+    console.log("[tg-session] ensure: existing token");
+    return existing;
+  }
 
   if (ensureSessionInFlight) return ensureSessionInFlight;
 
   ensureSessionInFlight = (async () => {
     const current = getTelegramUserSessionToken();
-    if (current) return current;
+    if (current) {
+      console.log("[tg-session] ensure: token appeared in-flight");
+      return current;
+    }
 
     const initData = await waitForTelegramInitData(3000);
-    if (!initData) return "";
+    if (!initData) {
+      console.log("[tg-session] ensure: initData missing after wait");
+      return "";
+    }
 
     try {
       const { verifyTelegramIdentity } = await import("../api/telegramIdentityApi");
       const verified = await verifyTelegramIdentity(initData);
-      setTelegramUserSessionToken(verified.sessionToken, verified.expiresAt);
+      // Prefer relative ttl when present to avoid client clock skew issues with absolute expires_at.
+      const effectiveExpiresAt = Number.isInteger(verified.expiresIn) && verified.expiresIn > 0
+        ? new Date(Date.now() + verified.expiresIn * 1000).toISOString()
+        : verified.expiresAt;
+      setTelegramUserSessionToken(verified.sessionToken, effectiveExpiresAt);
       try {
         window.localStorage.setItem("tg_user_id", String(verified.telegramId));
       } catch {
         // no-op
       }
-      return getTelegramUserSessionToken();
+      const savedToken = getTelegramUserSessionToken();
+      console.log("[tg-session] ensure: verify success", {
+        telegramId: verified.telegramId,
+        tokenSaved: Boolean(savedToken),
+      });
+      return savedToken;
     } catch {
+      console.log("[tg-session] ensure: verify failed");
       clearTelegramUserSessionToken();
       return "";
     } finally {
