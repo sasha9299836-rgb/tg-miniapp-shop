@@ -11,6 +11,20 @@ export function getKnownTgUserId(): number | null {
       return telegramRuntimeId;
     }
 
+    const initData = String(window.Telegram?.WebApp?.initData ?? "").trim();
+    if (initData) {
+      const params = new URLSearchParams(initData);
+      const rawUser = String(params.get("user") ?? "").trim();
+      if (rawUser) {
+        const parsedUser = JSON.parse(rawUser) as { id?: unknown };
+        const initDataId = Number(parsedUser?.id);
+        if (Number.isInteger(initDataId) && initDataId > 0) {
+          window.localStorage.setItem(TG_USER_ID_KEY, String(initDataId));
+          return initDataId;
+        }
+      }
+    }
+
     const raw = window.localStorage.getItem(TG_USER_ID_KEY);
     if (!raw) return null;
     const parsed = Number.parseInt(raw, 10);

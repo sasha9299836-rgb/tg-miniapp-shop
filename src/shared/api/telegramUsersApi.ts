@@ -1,5 +1,5 @@
 import { TG_IDENTITY_REQUIRED_ERROR } from "../auth/tgUser";
-import { getTelegramUserSessionToken } from "../auth/tgUserSession";
+import { ensureTelegramUserSessionToken } from "../auth/tgUserSession";
 import { supabase } from "./supabaseClient";
 
 export type TgUserRecord = {
@@ -24,8 +24,8 @@ type UpsertTelegramUserPayload = {
   lastName?: string | null;
 };
 
-function buildTelegramUserSessionHeaders(): Record<string, string> {
-  const token = getTelegramUserSessionToken();
+async function buildTelegramUserSessionHeaders(): Promise<Record<string, string>> {
+  const token = await ensureTelegramUserSessionToken();
   if (!token) throw new Error(TG_IDENTITY_REQUIRED_ERROR);
   return { "x-tg-user-session": token };
 }
@@ -45,7 +45,7 @@ export async function upsertTelegramUser(payload: UpsertTelegramUserPayload): Pr
         telegram_first_name: payload.firstName ?? null,
         telegram_last_name: payload.lastName ?? null,
       },
-      headers: buildTelegramUserSessionHeaders(),
+      headers: await buildTelegramUserSessionHeaders(),
     },
   );
   if (error) throw error;
@@ -59,7 +59,7 @@ export async function loadTelegramUserProfile(): Promise<TgUserRecord | null> {
     "tg_users_secure",
     {
       body: { mode: "load_profile" },
-      headers: buildTelegramUserSessionHeaders(),
+      headers: await buildTelegramUserSessionHeaders(),
     },
   );
   if (error) throw error;
@@ -86,7 +86,7 @@ export async function saveTelegramUserProfile(payload: SaveTelegramUserProfilePa
         phone: payload.phone.trim() || null,
         email: payload.email.trim() || null,
       },
-      headers: buildTelegramUserSessionHeaders(),
+      headers: await buildTelegramUserSessionHeaders(),
     },
   );
   if (error) throw error;

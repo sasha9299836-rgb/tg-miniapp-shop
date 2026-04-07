@@ -1,6 +1,6 @@
 import { supabase } from "./supabaseClient";
 import { TG_IDENTITY_REQUIRED_ERROR } from "../auth/tgUser";
-import { getTelegramUserSessionToken } from "../auth/tgUserSession";
+import { ensureTelegramUserSessionToken } from "../auth/tgUserSession";
 
 export const TG_SELECTED_ADDRESS_PRESET_ID_KEY = "tg_selected_address_preset_id";
 
@@ -32,8 +32,8 @@ export type UpsertAddressPresetPayload = {
   is_default?: boolean;
 };
 
-function buildTelegramUserSessionHeaders(): Record<string, string> {
-  const token = getTelegramUserSessionToken();
+async function buildTelegramUserSessionHeaders(): Promise<Record<string, string>> {
+  const token = await ensureTelegramUserSessionToken();
   if (!token) throw new Error(TG_IDENTITY_REQUIRED_ERROR);
   return { "x-tg-user-session": token };
 }
@@ -43,7 +43,7 @@ export async function listAddressPresets(): Promise<TgAddressPreset[]> {
     "tg_address_presets_secure",
     {
       body: { mode: "list" },
-      headers: buildTelegramUserSessionHeaders(),
+      headers: await buildTelegramUserSessionHeaders(),
     },
   );
   if (error) throw error;
@@ -68,7 +68,7 @@ export async function upsertAddressPreset(payload: UpsertAddressPresetPayload): 
       city_code: payload.city_code ?? null,
       pvz_code: payload.pvz_code ?? null,
     },
-    headers: buildTelegramUserSessionHeaders(),
+    headers: await buildTelegramUserSessionHeaders(),
   });
   if (error) throw error;
   if (!data?.ok) throw new Error("PRESET_SAVE_FAILED");
@@ -90,7 +90,7 @@ export async function deleteAddressPreset(presetId: string): Promise<void> {
     "tg_address_presets_secure",
     {
       body: { mode: "delete", preset_id: presetId },
-      headers: buildTelegramUserSessionHeaders(),
+      headers: await buildTelegramUserSessionHeaders(),
     },
   );
   if (error) throw error;

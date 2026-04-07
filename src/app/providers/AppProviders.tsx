@@ -53,7 +53,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
               setTelegramUserSessionToken(session.sessionToken, session.expiresAt);
               lastVerifiedTelegramId = session.telegramId;
             }
-          } catch {
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "VERIFY_FAILED";
+            console.log(`[tg-user-bootstrap] verify failed: ${message}`);
             if (!isCancelled) {
               clearTelegramUserSessionToken();
             }

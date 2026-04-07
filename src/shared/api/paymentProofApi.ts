@@ -1,6 +1,6 @@
 import { supabase } from "./supabaseClient";
 import { TG_IDENTITY_REQUIRED_ERROR } from "../auth/tgUser";
-import { getTelegramUserSessionToken } from "../auth/tgUserSession";
+import { ensureTelegramUserSessionToken } from "../auth/tgUserSession";
 
 const TG_ADMIN_SESSION_TOKEN_KEY = "tg_admin_session_token";
 
@@ -9,7 +9,7 @@ export async function getPaymentProofPutPresign(payload: {
   file_name: string;
   content_type: string;
 }): Promise<{ url: string; key: string }> {
-  const userSessionToken = readTelegramUserSessionToken();
+  const userSessionToken = await readTelegramUserSessionToken();
   if (!userSessionToken) {
     throw new Error(TG_IDENTITY_REQUIRED_ERROR);
   }
@@ -45,6 +45,6 @@ export async function getPaymentProofGetPresign(orderId: string): Promise<{ url:
   return { url: data.url };
 }
 
-function readTelegramUserSessionToken() {
-  return getTelegramUserSessionToken();
+async function readTelegramUserSessionToken() {
+  return ensureTelegramUserSessionToken();
 }

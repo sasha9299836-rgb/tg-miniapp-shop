@@ -1,6 +1,6 @@
 import { supabase } from "./supabaseClient";
-import { getCurrentTgUserId, TG_IDENTITY_REQUIRED_ERROR } from "../auth/tgUser";
-import { getTelegramUserSessionToken } from "../auth/tgUserSession";
+import { TG_IDENTITY_REQUIRED_ERROR } from "../auth/tgUser";
+import { ensureTelegramUserSessionToken } from "../auth/tgUserSession";
 
 export const TG_LAST_ORDER_ID_KEY = "tg_last_order_id";
 
@@ -199,8 +199,7 @@ export function clearLastOrderId() {
 }
 
 export async function createOrder(payload: CreateOrderPayload): Promise<{ order_id: string; reserved_until: string }> {
-  const userSessionToken = readTelegramUserSessionToken();
-  ensureTgUserId(getCurrentTgUserId());
+  const userSessionToken = await readTelegramUserSessionToken();
   console.log("tg_create_order payload", {
     post_ids_count: Array.isArray(payload.post_ids) ? payload.post_ids.length : 0,
     delivery_type: payload.delivery_type,
@@ -325,8 +324,7 @@ export async function listOrderItemsByOrderIds(orderIds: string[]): Promise<TgOr
 }
 
 export async function listOrderShipments(orderId: string): Promise<TgOrderShipment[]> {
-  ensureTgUserId(getCurrentTgUserId());
-  const userSessionToken = readTelegramUserSessionToken();
+  const userSessionToken = await readTelegramUserSessionToken();
   const { data, error } = await supabase.functions.invoke<{
     ok: boolean;
     mode: "user_by_order_id";
@@ -353,7 +351,7 @@ export async function listOrderShipmentsByOrderIds(orderIds: string[]): Promise<
     ? { mode: "admin_by_order_ids" as const, order_ids: normalized }
     : { mode: "user_by_order_ids" as const, order_ids: normalized };
 
-  const userSessionToken = hasAdminToken ? "" : readTelegramUserSessionToken();
+  const userSessionToken = hasAdminToken ? "" : await readTelegramUserSessionToken();
 
   const { data, error } = await supabase.functions.invoke<{
     ok: boolean;
@@ -393,7 +391,7 @@ export async function calculateDeliveryQuote(params: {
 }
 
 export async function getOrder(orderId: string): Promise<TgOrder | null> {
-  const userSessionToken = readTelegramUserSessionToken();
+  const userSessionToken = await readTelegramUserSessionToken();
   const { data, error } = await supabase.functions.invoke<{
     ok: boolean;
     mode: "user_one";
@@ -415,8 +413,7 @@ export async function getOrderById(orderId: string): Promise<TgOrder | null> {
 }
 
 export async function listOrdersByUser(): Promise<TgOrder[]> {
-  ensureTgUserId(getCurrentTgUserId());
-  const userSessionToken = readTelegramUserSessionToken();
+  const userSessionToken = await readTelegramUserSessionToken();
   const { data, error } = await supabase.functions.invoke<{
     ok: boolean;
     mode: "user_list";
@@ -433,7 +430,7 @@ export async function listOrdersByUser(): Promise<TgOrder[]> {
 }
 
 export async function getOrderWithTimeline(orderId: string): Promise<TgOrderWithTimeline> {
-  const userSessionToken = readTelegramUserSessionToken();
+  const userSessionToken = await readTelegramUserSessionToken();
   const { data, error } = await supabase.functions.invoke<{
     ok: boolean;
     mode: "user_by_order_id" | "admin_by_order_id";
@@ -458,7 +455,7 @@ export async function getOrderWithTimeline(orderId: string): Promise<TgOrderWith
 }
 
 export async function submitPaymentProof(orderId: string, proofKey: string): Promise<void> {
-  const userSessionToken = readTelegramUserSessionToken();
+  const userSessionToken = await readTelegramUserSessionToken();
   const { data, error } = await supabase.functions.invoke<{ ok?: boolean; error?: string }>(
     "tg_submit_payment_proof",
     {
@@ -479,7 +476,7 @@ export async function submitPaymentProof(orderId: string, proofKey: string): Pro
 }
 
 export async function cancelPendingOrder(orderId: string): Promise<void> {
-  const userSessionToken = readTelegramUserSessionToken();
+  const userSessionToken = await readTelegramUserSessionToken();
   const { data, error } = await supabase.functions.invoke<{ ok?: boolean; error?: string }>(
     "tg_cancel_order",
     {
@@ -670,8 +667,8 @@ function readAdminToken() {
   }
 }
 
-function readTelegramUserSessionToken() {
-  return getTelegramUserSessionToken();
+async function readTelegramUserSessionToken() {
+  return ensureTelegramUserSessionToken();
 }
 
 function buildAdminSessionHeaders(adminToken: string): Record<string, string> | undefined {

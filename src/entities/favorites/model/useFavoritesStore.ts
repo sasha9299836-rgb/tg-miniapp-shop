@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { getCurrentTgUserId, TG_IDENTITY_REQUIRED_ERROR } from "../../../shared/auth/tgUser";
+import { TG_IDENTITY_REQUIRED_ERROR } from "../../../shared/auth/tgUser";
 import {
   addUserFavorite,
   clearUserFavorites,
@@ -60,8 +60,6 @@ export const useFavoritesStore = create<State>((set, get) => ({
   notice: null,
   load: async () => {
     try {
-      const tgUserId = getCurrentTgUserId();
-      if (!Number.isInteger(tgUserId) || tgUserId <= 0) throw new Error(TG_IDENTITY_REQUIRED_ERROR);
       const rows = await listUserFavorites();
       const postIds = rows.map((row) => String(row.post_id ?? "").trim()).filter(Boolean);
       const ids = Array.from(productToPost.entries())
@@ -132,8 +130,6 @@ export const useFavoritesStore = create<State>((set, get) => ({
     const postId = resolvePostId(target);
     if (!postId) return;
     try {
-      const tgUserId = getCurrentTgUserId();
-      if (!Number.isInteger(tgUserId) || tgUserId <= 0) throw new Error(TG_IDENTITY_REQUIRED_ERROR);
       await removeUserFavorite(postId);
     } catch (error) {
       if (isIdentityError(error)) {
@@ -150,8 +146,6 @@ export const useFavoritesStore = create<State>((set, get) => ({
   },
   clear: async () => {
     try {
-      const tgUserId = getCurrentTgUserId();
-      if (!Number.isInteger(tgUserId) || tgUserId <= 0) throw new Error(TG_IDENTITY_REQUIRED_ERROR);
       await clearUserFavorites();
     } catch (error) {
       if (isIdentityError(error)) {

@@ -1,6 +1,6 @@
 import { supabase } from "./supabaseClient";
 import { TG_IDENTITY_REQUIRED_ERROR } from "../auth/tgUser";
-import { getTelegramUserSessionToken } from "../auth/tgUserSession";
+import { ensureTelegramUserSessionToken } from "../auth/tgUserSession";
 
 export type UserFavoriteRow = {
   post_id: string;
@@ -14,8 +14,8 @@ export type UserCartRow = {
 
 type AddResult = "ADDED" | "ALREADY_EXISTS" | "LIMIT_REACHED" | "BAD_PAYLOAD";
 
-function buildTelegramUserSessionHeaders(): Record<string, string> {
-  const token = getTelegramUserSessionToken();
+async function buildTelegramUserSessionHeaders(): Promise<Record<string, string>> {
+  const token = await ensureTelegramUserSessionToken();
   if (!token) throw new Error(TG_IDENTITY_REQUIRED_ERROR);
   return { "x-tg-user-session": token };
 }
@@ -25,7 +25,7 @@ export async function listUserFavorites(): Promise<UserFavoriteRow[]> {
     "tg_user_collections_secure",
     {
       body: { scope: "favorites", action: "list" },
-      headers: buildTelegramUserSessionHeaders(),
+      headers: await buildTelegramUserSessionHeaders(),
     },
   );
   if (error) throw error;
@@ -38,7 +38,7 @@ export async function addUserFavorite(postId: string): Promise<AddResult> {
     "tg_user_collections_secure",
     {
       body: { scope: "favorites", action: "add", post_id: postId },
-      headers: buildTelegramUserSessionHeaders(),
+      headers: await buildTelegramUserSessionHeaders(),
     },
   );
   if (error) throw error;
@@ -51,7 +51,7 @@ export async function removeUserFavorite(postId: string): Promise<void> {
     "tg_user_collections_secure",
     {
       body: { scope: "favorites", action: "remove", post_id: postId },
-      headers: buildTelegramUserSessionHeaders(),
+      headers: await buildTelegramUserSessionHeaders(),
     },
   );
   if (error) throw error;
@@ -63,7 +63,7 @@ export async function clearUserFavorites(): Promise<void> {
     "tg_user_collections_secure",
     {
       body: { scope: "favorites", action: "clear" },
-      headers: buildTelegramUserSessionHeaders(),
+      headers: await buildTelegramUserSessionHeaders(),
     },
   );
   if (error) throw error;
@@ -75,7 +75,7 @@ export async function listUserCart(): Promise<UserCartRow[]> {
     "tg_user_collections_secure",
     {
       body: { scope: "cart", action: "list" },
-      headers: buildTelegramUserSessionHeaders(),
+      headers: await buildTelegramUserSessionHeaders(),
     },
   );
   if (error) throw error;
@@ -88,7 +88,7 @@ export async function addUserCartItem(postId: string): Promise<AddResult> {
     "tg_user_collections_secure",
     {
       body: { scope: "cart", action: "add", post_id: postId },
-      headers: buildTelegramUserSessionHeaders(),
+      headers: await buildTelegramUserSessionHeaders(),
     },
   );
   if (error) throw error;
@@ -101,7 +101,7 @@ export async function removeUserCartItem(postId: string): Promise<void> {
     "tg_user_collections_secure",
     {
       body: { scope: "cart", action: "remove", post_id: postId },
-      headers: buildTelegramUserSessionHeaders(),
+      headers: await buildTelegramUserSessionHeaders(),
     },
   );
   if (error) throw error;
@@ -113,7 +113,7 @@ export async function clearUserCart(): Promise<void> {
     "tg_user_collections_secure",
     {
       body: { scope: "cart", action: "clear" },
-      headers: buildTelegramUserSessionHeaders(),
+      headers: await buildTelegramUserSessionHeaders(),
     },
   );
   if (error) throw error;

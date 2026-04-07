@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { getCurrentTgUserId, TG_IDENTITY_REQUIRED_ERROR } from "../../../shared/auth/tgUser";
+import { TG_IDENTITY_REQUIRED_ERROR } from "../../../shared/auth/tgUser";
 import {
   addUserCartItem,
   clearUserCart,
@@ -60,8 +60,6 @@ export const useCartStore = create<State>((set, get) => ({
   notice: null,
   load: async () => {
     try {
-      const tgUserId = getCurrentTgUserId();
-      if (!Number.isInteger(tgUserId) || tgUserId <= 0) throw new Error(TG_IDENTITY_REQUIRED_ERROR);
       const rows = await listUserCart();
       const items: CartItem[] = rows.map((row) => {
         const postId = String(row.post_id ?? "").trim();
@@ -110,8 +108,6 @@ export const useCartStore = create<State>((set, get) => ({
 
     let result: "ADDED" | "ALREADY_EXISTS" | "LIMIT_REACHED" | "BAD_PAYLOAD";
     try {
-      const tgUserId = getCurrentTgUserId();
-      if (!Number.isInteger(tgUserId) || tgUserId <= 0) throw new Error(TG_IDENTITY_REQUIRED_ERROR);
       result = await addUserCartItem(postId);
     } catch (error) {
       if (isIdentityError(error)) {
@@ -135,8 +131,6 @@ export const useCartStore = create<State>((set, get) => ({
     const postId = resolvePostId(target);
     if (!postId) return;
     try {
-      const tgUserId = getCurrentTgUserId();
-      if (!Number.isInteger(tgUserId) || tgUserId <= 0) throw new Error(TG_IDENTITY_REQUIRED_ERROR);
       await removeUserCartItem(postId);
     } catch (error) {
       if (isIdentityError(error)) {
@@ -154,8 +148,6 @@ export const useCartStore = create<State>((set, get) => ({
     const normalized = String(postId ?? "").trim();
     if (!normalized) return;
     try {
-      const tgUserId = getCurrentTgUserId();
-      if (!Number.isInteger(tgUserId) || tgUserId <= 0) throw new Error(TG_IDENTITY_REQUIRED_ERROR);
       await removeUserCartItem(normalized);
     } catch (error) {
       if (isIdentityError(error)) {
@@ -171,8 +163,6 @@ export const useCartStore = create<State>((set, get) => ({
   },
   clear: async () => {
     try {
-      const tgUserId = getCurrentTgUserId();
-      if (!Number.isInteger(tgUserId) || tgUserId <= 0) throw new Error(TG_IDENTITY_REQUIRED_ERROR);
       await clearUserCart();
     } catch (error) {
       if (isIdentityError(error)) {
@@ -195,11 +185,6 @@ export const useCartStore = create<State>((set, get) => ({
     const toRemove = get().items.filter((item) => !item.postId || !allowed.has(item.postId));
     if (!toRemove.length) return 0;
 
-    const tgUserId = getCurrentTgUserId();
-    if (!Number.isInteger(tgUserId) || tgUserId <= 0) {
-      set({ notice: IDENTITY_NOTICE });
-      return 0;
-    }
     for (const item of toRemove) {
       if (!item.postId) continue;
       try {
