@@ -44,6 +44,13 @@ export function getOptionalSecret(...keys: string[]) {
   return "";
 }
 
+export function getDebugId(req: Request): string {
+  const raw = (req.headers.get("x-debug-id") ?? "").trim();
+  if (!raw) return "";
+  if (!/^[A-Za-z0-9._:-]{1,80}$/.test(raw)) return "";
+  return raw;
+}
+
 function isSupabaseClientToken(token: string) {
   return token.startsWith("sb_publishable_") || token.startsWith("sb_secret_");
 }

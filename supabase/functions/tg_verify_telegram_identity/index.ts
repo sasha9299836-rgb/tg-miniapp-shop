@@ -1,6 +1,7 @@
 import {
   createSupabaseAdminClient,
   empty,
+  getDebugId,
   getRequiredSecret,
   json,
 } from "../_shared/admin.ts";
@@ -22,11 +23,13 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "METHOD_NOT_ALLOWED" }, 405);
 
   try {
+    const debugId = getDebugId(req);
     const body = await req.json().catch(() => null) as VerifyTelegramIdentityBody | null;
     const initData = String(body?.initData ?? "").trim();
     console.log(JSON.stringify({
       scope: "tg_verify_telegram_identity",
       event: "request_received",
+      debugId: debugId || null,
       hasInitData: Boolean(initData),
       initDataLength: initData.length,
     }));
@@ -39,6 +42,7 @@ Deno.serve(async (req) => {
       console.log(JSON.stringify({
         scope: "tg_verify_telegram_identity",
         event: "verification_failed",
+        debugId: debugId || null,
         reason: verification.reason,
       }));
       return json({ error: "INVALID_TELEGRAM_IDENTITY", reason: verification.reason }, 401);
@@ -46,7 +50,8 @@ Deno.serve(async (req) => {
     console.log(JSON.stringify({
       scope: "tg_verify_telegram_identity",
       event: "verification_passed",
-      telegramId: verification.user.id,
+      debugId: debugId || null,
+      telegramIdResolved: Number.isFinite(Number(verification.user.id)) && Number(verification.user.id) > 0,
     }));
 
     const supabase = createSupabaseAdminClient();
@@ -55,13 +60,15 @@ Deno.serve(async (req) => {
       console.log(JSON.stringify({
         scope: "tg_verify_telegram_identity",
         event: "session_create_failed",
+        debugId: debugId || null,
       }));
       return json({ error: "SESSION_CREATE_FAILED", details: session.error }, 500);
     }
     console.log(JSON.stringify({
       scope: "tg_verify_telegram_identity",
       event: "session_issued",
-      telegramId: verification.user.id,
+      debugId: debugId || null,
+      sessionIssued: true,
     }));
 
     return json({

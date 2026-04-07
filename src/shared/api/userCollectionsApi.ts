@@ -1,5 +1,6 @@
 import { supabase } from "./supabaseClient";
 import { TG_IDENTITY_REQUIRED_ERROR } from "../auth/tgUser";
+import { getTgDebugHeaders, setLastCollectionsErrorCode } from "../debug/tgDebug";
 import { ensureTelegramUserSessionToken } from "../auth/tgUserSession";
 
 export type UserFavoriteRow = {
@@ -18,7 +19,7 @@ async function buildTelegramUserSessionHeaders(): Promise<Record<string, string>
   const token = await ensureTelegramUserSessionToken();
   console.log("[user-collections] session header build", { hasToken: Boolean(token) });
   if (!token) throw new Error(TG_IDENTITY_REQUIRED_ERROR);
-  return { "x-tg-user-session": token };
+  return { "x-tg-user-session": token, ...getTgDebugHeaders() };
 }
 
 export async function listUserFavorites(): Promise<UserFavoriteRow[]> {
@@ -29,8 +30,12 @@ export async function listUserFavorites(): Promise<UserFavoriteRow[]> {
       headers: await buildTelegramUserSessionHeaders(),
     },
   );
-  if (error) throw error;
+  if (error) {
+    setLastCollectionsErrorCode(error.message ?? "COLLECTION_LOAD_FAILED");
+    throw error;
+  }
   if (!data?.ok) throw new Error("COLLECTION_LOAD_FAILED");
+  setLastCollectionsErrorCode(null);
   return data.rows ?? [];
 }
 
@@ -42,8 +47,12 @@ export async function addUserFavorite(postId: string): Promise<AddResult> {
       headers: await buildTelegramUserSessionHeaders(),
     },
   );
-  if (error) throw error;
+  if (error) {
+    setLastCollectionsErrorCode(error.message ?? "COLLECTION_ADD_FAILED");
+    throw error;
+  }
   if (!data?.ok) throw new Error("COLLECTION_ADD_FAILED");
+  setLastCollectionsErrorCode(null);
   return String(data.result ?? "BAD_PAYLOAD") as AddResult;
 }
 
@@ -55,8 +64,12 @@ export async function removeUserFavorite(postId: string): Promise<void> {
       headers: await buildTelegramUserSessionHeaders(),
     },
   );
-  if (error) throw error;
+  if (error) {
+    setLastCollectionsErrorCode(error.message ?? "COLLECTION_REMOVE_FAILED");
+    throw error;
+  }
   if (!data?.ok) throw new Error("COLLECTION_REMOVE_FAILED");
+  setLastCollectionsErrorCode(null);
 }
 
 export async function clearUserFavorites(): Promise<void> {
@@ -67,8 +80,12 @@ export async function clearUserFavorites(): Promise<void> {
       headers: await buildTelegramUserSessionHeaders(),
     },
   );
-  if (error) throw error;
+  if (error) {
+    setLastCollectionsErrorCode(error.message ?? "COLLECTION_CLEAR_FAILED");
+    throw error;
+  }
   if (!data?.ok) throw new Error("COLLECTION_CLEAR_FAILED");
+  setLastCollectionsErrorCode(null);
 }
 
 export async function listUserCart(): Promise<UserCartRow[]> {
@@ -79,8 +96,12 @@ export async function listUserCart(): Promise<UserCartRow[]> {
       headers: await buildTelegramUserSessionHeaders(),
     },
   );
-  if (error) throw error;
+  if (error) {
+    setLastCollectionsErrorCode(error.message ?? "COLLECTION_LOAD_FAILED");
+    throw error;
+  }
   if (!data?.ok) throw new Error("COLLECTION_LOAD_FAILED");
+  setLastCollectionsErrorCode(null);
   return data.rows ?? [];
 }
 
@@ -92,8 +113,12 @@ export async function addUserCartItem(postId: string): Promise<AddResult> {
       headers: await buildTelegramUserSessionHeaders(),
     },
   );
-  if (error) throw error;
+  if (error) {
+    setLastCollectionsErrorCode(error.message ?? "COLLECTION_ADD_FAILED");
+    throw error;
+  }
   if (!data?.ok) throw new Error("COLLECTION_ADD_FAILED");
+  setLastCollectionsErrorCode(null);
   return String(data.result ?? "BAD_PAYLOAD") as AddResult;
 }
 
@@ -105,8 +130,12 @@ export async function removeUserCartItem(postId: string): Promise<void> {
       headers: await buildTelegramUserSessionHeaders(),
     },
   );
-  if (error) throw error;
+  if (error) {
+    setLastCollectionsErrorCode(error.message ?? "COLLECTION_REMOVE_FAILED");
+    throw error;
+  }
   if (!data?.ok) throw new Error("COLLECTION_REMOVE_FAILED");
+  setLastCollectionsErrorCode(null);
 }
 
 export async function clearUserCart(): Promise<void> {
@@ -117,6 +146,10 @@ export async function clearUserCart(): Promise<void> {
       headers: await buildTelegramUserSessionHeaders(),
     },
   );
-  if (error) throw error;
+  if (error) {
+    setLastCollectionsErrorCode(error.message ?? "COLLECTION_CLEAR_FAILED");
+    throw error;
+  }
   if (!data?.ok) throw new Error("COLLECTION_CLEAR_FAILED");
+  setLastCollectionsErrorCode(null);
 }

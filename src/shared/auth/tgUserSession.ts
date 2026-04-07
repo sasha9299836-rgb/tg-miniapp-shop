@@ -1,3 +1,5 @@
+import { setTgDebugState } from "../debug/tgDebug";
+
 const TG_USER_SESSION_TOKEN_KEY = "tg_user_session_token";
 const TG_USER_SESSION_EXPIRES_AT_KEY = "tg_user_session_expires_at";
 let ensureSessionInFlight: Promise<string> | null = null;
@@ -10,7 +12,9 @@ function isFutureIsoDate(value: string): boolean {
 export function getTelegramUserSessionToken(): string {
   try {
     const token = (window.localStorage.getItem(TG_USER_SESSION_TOKEN_KEY) ?? "").trim();
-    if (!token) return "";
+    if (!token) {
+      return "";
+    }
     const expiresAt = (window.localStorage.getItem(TG_USER_SESSION_EXPIRES_AT_KEY) ?? "").trim();
     if (!isFutureIsoDate(expiresAt)) {
       window.localStorage.removeItem(TG_USER_SESSION_TOKEN_KEY);
@@ -48,6 +52,23 @@ export function clearTelegramUserSessionToken() {
   }
 }
 
+export function refreshTgDebugSessionFlags() {
+  try {
+    const tokenPresent = Boolean((window.localStorage.getItem(TG_USER_SESSION_TOKEN_KEY) ?? "").trim());
+    const expiresPresent = Boolean((window.localStorage.getItem(TG_USER_SESSION_EXPIRES_AT_KEY) ?? "").trim());
+    setTgDebugState({
+      sessionTokenPresent: tokenPresent,
+      sessionExpiresPresent: expiresPresent,
+    });
+  } catch {
+    setTgDebugState({
+      sessionTokenPresent: false,
+      sessionExpiresPresent: false,
+    });
+  }
+}
+
+
 async function waitForTelegramInitData(timeoutMs: number): Promise<string> {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
@@ -81,6 +102,7 @@ export async function ensureTelegramUserSessionToken(): Promise<string> {
     const initData = await waitForTelegramInitData(3000);
     if (!initData) {
       console.log("[tg-session] ensure: initData missing after wait");
+      refreshTgDebugSessionFlags();
       return "";
     }
 
@@ -98,6 +120,7 @@ export async function ensureTelegramUserSessionToken(): Promise<string> {
         // no-op
       }
       const savedToken = getTelegramUserSessionToken();
+      refreshTgDebugSessionFlags();
       console.log("[tg-session] ensure: verify success", {
         telegramId: verified.telegramId,
         tokenSaved: Boolean(savedToken),
@@ -106,6 +129,7 @@ export async function ensureTelegramUserSessionToken(): Promise<string> {
     } catch {
       console.log("[tg-session] ensure: verify failed");
       clearTelegramUserSessionToken();
+      refreshTgDebugSessionFlags();
       return "";
     } finally {
       ensureSessionInFlight = null;

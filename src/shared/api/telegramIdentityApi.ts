@@ -1,4 +1,5 @@
 import { supabase } from "./supabaseClient";
+import { getTgDebugHeaders } from "../debug/tgDebug";
 
 type VerifyTelegramIdentityResponse = {
   session_token?: string;
@@ -26,6 +27,7 @@ export async function verifyTelegramIdentity(initData: string) {
       body: {
         initData: normalizedInitData,
       },
+      headers: getTgDebugHeaders(),
     },
   );
 

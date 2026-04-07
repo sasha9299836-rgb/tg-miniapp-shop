@@ -1,4 +1,4 @@
-import { createSupabaseAdminClient, json } from "./admin.ts";
+import { createSupabaseAdminClient, getDebugId, json } from "./admin.ts";
 
 type TelegramUserSessionRow = {
   token: string;
@@ -71,10 +71,12 @@ export async function requireTelegramUserSession(
   supabase: ReturnType<typeof createSupabaseAdminClient>,
   req: Request,
 ) {
+  const debugId = getDebugId(req);
   const sessionToken = getUserSessionToken(req);
   console.log(JSON.stringify({
     scope: "telegram_user_session",
     event: "session_header_checked",
+    debugId: debugId || null,
     hasSessionToken: Boolean(sessionToken),
   }));
   if (!sessionToken) {
@@ -91,6 +93,7 @@ export async function requireTelegramUserSession(
     console.log(JSON.stringify({
       scope: "telegram_user_session",
       event: "session_lookup_failed",
+      debugId: debugId || null,
     }));
     return { ok: false as const, response: json({ error: "SESSION_CHECK_FAILED" }, 500) };
   }
@@ -100,6 +103,7 @@ export async function requireTelegramUserSession(
     console.log(JSON.stringify({
       scope: "telegram_user_session",
       event: "session_not_found",
+      debugId: debugId || null,
     }));
     return { ok: false as const, response: json({ error: "UNAUTHORIZED" }, 401) };
   }
@@ -109,13 +113,15 @@ export async function requireTelegramUserSession(
     console.log(JSON.stringify({
       scope: "telegram_user_session",
       event: "session_expired",
+      debugId: debugId || null,
     }));
     return { ok: false as const, response: json({ error: "UNAUTHORIZED" }, 401) };
   }
   console.log(JSON.stringify({
     scope: "telegram_user_session",
     event: "session_valid",
-    tgUserId: Number(session.tg_user_id),
+    debugId: debugId || null,
+    tgUserIdResolved: Number.isFinite(Number(session.tg_user_id)) && Number(session.tg_user_id) > 0,
   }));
 
   return {

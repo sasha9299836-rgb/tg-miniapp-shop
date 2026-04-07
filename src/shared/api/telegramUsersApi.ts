@@ -1,4 +1,5 @@
 import { TG_IDENTITY_REQUIRED_ERROR } from "../auth/tgUser";
+import { getTgDebugHeaders, setLastAuthErrorCode, setTgDebugState } from "../debug/tgDebug";
 import { ensureTelegramUserSessionToken } from "../auth/tgUserSession";
 import { supabase } from "./supabaseClient";
 
@@ -27,7 +28,7 @@ type UpsertTelegramUserPayload = {
 async function buildTelegramUserSessionHeaders(): Promise<Record<string, string>> {
   const token = await ensureTelegramUserSessionToken();
   if (!token) throw new Error(TG_IDENTITY_REQUIRED_ERROR);
-  return { "x-tg-user-session": token };
+  return { "x-tg-user-session": token, ...getTgDebugHeaders() };
 }
 
 function resolveUserFromResponse(payload: { ok?: boolean; user?: TgUserRecord | null } | null | undefined): TgUserRecord | null {
@@ -48,9 +49,18 @@ export async function upsertTelegramUser(payload: UpsertTelegramUserPayload): Pr
       headers: await buildTelegramUserSessionHeaders(),
     },
   );
-  if (error) throw error;
+  if (error) {
+    setLastAuthErrorCode(error.message ?? "USER_BOOTSTRAP_FAILED");
+    throw error;
+  }
   const user = resolveUserFromResponse(data);
   if (!user) throw new Error("TG_USER_UPSERT_EMPTY_RESULT");
+  setTgDebugState({
+    currentUserLoaded: true,
+    currentUserTelegramIdPresent: Boolean(user.telegram_id),
+    currentUserIsAdmin: Boolean(user.is_admin),
+  });
+  setLastAuthErrorCode(null);
   return user;
 }
 
@@ -62,8 +72,17 @@ export async function loadTelegramUserProfile(): Promise<TgUserRecord | null> {
       headers: await buildTelegramUserSessionHeaders(),
     },
   );
-  if (error) throw error;
-  return resolveUserFromResponse(data);
+  if (error) {
+    setLastAuthErrorCode(error.message ?? "USER_PROFILE_LOAD_FAILED");
+    throw error;
+  }
+  const user = resolveUserFromResponse(data);
+  setTgDebugState({
+    currentUserLoaded: Boolean(user),
+    currentUserTelegramIdPresent: Boolean(user?.telegram_id),
+    currentUserIsAdmin: Boolean(user?.is_admin),
+  });
+  return user;
 }
 
 export type SaveTelegramUserProfilePayload = {
@@ -89,8 +108,17 @@ export async function saveTelegramUserProfile(payload: SaveTelegramUserProfilePa
       headers: await buildTelegramUserSessionHeaders(),
     },
   );
-  if (error) throw error;
+  if (error) {
+    setLastAuthErrorCode(error.message ?? "USER_PROFILE_SAVE_FAILED");
+    throw error;
+  }
   const user = resolveUserFromResponse(data);
   if (!user) throw new Error("TG_USER_PROFILE_SAVE_EMPTY_RESULT");
+  setTgDebugState({
+    currentUserLoaded: true,
+    currentUserTelegramIdPresent: Boolean(user.telegram_id),
+    currentUserIsAdmin: Boolean(user.is_admin),
+  });
+  setLastAuthErrorCode(null);
   return user;
 }

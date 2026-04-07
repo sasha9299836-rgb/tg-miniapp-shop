@@ -1,6 +1,7 @@
 import {
   createSupabaseAdminClient,
   empty,
+  getDebugId,
   json,
 } from "../_shared/admin.ts";
 import { requireTelegramUserSession } from "../_shared/telegramUserSession.ts";
@@ -19,9 +20,11 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "METHOD_NOT_ALLOWED" }, 405);
 
   try {
+    const debugId = getDebugId(req);
     console.log(JSON.stringify({
       scope: "tg_user_collections_secure",
       event: "request_received",
+      debugId: debugId || null,
       hasSessionHeader: Boolean((req.headers.get("x-tg-user-session") ?? "").trim()),
     }));
     const supabase = createSupabaseAdminClient();
@@ -30,7 +33,8 @@ Deno.serve(async (req) => {
     console.log(JSON.stringify({
       scope: "tg_user_collections_secure",
       event: "session_resolved",
-      tgUserId: userSession.tgUserId,
+      debugId: debugId || null,
+      tgUserIdResolved: Number.isFinite(Number(userSession.tgUserId)) && Number(userSession.tgUserId) > 0,
     }));
 
     const body = await req.json().catch(() => null) as RequestBody | null;

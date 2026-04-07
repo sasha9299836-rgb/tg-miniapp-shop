@@ -1,6 +1,7 @@
 import {
   createSupabaseAdminClient,
   empty,
+  getDebugId,
   json,
 } from "../_shared/admin.ts";
 import { requireTelegramUserSession } from "../_shared/telegramUserSession.ts";
@@ -45,6 +46,13 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "METHOD_NOT_ALLOWED" }, 405);
 
   try {
+    const debugId = getDebugId(req);
+    console.log(JSON.stringify({
+      scope: "tg_users_secure",
+      event: "request_received",
+      debugId: debugId || null,
+      hasSessionHeader: Boolean((req.headers.get("x-tg-user-session") ?? "").trim()),
+    }));
     const supabase = createSupabaseAdminClient();
     const userSession = await requireTelegramUserSession(supabase, req);
     if (!userSession.ok) return userSession.response;
@@ -69,6 +77,14 @@ Deno.serve(async (req) => {
         return json({ error: "USER_BOOTSTRAP_FAILED", details: error.message }, 500);
       }
 
+      console.log(JSON.stringify({
+        scope: "tg_users_secure",
+        event: "bootstrap_resolved",
+        debugId: debugId || null,
+        tgUserIdResolved: Boolean(data?.telegram_id),
+        isAdmin: Boolean(data?.is_admin),
+      }));
+
       return json({ ok: true, mode, user: data ?? null });
     }
 
@@ -82,6 +98,15 @@ Deno.serve(async (req) => {
       if (error) {
         return json({ error: "USER_PROFILE_LOAD_FAILED", details: error.message }, 500);
       }
+
+      console.log(JSON.stringify({
+        scope: "tg_users_secure",
+        event: "profile_loaded",
+        debugId: debugId || null,
+        currentUserResolved: Boolean(data),
+        tgUserIdResolved: Boolean(data?.telegram_id),
+        isAdmin: Boolean(data?.is_admin),
+      }));
 
       return json({ ok: true, mode, user: data ?? null });
     }
@@ -104,6 +129,15 @@ Deno.serve(async (req) => {
       if (error) {
         return json({ error: "USER_PROFILE_SAVE_FAILED", details: error.message }, 500);
       }
+
+      console.log(JSON.stringify({
+        scope: "tg_users_secure",
+        event: "profile_saved",
+        debugId: debugId || null,
+        currentUserResolved: Boolean(data),
+        tgUserIdResolved: Boolean(data?.telegram_id),
+        isAdmin: Boolean(data?.is_admin),
+      }));
 
       return json({ ok: true, mode, user: data ?? null });
     }

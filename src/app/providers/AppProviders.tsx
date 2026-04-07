@@ -5,9 +5,16 @@ import { useCartStore } from "../../entities/cart/model/useCartStore";
 import { useFavoritesStore } from "../../entities/favorites/model/useFavoritesStore";
 import { verifyTelegramIdentity } from "../../shared/api/telegramIdentityApi";
 import { upsertTelegramUser } from "../../shared/api/telegramUsersApi";
+import TgDebugPanel from "../../shared/debug/TgDebugPanel";
+import {
+  isTgDebugModeEnabled,
+  setLastAuthErrorCode,
+  setTgDebugState,
+} from "../../shared/debug/tgDebug";
 import {
   clearTelegramUserSessionToken,
   getTelegramUserSessionToken,
+  refreshTgDebugSessionFlags,
   setTelegramUserSessionToken,
 } from "../../shared/auth/tgUserSession";
 import { getTelegramUser, getTelegramWebApp, initTelegramWebApp } from "./telegram";
@@ -25,6 +32,11 @@ export function AppProviders({ children }: { children: ReactNode }) {
     let attempts = 0;
 
     initTelegramWebApp();
+    setTgDebugState({
+      runtimeDetected: Boolean(getTelegramWebApp()),
+      initDataPresent: Boolean(String(getTelegramWebApp()?.initData ?? "").trim()),
+      initDataLength: String(getTelegramWebApp()?.initData ?? "").trim().length,
+    });
     console.log("[tg-user-bootstrap] start");
 
     const tryBootstrap = async () => {
@@ -33,6 +45,11 @@ export function AppProviders({ children }: { children: ReactNode }) {
       attempts += 1;
 
       const tgUser = getTelegramUser();
+      setTgDebugState({
+        runtimeDetected: Boolean(getTelegramWebApp()),
+        initDataPresent: Boolean(String(getTelegramWebApp()?.initData ?? "").trim()),
+        initDataLength: String(getTelegramWebApp()?.initData ?? "").trim().length,
+      });
       if (!tgUser) {
         console.log(`[tg-user-bootstrap] no Telegram user yet (attempt ${attempts}/${TELEGRAM_USER_BOOTSTRAP_MAX_ATTEMPTS})`);
         return;
@@ -44,6 +61,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
       const initData = String(getTelegramWebApp()?.initData ?? "").trim();
       if (initData && !verifyInFlight) {
+        setTgDebugState({ verifyRequested: true });
         const hasUserSession = getTelegramUserSessionToken().length > 0;
         if (!hasUserSession || lastVerifiedTelegramId !== tgUser.id) {
           verifyInFlight = true;
@@ -51,13 +69,19 @@ export function AppProviders({ children }: { children: ReactNode }) {
             const session = await verifyTelegramIdentity(initData);
             if (!isCancelled) {
               setTelegramUserSessionToken(session.sessionToken, session.expiresAt);
+              refreshTgDebugSessionFlags();
+              setTgDebugState({ verifySuccess: true });
+              setLastAuthErrorCode(null);
               lastVerifiedTelegramId = session.telegramId;
             }
           } catch (error) {
             const message = error instanceof Error ? error.message : "VERIFY_FAILED";
             console.log(`[tg-user-bootstrap] verify failed: ${message}`);
+            setTgDebugState({ verifySuccess: false });
+            setLastAuthErrorCode(message);
             if (!isCancelled) {
               clearTelegramUserSessionToken();
+              refreshTgDebugSessionFlags();
             }
           } finally {
             verifyInFlight = false;
@@ -65,6 +89,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
         }
       }
       if (!getTelegramUserSessionToken()) {
+        refreshTgDebugSessionFlags();
         return;
       }
 
@@ -100,6 +125,11 @@ export function AppProviders({ children }: { children: ReactNode }) {
             // no-op
           }
           useAdminStore.getState().setDbAdmin(Boolean(row.is_admin));
+          setTgDebugState({
+            currentUserLoaded: true,
+            currentUserTelegramIdPresent: Boolean(row.telegram_id),
+            currentUserIsAdmin: Boolean(row.is_admin),
+          });
           useAccountStore.getState().applyTelegramProfile({
             telegramId: row.telegram_id,
             telegramUsername: row.telegram_username,
@@ -115,6 +145,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       } catch (error) {
         const message = error instanceof Error ? error.message : "UNKNOWN_ERROR";
         console.log(`[tg-user-bootstrap] upsert error: ${message}`);
+        setLastAuthErrorCode(message);
       } finally {
         bootstrapInFlight = false;
       }
@@ -142,9 +173,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  return (
+    return (
     <>
       {children}
+      {isTgDebugModeEnabled() ? <TgDebugPanel /> : null}
     </>
   );
 }
