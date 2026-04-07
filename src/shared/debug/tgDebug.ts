@@ -41,15 +41,16 @@ function readOrCreateDebugId() {
   }
 }
 
-function readFlagFromQuery() {
+function readFlagFromQuery(): boolean | null {
   try {
     const url = new URL(window.location.href);
     const value = (url.searchParams.get("tg_debug") ?? "").trim();
     if (value === "1" || value.toLowerCase() === "true") return true;
+    if (value === "0" || value.toLowerCase() === "false") return false;
   } catch {
     // no-op
   }
-  return false;
+  return null;
 }
 
 function readLocalFlag() {
@@ -83,9 +84,11 @@ function readSessionFlags() {
   }
 }
 
-let debugEnabled = readLocalFlag() || readFlagFromQuery();
-if (readFlagFromQuery()) {
-  writeLocalFlag(true);
+const queryDebugFlag = readFlagFromQuery();
+let debugEnabled = readLocalFlag();
+if (queryDebugFlag !== null) {
+  debugEnabled = queryDebugFlag;
+  writeLocalFlag(queryDebugFlag);
 }
 
 const state: TgDebugState = {
