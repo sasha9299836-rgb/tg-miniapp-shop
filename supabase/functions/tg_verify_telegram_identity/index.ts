@@ -13,7 +13,7 @@ type VerifyTelegramIdentityBody = {
 
 function resolveInitDataMaxAgeSeconds(rawValue: string | undefined): number {
   const parsed = Number(rawValue ?? "");
-  if (!Number.isInteger(parsed) || parsed <= 0) return 900;
+  if (!Number.isInteger(parsed) || parsed <= 0) return 86400;
   return Math.min(86400, Math.max(60, parsed));
 }
 

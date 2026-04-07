@@ -14,7 +14,7 @@ export function AccountPage() {
   const nav = useNavigate();
   const isDbAdmin = useAccountStore((s) => s.profile.isAdmin);
   const { mode, setMode } = useThemeStore();
-  const { isAdmin, load, setSessionToken, clearAdmin } = useAdminStore();
+  const { load, setSessionToken, clearAdmin } = useAdminStore();
   const canUseAdminAccess = canUseAdminSessionByContext(isDbAdmin);
   const [code, setCode] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -122,7 +122,7 @@ export function AccountPage() {
         </Card>
 
         <div className="account-list">
-          {isAdmin && canUseAdminAccess ? (
+          {canUseAdminAccess ? (
             <ListItem
               title="Админка"
               subtitle="Управление данными"
