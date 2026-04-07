@@ -12,10 +12,20 @@ export type TelegramIdentityVerificationResult =
       ok: true;
       user: TelegramIdentityUser;
       authDate: number;
+      diagnostics: {
+        initDataParsed: true;
+        authDateValid: true;
+        hashValid: true;
+      };
     }
   | {
       ok: false;
       reason: "MISSING_HASH" | "INVALID_HASH" | "INVALID_AUTH_DATE" | "EXPIRED_AUTH_DATE" | "INVALID_USER";
+      diagnostics: {
+        initDataParsed: true;
+        authDateValid: boolean;
+        hashValid: boolean;
+      };
     };
 
 async function hmacSha256Raw(key: Uint8Array, value: string): Promise<Uint8Array> {
@@ -79,7 +89,11 @@ function buildDataCheckString(params: URLSearchParams): string {
     if (key === "hash") return;
     entries.push([key, value]);
   });
-  entries.sort(([left], [right]) => left.localeCompare(right));
+  entries.sort(([left], [right]) => {
+    if (left < right) return -1;
+    if (left > right) return 1;
+    return 0;
+  });
   return entries.map(([key, value]) => `${key}=${value}`).join("\n");
 }
 
@@ -91,34 +105,55 @@ export async function verifyTelegramInitData(
   const params = new URLSearchParams(initData);
   const hash = String(params.get("hash") ?? "").trim().toLowerCase();
   if (!hash) {
-    return { ok: false, reason: "MISSING_HASH" };
+    return {
+      ok: false,
+      reason: "MISSING_HASH",
+      diagnostics: { initDataParsed: true, authDateValid: false, hashValid: false },
+    };
   }
 
   const authDate = parseAuthDate(params.get("auth_date"));
   if (!authDate) {
-    return { ok: false, reason: "INVALID_AUTH_DATE" };
+    return {
+      ok: false,
+      reason: "INVALID_AUTH_DATE",
+      diagnostics: { initDataParsed: true, authDateValid: false, hashValid: false },
+    };
   }
 
   const nowSeconds = Math.floor(Date.now() / 1000);
   if (Math.abs(nowSeconds - authDate) > maxAgeSeconds) {
-    return { ok: false, reason: "EXPIRED_AUTH_DATE" };
+    return {
+      ok: false,
+      reason: "EXPIRED_AUTH_DATE",
+      diagnostics: { initDataParsed: true, authDateValid: false, hashValid: false },
+    };
   }
 
   const dataCheckString = buildDataCheckString(params);
   const secretKey = await hmacSha256Raw(textEncoder.encode("WebAppData"), botToken);
   const expectedHash = toHex(await hmacSha256Raw(secretKey, dataCheckString));
   if (!safeEqual(expectedHash, hash)) {
-    return { ok: false, reason: "INVALID_HASH" };
+    return {
+      ok: false,
+      reason: "INVALID_HASH",
+      diagnostics: { initDataParsed: true, authDateValid: true, hashValid: false },
+    };
   }
 
   const user = parseTelegramUser(params.get("user"));
   if (!user) {
-    return { ok: false, reason: "INVALID_USER" };
+    return {
+      ok: false,
+      reason: "INVALID_USER",
+      diagnostics: { initDataParsed: true, authDateValid: true, hashValid: true },
+    };
   }
 
   return {
     ok: true,
     user,
     authDate,
+    diagnostics: { initDataParsed: true, authDateValid: true, hashValid: true },
   };
 }

@@ -2,7 +2,6 @@ import {
   createSupabaseAdminClient,
   empty,
   getDebugId,
-  getRequiredSecret,
   json,
 } from "../_shared/admin.ts";
 import { verifyTelegramInitData } from "../_shared/telegramIdentity.ts";
@@ -16,6 +15,15 @@ function resolveInitDataMaxAgeSeconds(rawValue: string | undefined): number {
   const parsed = Number(rawValue ?? "");
   if (!Number.isInteger(parsed) || parsed <= 0) return 86400;
   return Math.min(86400, Math.max(60, parsed));
+}
+
+function resolveBotTokenFromEnv() {
+  const keys = ["TELEGRAM_BOT_TOKEN", "TG_BOT_TOKEN", "BOT_TOKEN"] as const;
+  for (const key of keys) {
+    const value = String(Deno.env.get(key) ?? "").trim();
+    if (value) return { token: value, source: key };
+  }
+  return { token: "", source: "" };
 }
 
 Deno.serve(async (req) => {
@@ -35,15 +43,33 @@ Deno.serve(async (req) => {
     }));
     if (!initData) return json({ error: "INIT_DATA_REQUIRED" }, 400);
 
-    const botToken = getRequiredSecret("TELEGRAM_BOT_TOKEN", "TG_BOT_TOKEN", "BOT_TOKEN");
+    const tokenFromEnv = resolveBotTokenFromEnv();
+    if (!tokenFromEnv.token) {
+      console.log(JSON.stringify({
+        scope: "tg_verify_telegram_identity",
+        event: "bot_token_missing",
+        debugId: debugId || null,
+      }));
+      return json({ error: "BOT_TOKEN_MISSING" }, 500);
+    }
     const initDataMaxAgeSeconds = resolveInitDataMaxAgeSeconds(Deno.env.get("TG_INITDATA_MAX_AGE_SECONDS"));
-    const verification = await verifyTelegramInitData(initData, botToken, initDataMaxAgeSeconds);
+    console.log(JSON.stringify({
+      scope: "tg_verify_telegram_identity",
+      event: "verification_config",
+      debugId: debugId || null,
+      botTokenSource: tokenFromEnv.source,
+      authDateTtlSeconds: initDataMaxAgeSeconds,
+    }));
+    const verification = await verifyTelegramInitData(initData, tokenFromEnv.token, initDataMaxAgeSeconds);
     if (!verification.ok) {
       console.log(JSON.stringify({
         scope: "tg_verify_telegram_identity",
         event: "verification_failed",
         debugId: debugId || null,
         reason: verification.reason,
+        initDataParsed: verification.diagnostics.initDataParsed,
+        authDateValid: verification.diagnostics.authDateValid,
+        hashValid: verification.diagnostics.hashValid,
       }));
       return json({ error: "INVALID_TELEGRAM_IDENTITY", reason: verification.reason }, 401);
     }
