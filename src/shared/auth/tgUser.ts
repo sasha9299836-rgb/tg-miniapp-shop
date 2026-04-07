@@ -1,5 +1,7 @@
 const TG_USER_ID_KEY = "tg_user_id";
-const DEFAULT_TG_USER_ID = 1;
+
+export const TG_IDENTITY_REQUIRED_ERROR = "TG_IDENTITY_REQUIRED";
+export const TG_IDENTITY_REQUIRED_MESSAGE = "Действие доступно только внутри Telegram Mini App с авторизованным пользователем.";
 
 export function getKnownTgUserId(): number | null {
   try {
@@ -21,11 +23,15 @@ export function getKnownTgUserId(): number | null {
 
 export function getCurrentTgUserId(): number {
   const known = getKnownTgUserId();
+  return known ?? 0;
+}
+
+export function requireCurrentTgUserId(): number {
+  const known = getKnownTgUserId();
   if (known) return known;
-  try {
-    window.localStorage.setItem(TG_USER_ID_KEY, String(DEFAULT_TG_USER_ID));
-    return DEFAULT_TG_USER_ID;
-  } catch {
-    return DEFAULT_TG_USER_ID;
-  }
+  throw new Error(TG_IDENTITY_REQUIRED_ERROR);
+}
+
+export function isTgIdentityRequiredError(error: unknown): boolean {
+  return error instanceof Error && error.message === TG_IDENTITY_REQUIRED_ERROR;
 }

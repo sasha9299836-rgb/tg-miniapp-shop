@@ -3,13 +3,21 @@ import { useAccountStore } from "../../entities/account/model/useAccountStore";
 import { useAdminStore } from "../../entities/account/model/useAdminStore";
 import { useCartStore } from "../../entities/cart/model/useCartStore";
 import { useFavoritesStore } from "../../entities/favorites/model/useFavoritesStore";
+import { verifyTelegramIdentity } from "../../shared/api/telegramIdentityApi";
 import { upsertTelegramUser } from "../../shared/api/telegramUsersApi";
-import { getTelegramUser, initTelegramWebApp } from "./telegram";
+import {
+  clearTelegramUserSessionToken,
+  getTelegramUserSessionToken,
+  setTelegramUserSessionToken,
+} from "../../shared/auth/tgUserSession";
+import { getTelegramUser, getTelegramWebApp, initTelegramWebApp } from "./telegram";
 
 const TELEGRAM_USER_BOOTSTRAP_MAX_ATTEMPTS = 120;
 const TELEGRAM_USER_BOOTSTRAP_INTERVAL_MS = 300;
 let lastBootstrappedTelegramId: number | null = null;
 let bootstrapInFlight = false;
+let lastVerifiedTelegramId: number | null = null;
+let verifyInFlight = false;
 
 export function AppProviders({ children }: { children: ReactNode }) {
   useEffect(() => {
@@ -34,28 +42,55 @@ export function AppProviders({ children }: { children: ReactNode }) {
         return;
       }
 
+      const initData = String(getTelegramWebApp()?.initData ?? "").trim();
+      if (initData && !verifyInFlight) {
+        const hasUserSession = getTelegramUserSessionToken().length > 0;
+        if (!hasUserSession || lastVerifiedTelegramId !== tgUser.id) {
+          verifyInFlight = true;
+          try {
+            const session = await verifyTelegramIdentity(initData);
+            if (!isCancelled) {
+              setTelegramUserSessionToken(session.sessionToken, session.expiresAt);
+              lastVerifiedTelegramId = session.telegramId;
+            }
+          } catch {
+            if (!isCancelled) {
+              clearTelegramUserSessionToken();
+            }
+          } finally {
+            verifyInFlight = false;
+          }
+        }
+      }
+      if (!getTelegramUserSessionToken()) {
+        return;
+      }
+
       console.log("[tg-user-bootstrap] Telegram user resolved", {
         telegram_id: tgUser.id,
-        username: tgUser.username,
-        first_name: tgUser.firstName,
-        last_name: tgUser.lastName,
+        has_username: Boolean(tgUser.username),
+        has_first_name: Boolean(tgUser.firstName),
+        has_last_name: Boolean(tgUser.lastName),
       });
 
       bootstrapInFlight = true;
       try {
         console.log("[tg-user-bootstrap] upsert payload", {
           p_telegram_id: tgUser.id,
-          p_telegram_username: tgUser.username,
-          p_telegram_first_name: tgUser.firstName,
-          p_telegram_last_name: tgUser.lastName,
+          has_username: Boolean(tgUser.username),
+          has_first_name: Boolean(tgUser.firstName),
+          has_last_name: Boolean(tgUser.lastName),
         });
         const row = await upsertTelegramUser({
-          telegramId: tgUser.id,
           username: tgUser.username,
           firstName: tgUser.firstName,
           lastName: tgUser.lastName,
         });
-        console.log("[tg-user-bootstrap] upsert success", row);
+        console.log("[tg-user-bootstrap] upsert success", {
+          telegram_id: row.telegram_id,
+          has_username: Boolean(row.telegram_username),
+          is_admin: Boolean(row.is_admin),
+        });
         if (!isCancelled) {
           try {
             window.localStorage.setItem("tg_user_id", String(row.telegram_id));

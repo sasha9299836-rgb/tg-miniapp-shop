@@ -6,42 +6,40 @@
 npx supabase db push
 ```
 
-## 2) Задеплоить Edge Function
+## 2) Задеплоить Edge Functions
 
 ```bash
 npx supabase functions deploy publish_due_posts
-npx supabase functions deploy yc_presign_put
+npx supabase functions deploy tg_publish_due_posts
 ```
 
-## 3) Проверить secrets для `publish_due_posts`
+## 3) Обязательные secrets
 
-В Supabase Dashboard → Edge Functions → Secrets:
+Для `publish_due_posts` и `tg_publish_due_posts`:
 
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_URL` (или `PROJECT_URL`)
+- `SUPABASE_SERVICE_ROLE_KEY` (или `SERVICE_ROLE_KEY`)
+- `PUBLISH_DUE_POSTS_CRON_SECRET` (или `CRON_SECRET`)
 
-Для `publish_due_posts` должен быть выключен Verify JWT.
+## 4) Безопасный cron-вызов
 
-## 4) Включить cron (раз в минуту)
+Endpoint нельзя оставлять в public-open режиме.  
+Scheduler должен передавать заголовок:
 
-В Supabase Dashboard:
+- `x-cron-secret: <PUBLISH_DUE_POSTS_CRON_SECRET>`
 
-1. `Database` → `Cron` → `New job`
-2. Тип: HTTP request
-3. URL:
-   - `https://<project-ref>.supabase.co/functions/v1/publish_due_posts`
-4. Метод: `POST`
-5. Заголовок:
+Пример HTTP cron:
+
+1. URL: `https://<project-ref>.supabase.co/functions/v1/publish_due_posts`
+2. Метод: `POST`
+3. Headers:
    - `content-type: application/json`
-6. Расписание:
-   - `* * * * *`
+   - `x-cron-secret: <PUBLISH_DUE_POSTS_CRON_SECRET>`
+4. Расписание: `* * * * *`
 
-## 5) Проверка вручную
+## 5) Проверка
 
-1. Создать черновик, поставить время на +1 минуту, нажать `Сохранить`.
-   - Пост должен появиться во вкладке `Отложенные`.
-2. Подождать 1–2 минуты.
-   - Пост должен исчезнуть из `Отложенные`.
-   - Пост должен появиться в `Каталоге`.
-3. Открыть редактирование поста без ID.
-   - В консоли не должно быть предупреждения: `The specified value "null" cannot be parsed, or is out of range.`
+1. Создать отложенный пост на ближайшую минуту.
+2. Дождаться выполнения cron.
+3. Проверить, что пост перешел в `published`.
+

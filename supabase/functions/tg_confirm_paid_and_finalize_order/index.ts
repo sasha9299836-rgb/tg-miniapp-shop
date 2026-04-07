@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
     if (!session.ok) return session.response;
 
     const cdekProxyBaseUrl = getRequiredSecret("CDEK_PROXY_BASE_URL");
-    console.log("CDEK_PROXY_BASE_URL:", cdekProxyBaseUrl);
+    console.log(JSON.stringify({ scope: "shipment", event: "cdek_proxy_base_loaded" }));
     const body = await req.json().catch(() => null) as { order_id?: string } | null;
     const orderId = String(body?.order_id ?? "").trim();
     if (!orderId) return json({ error: "BAD_PAYLOAD" }, 400);
@@ -53,7 +53,6 @@ Deno.serve(async (req) => {
         scope: "shipment",
         event: "confirm_paid_and_finalize_failed",
         error: message,
-        raw: error,
       }),
     );
     const classified = classifyConfirmPaymentError(message);

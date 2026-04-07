@@ -1,4 +1,4 @@
-﻿import { supabase } from "./supabaseClient";
+import { supabase } from "./supabaseClient";
 
 export type YcPresignPutPayload = {
   post_id: string;
@@ -19,9 +19,24 @@ type YcDeleteObjectResponse = {
   ok: boolean;
 };
 
+function readAdminToken(): string {
+  try {
+    return (window.localStorage.getItem("tg_admin_session_token") ?? "").trim();
+  } catch {
+    return "";
+  }
+}
+
+function buildAdminSessionHeaders(): Record<string, string> | undefined {
+  const token = readAdminToken();
+  if (!token) return undefined;
+  return { "x-admin-token": token };
+}
+
 export async function ycPresignPut(payload: YcPresignPutPayload): Promise<YcPresignResponse> {
   const { data, error } = await supabase.functions.invoke<YcPresignResponse>("yc_presign_put", {
     body: payload,
+    headers: buildAdminSessionHeaders(),
   });
 
   if (error) throw error;
@@ -58,6 +73,7 @@ export async function deleteYcObject(storageKey: string): Promise<void> {
 
   const { data, error } = await supabase.functions.invoke<YcDeleteObjectResponse>("yc_delete_object", {
     body: { key },
+    headers: buildAdminSessionHeaders(),
   });
 
   if (error) throw error;

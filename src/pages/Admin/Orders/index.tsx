@@ -57,6 +57,11 @@ type OrderProductLine = {
   warehouseLabel: string;
 };
 
+type AdminUsersLookupResponse = {
+  ok?: boolean;
+  users?: Array<{ telegram_id: number; telegram_username: string | null }>;
+};
+
 type ConfirmationDialogState =
   | {
       kind: "confirm_payment";
@@ -76,6 +81,34 @@ const statusByTab: Record<Tab, TgOrder["status"][]> = {
   confirmed: ["payment_confirmed", "paid", "ready_for_pickup", "completed"],
   rejected: ["rejected"],
 };
+
+function readAdminToken(): string {
+  try {
+    return (window.localStorage.getItem("tg_admin_session_token") ?? "").trim();
+  } catch {
+    return "";
+  }
+}
+
+async function lookupTelegramUsernamesByIds(telegramIds: string[]): Promise<Record<string, string | null>> {
+  const normalized = [...new Set(telegramIds.map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0))];
+  if (!normalized.length) return {};
+
+  const adminToken = readAdminToken();
+  const { data, error } = await supabase.functions.invoke<AdminUsersLookupResponse>("tg_admin_users_lookup", {
+    body: { telegram_ids: normalized },
+    headers: adminToken ? { "x-admin-token": adminToken } : undefined,
+  });
+  if (error) throw error;
+  if (!data?.ok || !Array.isArray(data.users)) {
+    throw new Error("ADMIN_USERS_LOOKUP_FAILED");
+  }
+
+  return data.users.reduce<Record<string, string | null>>((acc, row) => {
+    acc[String(row.telegram_id)] = row.telegram_username ? String(row.telegram_username) : null;
+    return acc;
+  }, {});
+}
 
 function formatDate(value: string | null) {
   if (!value) return "—";
@@ -601,18 +634,9 @@ export function AdminOrdersPage() {
       setHistoryTrackNumbersByOrderId(groupedHistoryTracks);
 
       const tgUserIds = [...new Set(orderRows.map((row) => String(row.tg_user_id ?? "").trim()).filter(Boolean))];
-      const telegramByUserId: Record<string, string | null> = {};
-      if (tgUserIds.length) {
-        const { data: users, error: usersErr } = await supabase
-          .from("tg_users")
-          .select("telegram_id, telegram_username")
-          .in("telegram_id", tgUserIds);
-        if (usersErr) throw usersErr;
-        (users ?? []).forEach((row) => {
-          const entry = row as { telegram_id: string | number; telegram_username: string | null };
-          telegramByUserId[String(entry.telegram_id)] = entry.telegram_username ? String(entry.telegram_username) : null;
-        });
-      }
+      const telegramByUserId = tgUserIds.length
+        ? await lookupTelegramUsernamesByIds(tgUserIds)
+        : {};
       const telegramByOrderId = orderRows.reduce<Record<string, string | null>>((acc, row) => {
         const key = String(row.tg_user_id ?? "").trim();
         acc[row.id] = key ? (telegramByUserId[key] ?? null) : null;

@@ -8,7 +8,6 @@ import {
   type TgUserRecord,
 } from "../../../shared/api/telegramUsersApi";
 import { listAddressPresets } from "../../../shared/api/addressPresetsApi";
-import { getKnownTgUserId } from "../../../shared/auth/tgUser";
 import { useTelegramUser } from "../../../shared/auth/useTelegramUser";
 import { normalizeFio } from "../../../shared/lib/formatFio";
 import { extractNationalDigits } from "../../../shared/lib/formatPhone";
@@ -69,19 +68,10 @@ export function ProfilePage() {
     [profile.telegramUsername, tgUser?.username],
   );
 
-  const telegramId = useMemo(() => {
-    if (tgUser?.id && Number.isInteger(tgUser.id) && tgUser.id > 0) return tgUser.id;
-    const known = getKnownTgUserId();
-    if (known && Number.isInteger(known) && known > 0) return known;
-    const parsed = Number.parseInt(profile.telegramId, 10);
-    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
-  }, [profile.telegramId, tgUser?.id]);
-
   useEffect(() => {
-    if (!telegramId) return;
     let active = true;
     setIsLoadingProfile(true);
-    void loadTelegramUserProfile(telegramId)
+    void loadTelegramUserProfile()
       .then(async (row) => {
         if (!active) return;
         if (row) {
@@ -95,7 +85,7 @@ export function ProfilePage() {
 
           if (isProfileEmpty) {
             try {
-              const presets = await listAddressPresets(telegramId);
+              const presets = await listAddressPresets();
               if (!active || !presets.length) return;
               const source = presets.find((preset) => preset.is_default) ?? presets[0];
               const parsed = splitFio(source.recipient_fio);
@@ -113,7 +103,7 @@ export function ProfilePage() {
         }
 
         try {
-          const presets = await listAddressPresets(telegramId);
+          const presets = await listAddressPresets();
           if (!active || !presets.length) return;
           const source = presets.find((preset) => preset.is_default) ?? presets[0];
           const parsed = splitFio(source.recipient_fio);
@@ -137,15 +127,10 @@ export function ProfilePage() {
     return () => {
       active = false;
     };
-  }, [setDbAdmin, setProfile, telegramId]);
+  }, [setDbAdmin, setProfile]);
 
   const handleSave = async () => {
     setFormError(null);
-    if (!telegramId) {
-      console.log("[tg-user-profile-save] skip: telegram_id is missing");
-      setFormError("Не удалось определить Telegram ID");
-      return;
-    }
 
     const email = profile.email.trim();
     if (email && !email.includes("@")) {
@@ -162,7 +147,6 @@ export function ProfilePage() {
     setIsSaving(true);
     try {
       const row = await saveTelegramUserProfile({
-        telegramId,
         lastName: profile.lastName,
         firstName: profile.firstName,
         middleName: profile.middleName,

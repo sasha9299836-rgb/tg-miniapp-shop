@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { getCurrentTgUserId } from "../../../shared/auth/tgUser";
+import { getCurrentTgUserId, TG_IDENTITY_REQUIRED_ERROR } from "../../../shared/auth/tgUser";
 import {
   addUserFavorite,
   clearUserFavorites,
@@ -39,6 +39,12 @@ function setNotice(text: string) {
   }
 }
 
+function isIdentityError(error: unknown) {
+  return error instanceof Error && error.message === TG_IDENTITY_REQUIRED_ERROR;
+}
+
+const IDENTITY_NOTICE = "Действие доступно только внутри Telegram Mini App с авторизованным пользователем.";
+
 function areNumberArraysEqual(left: number[], right: number[]) {
   if (left.length !== right.length) return false;
   for (let i = 0; i < left.length; i += 1) {
@@ -53,13 +59,22 @@ export const useFavoritesStore = create<State>((set, get) => ({
   isLoaded: false,
   notice: null,
   load: async () => {
-    const tgUserId = getCurrentTgUserId();
-    const rows = await listUserFavorites(tgUserId);
-    const postIds = rows.map((row) => String(row.post_id ?? "").trim()).filter(Boolean);
-    const ids = Array.from(productToPost.entries())
-      .filter(([, postId]) => postIds.includes(postId))
-      .map(([id]) => id);
-    set({ postIds, ids, isLoaded: true });
+    try {
+      const tgUserId = getCurrentTgUserId();
+      if (!Number.isInteger(tgUserId) || tgUserId <= 0) throw new Error(TG_IDENTITY_REQUIRED_ERROR);
+      const rows = await listUserFavorites();
+      const postIds = rows.map((row) => String(row.post_id ?? "").trim()).filter(Boolean);
+      const ids = Array.from(productToPost.entries())
+        .filter(([, postId]) => postIds.includes(postId))
+        .map(([id]) => id);
+      set({ postIds, ids, isLoaded: true });
+    } catch (error) {
+      if (isIdentityError(error)) {
+        set({ postIds: [], ids: [], isLoaded: true, notice: IDENTITY_NOTICE });
+        return;
+      }
+      throw error;
+    }
   },
   registerCatalogItems: (items) => {
     for (const item of items) {
@@ -79,19 +94,28 @@ export const useFavoritesStore = create<State>((set, get) => ({
   toggle: async (target) => {
     const postId = resolvePostId(target);
     if (!postId) return;
-    const tgUserId = getCurrentTgUserId();
     const state = get();
     const isActive = state.postIds.includes(postId);
 
     if (isActive) {
-      await removeUserFavorite(tgUserId, postId);
+      await removeUserFavorite(postId);
       const postIds = state.postIds.filter((value) => value !== postId);
       const ids = state.ids.filter((value) => value !== target.id);
       set({ postIds, ids });
       return;
     }
 
-    const result = await addUserFavorite(tgUserId, postId);
+    let result: "ADDED" | "ALREADY_EXISTS" | "LIMIT_REACHED" | "BAD_PAYLOAD";
+    try {
+      result = await addUserFavorite(postId);
+    } catch (error) {
+      if (isIdentityError(error)) {
+        set({ notice: IDENTITY_NOTICE });
+        setNotice(IDENTITY_NOTICE);
+        return;
+      }
+      throw error;
+    }
     if (result === "LIMIT_REACHED") {
       const text = "В избранном может быть не больше 50 товаров";
       set({ notice: text });
@@ -107,14 +131,36 @@ export const useFavoritesStore = create<State>((set, get) => ({
   remove: async (target) => {
     const postId = resolvePostId(target);
     if (!postId) return;
-    await removeUserFavorite(getCurrentTgUserId(), postId);
+    try {
+      const tgUserId = getCurrentTgUserId();
+      if (!Number.isInteger(tgUserId) || tgUserId <= 0) throw new Error(TG_IDENTITY_REQUIRED_ERROR);
+      await removeUserFavorite(postId);
+    } catch (error) {
+      if (isIdentityError(error)) {
+        set({ notice: IDENTITY_NOTICE });
+        setNotice(IDENTITY_NOTICE);
+        return;
+      }
+      throw error;
+    }
     set({
       postIds: get().postIds.filter((value) => value !== postId),
       ids: get().ids.filter((value) => value !== target.id),
     });
   },
   clear: async () => {
-    await clearUserFavorites(getCurrentTgUserId());
+    try {
+      const tgUserId = getCurrentTgUserId();
+      if (!Number.isInteger(tgUserId) || tgUserId <= 0) throw new Error(TG_IDENTITY_REQUIRED_ERROR);
+      await clearUserFavorites();
+    } catch (error) {
+      if (isIdentityError(error)) {
+        set({ notice: IDENTITY_NOTICE });
+        setNotice(IDENTITY_NOTICE);
+        return;
+      }
+      throw error;
+    }
     set({ ids: [], postIds: [] });
   },
   has: (target) => {

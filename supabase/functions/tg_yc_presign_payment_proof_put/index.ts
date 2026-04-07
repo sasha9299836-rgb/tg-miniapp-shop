@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireTelegramUserSession } from "../_shared/telegramUserSession.ts";
 
 const SERVICE = "s3";
 const DEFAULT_REGION = "ru-central1";
@@ -6,7 +7,7 @@ const DEFAULT_REGION = "ru-central1";
 const corsHeaders: HeadersInit = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "POST,OPTIONS",
-  "access-control-allow-headers": "content-type, authorization, apikey, x-client-info",
+  "access-control-allow-headers": "content-type, authorization, apikey, x-client-info, x-tg-user-session",
   "access-control-max-age": "86400",
 };
 
@@ -144,14 +145,17 @@ Deno.serve(async (req) => {
     const region = (Deno.env.get("YC_REGION") ?? DEFAULT_REGION).trim() || DEFAULT_REGION;
 
     const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+    const userSession = await requireTelegramUserSession(supabase, req);
+    if (!userSession.ok) return userSession.response;
+    const trustedTgUserId = userSession.tgUserId;
+
     const body = await req.json().catch(() => null) as
-      | { order_id?: string; tg_user_id?: number; file_name?: string; content_type?: string }
+      | { order_id?: string; file_name?: string; content_type?: string }
       | null;
 
     const orderId = String(body?.order_id ?? "").trim();
-    const tgUserId = Number(body?.tg_user_id ?? 0);
     const fileName = sanitizeFileName(String(body?.file_name ?? ""));
-    if (!orderId || !Number.isInteger(tgUserId) || tgUserId <= 0 || !fileName) {
+    if (!orderId || !fileName) {
       return json({ error: "BAD_PAYLOAD" }, 400);
     }
 
@@ -161,7 +165,7 @@ Deno.serve(async (req) => {
       .eq("id", orderId)
       .maybeSingle();
     if (orderError) return json({ error: "ORDER_LOOKUP_FAILED", details: orderError.message }, 500);
-    if (!order || Number((order as { tg_user_id: number }).tg_user_id) !== tgUserId) {
+    if (!order || Number((order as { tg_user_id: number }).tg_user_id) !== trustedTgUserId) {
       return json({ error: "FORBIDDEN" }, 403);
     }
 

@@ -27,10 +27,20 @@ export default defineConfig(({ mode }) => {
   const viteEnv = loadEnv(mode, root, "VITE_");
   const merged = { ...sharedEnv, ...viteEnv };
 
-  // Expose every VITE_* key from the shared file to import.meta.env at build/dev time.
+  // Security: expose only explicit public keys to import.meta.env.
+  // Any accidental VITE_* secret in env files will be ignored by default.
+  const PUBLIC_VITE_KEYS = new Set([
+    "VITE_SUPABASE_URL",
+    "VITE_SUPABASE_ANON_KEY",
+    "VITE_CDEK_PROXY_BASE_URL",
+    "VITE_CDEK_PROXY_BASE",
+    "VITE_CDEK_PROXY_URL",
+    "VITE_CDEK_PROXY_TARGET",
+  ]);
+
   const defineEnv: Record<string, string> = {};
   for (const [key, value] of Object.entries(merged)) {
-    if (!key.startsWith("VITE_")) continue;
+    if (!PUBLIC_VITE_KEYS.has(key)) continue;
     defineEnv[`import.meta.env.${key}`] = JSON.stringify(value);
   }
 

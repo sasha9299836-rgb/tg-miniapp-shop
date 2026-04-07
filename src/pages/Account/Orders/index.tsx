@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getCurrentTgUserId } from "../../../shared/auth/tgUser";
+import { isTgIdentityRequiredError, TG_IDENTITY_REQUIRED_MESSAGE } from "../../../shared/auth/tgUser";
 import {
   listOrderItemsByOrderIds,
   listOrdersByUser,
@@ -64,8 +64,7 @@ export function OrdersPage() {
       setIsLoading(true);
       setErrorText(null);
       try {
-        const tgUserId = getCurrentTgUserId();
-        const rows = await listOrdersByUser(tgUserId);
+        const rows = await listOrdersByUser();
         const orderIds = rows.map((row) => row.id);
         const [shipments, orderItems] = await Promise.all([
           listOrderShipmentsByOrderIds(orderIds),
@@ -102,8 +101,8 @@ export function OrdersPage() {
         setOrderItemsByOrderId(groupedItems);
         setShipmentsByOrderId(grouped);
         setPostsById(postsMap);
-      } catch {
-        setErrorText("Не удалось загрузить заказы.");
+      } catch (error) {
+        setErrorText(isTgIdentityRequiredError(error) ? TG_IDENTITY_REQUIRED_MESSAGE : "Не удалось загрузить заказы.");
       } finally {
         setIsLoading(false);
       }

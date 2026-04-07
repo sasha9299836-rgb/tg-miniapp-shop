@@ -1,25 +1,14 @@
+import {
+  createSupabaseAdminClient,
+  empty,
+  getOptionalSecret,
+  getRequiredSecret,
+  json,
+  requireAdminSession,
+} from "../_shared/admin.ts";
+
 const SERVICE = "s3";
 const DEFAULT_REGION = "ru-central1";
-
-const corsHeaders: HeadersInit = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-function json(data: Record<string, unknown>, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      ...corsHeaders,
-    },
-  });
-}
-
-function empty(status = 204) {
-  return new Response(null, { status, headers: corsHeaders });
-}
 
 function toHex(bytes: ArrayBuffer): string {
   return [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -118,23 +107,49 @@ async function createPresignedDeleteUrl(input: {
   return `https://${host}${canonicalUri}?${canonicalQueryString}&X-Amz-Signature=${signature}`;
 }
 
+function isAllowedStorageKey(key: string): boolean {
+  const itemMain = /^\d+\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
+  const itemDefect = /^\d+\/defects\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
+  const noItemMain = /^no-item\/[0-9a-f-]{36}\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
+  const noItemDefect = /^no-item\/[0-9a-f-]{36}\/defects\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
+  return itemMain.test(key) || itemDefect.test(key) || noItemMain.test(key) || noItemDefect.test(key);
+}
+
+function parseAllowedOrigins(raw: string): Set<string> {
+  return new Set(
+    raw
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return empty(204);
   if (req.method !== "POST") return json({ error: "METHOD_NOT_ALLOWED" }, 405);
 
   try {
-    const accessKey = (Deno.env.get("YC_ACCESS_KEY") ?? "").trim();
-    const secretKey = (Deno.env.get("YC_SECRET_KEY") ?? "").trim();
-    const bucket = (Deno.env.get("YC_BUCKET") ?? "").trim();
-    const region = (Deno.env.get("YC_REGION") ?? DEFAULT_REGION).trim() || DEFAULT_REGION;
-
-    if (!accessKey || !secretKey || !bucket) {
-      return json({ error: "SERVER_MISCONFIGURED" }, 500);
+    const allowedOriginsRaw = getOptionalSecret("YC_ALLOWED_ORIGINS");
+    const allowedOrigins = parseAllowedOrigins(allowedOriginsRaw);
+    if (allowedOrigins.size > 0) {
+      const requestOrigin = (req.headers.get("origin") ?? "").trim();
+      if (!requestOrigin || !allowedOrigins.has(requestOrigin)) {
+        return json({ error: "FORBIDDEN_ORIGIN" }, 403);
+      }
     }
+
+    const supabase = createSupabaseAdminClient();
+    const session = await requireAdminSession(supabase, req);
+    if (!session.ok) return session.response;
+
+    const accessKey = getRequiredSecret("YC_ACCESS_KEY");
+    const secretKey = getRequiredSecret("YC_SECRET_KEY");
+    const bucket = getRequiredSecret("YC_BUCKET");
+    const region = (Deno.env.get("YC_REGION") ?? DEFAULT_REGION).trim() || DEFAULT_REGION;
 
     const body = await req.json().catch(() => null) as { key?: unknown } | null;
     const key = typeof body?.key === "string" ? body.key.trim() : "";
-    if (!key || key.includes("..")) {
+    if (!key || key.includes("..") || !isAllowedStorageKey(key)) {
       return json({ error: "BAD_PAYLOAD" }, 400);
     }
 
@@ -153,7 +168,9 @@ Deno.serve(async (req) => {
     }
 
     return json({ ok: true }, 200);
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "UNKNOWN_ERROR";
+    if (message.startsWith("Missing secret:")) return json({ error: "SERVER_MISCONFIGURED" }, 500);
     return json({ error: "DELETE_FAILED" }, 500);
   }
 });

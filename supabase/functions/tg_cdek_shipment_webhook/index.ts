@@ -1,7 +1,7 @@
 import {
   createSupabaseAdminClient,
   empty,
-  getOptionalSecret,
+  getRequiredSecret,
   json,
 } from "../_shared/admin.ts";
 import { processShipmentWebhook } from "../_shared/cdekShipment.ts";
@@ -19,12 +19,10 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "METHOD_NOT_ALLOWED" }, 405);
 
   try {
-    const configuredSecret = getOptionalSecret("CDEK_WEBHOOK_SECRET");
-    if (configuredSecret) {
-      const providedSecret = getWebhookSecret(req);
-      if (!providedSecret || providedSecret !== configuredSecret) {
-        return json({ error: "UNAUTHORIZED" }, 401);
-      }
+    const configuredSecret = getRequiredSecret("CDEK_WEBHOOK_SECRET");
+    const providedSecret = getWebhookSecret(req);
+    if (!providedSecret || providedSecret !== configuredSecret) {
+      return json({ error: "UNAUTHORIZED" }, 401);
     }
 
     const payload = await req.json().catch(() => null);
@@ -37,6 +35,9 @@ Deno.serve(async (req) => {
     return json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "UNKNOWN_ERROR";
+    if (message.startsWith("Missing secret:")) {
+      return json({ error: "SERVER_MISCONFIGURED" }, 500);
+    }
     return json({ error: "SERVER_ERROR", details: message }, 500);
   }
 });

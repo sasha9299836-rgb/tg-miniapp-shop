@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCartStore } from "../../entities/cart/model/useCartStore";
 import { useProductsStore } from "../../entities/product/model/useProductsStore";
-import { getCurrentTgUserId } from "../../shared/auth/tgUser";
+import { isTgIdentityRequiredError, TG_IDENTITY_REQUIRED_MESSAGE } from "../../shared/auth/tgUser";
 import {
   listAddressPresets,
   readSelectedPresetId,
@@ -59,7 +59,7 @@ export function CartPage() {
     const loadPresets = async () => {
       try {
         setPresetError(null);
-        const rows = await listAddressPresets(getCurrentTgUserId());
+        const rows = await listAddressPresets();
         setPresets(rows);
         const selectedId = readSelectedPresetId();
         const active =
@@ -71,7 +71,7 @@ export function CartPage() {
         saveSelectedPresetId(active?.id ?? null);
       } catch (error) {
         console.error("cart presets load failed", error);
-        setPresetError("Не удалось загрузить адрес получателя.");
+        setPresetError(isTgIdentityRequiredError(error) ? TG_IDENTITY_REQUIRED_MESSAGE : "Не удалось загрузить адрес получателя.");
       }
     };
 

@@ -29,11 +29,11 @@ console.log("BOT_TOKEN present:", Boolean(token));
 console.log("WEBAPP_URL:", webAppUrl);
 
 if (!token) {
-  console.error("BOT_TOKEN is required (set it in .env.shared or tools/telegram-bot/.env)");
+  console.error("BOT_TOKEN is required (set it via environment or tools/telegram-bot/.env)");
   process.exit(1);
 }
 if (!webAppUrl) {
-  console.error("TELEGRAM_WEBAPP_URL is required (set it in .env.shared or tools/telegram-bot/.env)");
+  console.error("TELEGRAM_WEBAPP_URL is required (set it via environment or tools/telegram-bot/.env)");
   process.exit(1);
 }
 

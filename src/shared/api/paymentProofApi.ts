@@ -1,16 +1,26 @@
 import { supabase } from "./supabaseClient";
+import { TG_IDENTITY_REQUIRED_ERROR } from "../auth/tgUser";
+import { getTelegramUserSessionToken } from "../auth/tgUserSession";
 
 const TG_ADMIN_SESSION_TOKEN_KEY = "tg_admin_session_token";
 
 export async function getPaymentProofPutPresign(payload: {
   order_id: string;
-  tg_user_id: number;
   file_name: string;
   content_type: string;
 }): Promise<{ url: string; key: string }> {
+  const userSessionToken = readTelegramUserSessionToken();
+  if (!userSessionToken) {
+    throw new Error(TG_IDENTITY_REQUIRED_ERROR);
+  }
   const { data, error } = await supabase.functions.invoke<{ url?: string; key?: string }>(
     "tg_yc_presign_payment_proof_put",
-    { body: payload },
+    {
+      body: payload,
+      headers: {
+        "x-tg-user-session": userSessionToken,
+      },
+    },
   );
   if (error) throw error;
   if (!data?.url || !data?.key) throw new Error("PRESIGN_PUT_FAILED");
@@ -33,4 +43,8 @@ export async function getPaymentProofGetPresign(orderId: string): Promise<{ url:
   if (error) throw error;
   if (!data?.url) throw new Error("PRESIGN_GET_FAILED");
   return { url: data.url };
+}
+
+function readTelegramUserSessionToken() {
+  return getTelegramUserSessionToken();
 }

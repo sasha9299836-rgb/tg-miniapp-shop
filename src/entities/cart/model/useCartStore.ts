@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { getCurrentTgUserId } from "../../../shared/auth/tgUser";
+import { getCurrentTgUserId, TG_IDENTITY_REQUIRED_ERROR } from "../../../shared/auth/tgUser";
 import {
   addUserCartItem,
   clearUserCart,
@@ -48,23 +48,38 @@ function setNotice(text: string) {
   }
 }
 
+function isIdentityError(error: unknown) {
+  return error instanceof Error && error.message === TG_IDENTITY_REQUIRED_ERROR;
+}
+
+const IDENTITY_NOTICE = "Действие доступно только внутри Telegram Mini App с авторизованным пользователем.";
+
 export const useCartStore = create<State>((set, get) => ({
   items: [],
   isLoaded: false,
   notice: null,
   load: async () => {
-    const tgUserId = getCurrentTgUserId();
-    const rows = await listUserCart(tgUserId);
-    const items: CartItem[] = rows.map((row) => {
-      const postId = String(row.post_id ?? "").trim();
-      const mappedProductId = resolveProductId(postId);
-      return {
-        productId: Number.isFinite(mappedProductId) ? mappedProductId : -1,
-        postId,
-        qty: 1,
-      };
-    });
-    set({ items, isLoaded: true });
+    try {
+      const tgUserId = getCurrentTgUserId();
+      if (!Number.isInteger(tgUserId) || tgUserId <= 0) throw new Error(TG_IDENTITY_REQUIRED_ERROR);
+      const rows = await listUserCart();
+      const items: CartItem[] = rows.map((row) => {
+        const postId = String(row.post_id ?? "").trim();
+        const mappedProductId = resolveProductId(postId);
+        return {
+          productId: Number.isFinite(mappedProductId) ? mappedProductId : -1,
+          postId,
+          qty: 1,
+        };
+      });
+      set({ items, isLoaded: true });
+    } catch (error) {
+      if (isIdentityError(error)) {
+        set({ items: [], isLoaded: true, notice: IDENTITY_NOTICE });
+        return;
+      }
+      throw error;
+    }
   },
   registerCatalogItems: (items) => {
     for (const item of items) {
@@ -93,7 +108,19 @@ export const useCartStore = create<State>((set, get) => ({
       return;
     }
 
-    const result = await addUserCartItem(getCurrentTgUserId(), postId);
+    let result: "ADDED" | "ALREADY_EXISTS" | "LIMIT_REACHED" | "BAD_PAYLOAD";
+    try {
+      const tgUserId = getCurrentTgUserId();
+      if (!Number.isInteger(tgUserId) || tgUserId <= 0) throw new Error(TG_IDENTITY_REQUIRED_ERROR);
+      result = await addUserCartItem(postId);
+    } catch (error) {
+      if (isIdentityError(error)) {
+        set({ notice: IDENTITY_NOTICE });
+        setNotice(IDENTITY_NOTICE);
+        return;
+      }
+      throw error;
+    }
     if (result === "LIMIT_REACHED") {
       const text = "В корзине может быть не больше 10 товаров";
       set({ notice: text });
@@ -107,7 +134,18 @@ export const useCartStore = create<State>((set, get) => ({
   remove: async (target) => {
     const postId = resolvePostId(target);
     if (!postId) return;
-    await removeUserCartItem(getCurrentTgUserId(), postId);
+    try {
+      const tgUserId = getCurrentTgUserId();
+      if (!Number.isInteger(tgUserId) || tgUserId <= 0) throw new Error(TG_IDENTITY_REQUIRED_ERROR);
+      await removeUserCartItem(postId);
+    } catch (error) {
+      if (isIdentityError(error)) {
+        set({ notice: IDENTITY_NOTICE });
+        setNotice(IDENTITY_NOTICE);
+        return;
+      }
+      throw error;
+    }
     set({
       items: get().items.filter((item) => item.postId !== postId),
     });
@@ -115,13 +153,35 @@ export const useCartStore = create<State>((set, get) => ({
   removeByPostId: async (postId) => {
     const normalized = String(postId ?? "").trim();
     if (!normalized) return;
-    await removeUserCartItem(getCurrentTgUserId(), normalized);
+    try {
+      const tgUserId = getCurrentTgUserId();
+      if (!Number.isInteger(tgUserId) || tgUserId <= 0) throw new Error(TG_IDENTITY_REQUIRED_ERROR);
+      await removeUserCartItem(normalized);
+    } catch (error) {
+      if (isIdentityError(error)) {
+        set({ notice: IDENTITY_NOTICE });
+        setNotice(IDENTITY_NOTICE);
+        return;
+      }
+      throw error;
+    }
     set({
       items: get().items.filter((item) => item.postId !== normalized),
     });
   },
   clear: async () => {
-    await clearUserCart(getCurrentTgUserId());
+    try {
+      const tgUserId = getCurrentTgUserId();
+      if (!Number.isInteger(tgUserId) || tgUserId <= 0) throw new Error(TG_IDENTITY_REQUIRED_ERROR);
+      await clearUserCart();
+    } catch (error) {
+      if (isIdentityError(error)) {
+        set({ notice: IDENTITY_NOTICE });
+        setNotice(IDENTITY_NOTICE);
+        return;
+      }
+      throw error;
+    }
     set({ items: [] });
   },
   totalQty: () => get().items.reduce((sum, item) => sum + item.qty, 0),
@@ -136,9 +196,21 @@ export const useCartStore = create<State>((set, get) => ({
     if (!toRemove.length) return 0;
 
     const tgUserId = getCurrentTgUserId();
+    if (!Number.isInteger(tgUserId) || tgUserId <= 0) {
+      set({ notice: IDENTITY_NOTICE });
+      return 0;
+    }
     for (const item of toRemove) {
       if (!item.postId) continue;
-      await removeUserCartItem(tgUserId, item.postId);
+      try {
+        await removeUserCartItem(item.postId);
+      } catch (error) {
+        if (isIdentityError(error)) {
+          set({ notice: IDENTITY_NOTICE });
+          return 0;
+        }
+        throw error;
+      }
     }
 
     set({

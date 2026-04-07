@@ -4,7 +4,7 @@ import { expirePendingOrders } from "../_shared/orderExpiration.ts";
 const corsHeaders: HeadersInit = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "POST,OPTIONS",
-  "access-control-allow-headers": "content-type, authorization, apikey, x-client-info",
+  "access-control-allow-headers": "content-type, authorization, apikey, x-client-info, x-cron-secret, x-internal-secret",
   "access-control-max-age": "86400",
 };
 
@@ -30,11 +30,21 @@ function getSecret(...keys: string[]) {
   throw new Error(`Missing secret: ${keys.join(" | ")}`);
 }
 
+function getCronSecret(req: Request) {
+  return (req.headers.get("x-cron-secret") ?? req.headers.get("x-internal-secret") ?? "").trim();
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return empty(204);
   if (req.method !== "POST") return json({ error: "METHOD_NOT_ALLOWED" }, 405);
 
   try {
+    const configuredCronSecret = getSecret("EXPIRE_ORDERS_CRON_SECRET", "CRON_SECRET");
+    const providedCronSecret = getCronSecret(req);
+    if (!providedCronSecret || providedCronSecret !== configuredCronSecret) {
+      return json({ error: "UNAUTHORIZED" }, 401);
+    }
+
     const supabaseUrl = getSecret("SUPABASE_URL", "PROJECT_URL");
     const serviceRoleKey = getSecret("SUPABASE_SERVICE_ROLE_KEY", "SERVICE_ROLE_KEY");
     const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });

@@ -1,4 +1,6 @@
 import { supabase } from "./supabaseClient";
+import { getCurrentTgUserId, TG_IDENTITY_REQUIRED_ERROR } from "../auth/tgUser";
+import { getTelegramUserSessionToken } from "../auth/tgUserSession";
 
 export const TG_LAST_ORDER_ID_KEY = "tg_last_order_id";
 
@@ -104,7 +106,6 @@ export type AdminOrderEvent = {
 };
 
 export type CreateOrderPayload = {
-  tg_user_id: number;
   post_ids: string[];
   delivery_type: DeliveryType;
   fio: string;
@@ -167,6 +168,11 @@ export type DeliveryQuoteResult = {
   };
 };
 
+function ensureTgUserId(tgUserId: number): number {
+  if (Number.isInteger(tgUserId) && tgUserId > 0) return tgUserId;
+  throw new Error(TG_IDENTITY_REQUIRED_ERROR);
+}
+
 export function saveLastOrderId(orderId: string) {
   try {
     window.localStorage.setItem(TG_LAST_ORDER_ID_KEY, orderId);
@@ -193,34 +199,61 @@ export function clearLastOrderId() {
 }
 
 export async function createOrder(payload: CreateOrderPayload): Promise<{ order_id: string; reserved_until: string }> {
-  console.log("tg_create_order payload", payload);
+  const userSessionToken = readTelegramUserSessionToken();
+  ensureTgUserId(getCurrentTgUserId());
+  console.log("tg_create_order payload", {
+    post_ids_count: Array.isArray(payload.post_ids) ? payload.post_ids.length : 0,
+    delivery_type: payload.delivery_type,
+    has_city: Boolean(payload.city),
+    has_cdek_pvz_code: Boolean(payload.cdek_pvz_code),
+    has_cdek_pvz_address: Boolean(payload.cdek_pvz_address),
+    has_address_preset_id: Boolean(payload.address_preset_id),
+    has_street: Boolean(payload.street),
+    has_house: Boolean(payload.house),
+    has_entrance: Boolean(payload.entrance),
+    has_apartment: Boolean(payload.apartment),
+    has_floor: Boolean(payload.floor),
+    delivery_base_fee_rub: payload.delivery_base_fee_rub,
+    delivery_markup_rub: payload.delivery_markup_rub,
+    delivery_total_fee_rub: payload.delivery_total_fee_rub,
+  });
   // Критично: RPC ожидает имена аргументов p_* (см. сигнатуру функции в Postgres).
   // Если отправить обычные имена полей, заказ не создастся.
-  const { data, error } = await supabase.rpc("tg_create_order", {
-    p_tg_user_id: payload.tg_user_id,
-    p_post_ids: payload.post_ids,
-    p_delivery_type: payload.delivery_type,
-    p_fio: payload.fio,
-    p_phone: payload.phone,
-    p_city: payload.city ?? null,
-    p_cdek_pvz_code: payload.cdek_pvz_code ?? null,
-    p_cdek_pvz_address: payload.cdek_pvz_address ?? null,
-    p_receiver_city_code: payload.receiver_city_code ?? null,
-    p_delivery_point: payload.delivery_point ?? null,
-    p_packaging_type: payload.packaging_type ?? "standard",
-    p_address_preset_id: payload.address_preset_id ?? null,
-    p_street: payload.street ?? null,
-    p_house: payload.house ?? null,
-    p_entrance: payload.entrance ?? null,
-    p_apartment: payload.apartment ?? null,
-    p_floor: payload.floor ?? null,
-    p_delivery_base_fee_rub: payload.delivery_base_fee_rub,
-    p_delivery_markup_rub: payload.delivery_markup_rub,
-    p_delivery_total_fee_rub: payload.delivery_total_fee_rub,
+  const { data, error } = await supabase.functions.invoke<{
+    ok?: boolean;
+    error?: string;
+    order_id?: string;
+    reserved_until?: string;
+  }>("tg_create_order_secure", {
+    body: {
+      post_ids: payload.post_ids,
+      delivery_type: payload.delivery_type,
+      fio: payload.fio,
+      phone: payload.phone,
+      city: payload.city ?? null,
+      cdek_pvz_code: payload.cdek_pvz_code ?? null,
+      cdek_pvz_address: payload.cdek_pvz_address ?? null,
+      receiver_city_code: payload.receiver_city_code ?? null,
+      delivery_point: payload.delivery_point ?? null,
+      packaging_type: payload.packaging_type ?? "standard",
+      address_preset_id: payload.address_preset_id ?? null,
+      street: payload.street ?? null,
+      house: payload.house ?? null,
+      entrance: payload.entrance ?? null,
+      apartment: payload.apartment ?? null,
+      floor: payload.floor ?? null,
+      delivery_base_fee_rub: payload.delivery_base_fee_rub,
+      delivery_markup_rub: payload.delivery_markup_rub,
+      delivery_total_fee_rub: payload.delivery_total_fee_rub,
+    },
+    headers: buildTelegramUserSessionHeaders(userSessionToken),
   });
 
   if (error) {
-    console.error("tg_create_order error", error);
+    console.error("tg_create_order error", {
+      message: error.message ?? null,
+      code: (error as { code?: string | null }).code ?? null,
+    });
     const message = error.message ?? "";
     if (message.includes("NOT_AVAILABLE")) throw new Error("NOT_AVAILABLE");
     if (message.includes("CHECKOUT_RECIPIENT_REQUIRED")) throw new Error("CHECKOUT_RECIPIENT_REQUIRED");
@@ -239,8 +272,27 @@ export async function createOrder(payload: CreateOrderPayload): Promise<{ order_
     throw new Error(message || "CREATE_ORDER_FAILED");
   }
 
-  const row = Array.isArray(data) ? data[0] : data;
-  console.log("tg_create_order response", row);
+  if (data?.ok === false) {
+    const message = String(data.error ?? "CREATE_ORDER_FAILED");
+    if (message.includes("NOT_AVAILABLE")) throw new Error("NOT_AVAILABLE");
+    if (message.includes("CHECKOUT_RECIPIENT_REQUIRED")) throw new Error("CHECKOUT_RECIPIENT_REQUIRED");
+    if (message.includes("CHECKOUT_RECEIVER_CITY_CODE_REQUIRED")) throw new Error("CHECKOUT_RECEIVER_CITY_CODE_REQUIRED");
+    if (message.includes("CHECKOUT_DELIVERY_POINT_REQUIRED")) throw new Error("CHECKOUT_DELIVERY_POINT_REQUIRED");
+    if (message.includes("CHECKOUT_POST_PACKAGING_PRESET_REQUIRED")) throw new Error("CHECKOUT_POST_PACKAGING_PRESET_REQUIRED");
+    if (message.includes("CHECKOUT_POST_ORIGIN_PROFILE_REQUIRED")) throw new Error("CHECKOUT_POST_ORIGIN_PROFILE_REQUIRED");
+    if (message.includes("CHECKOUT_PACKAGE_DIMENSIONS_REQUIRED")) throw new Error("CHECKOUT_PACKAGE_DIMENSIONS_REQUIRED");
+    if (message.includes("CHECKOUT_DELIVERY_QUOTE_REQUIRED")) throw new Error("CHECKOUT_DELIVERY_QUOTE_REQUIRED");
+    if (message.includes("CHECKOUT_DELIVERY_FEE_INVALID")) throw new Error("CHECKOUT_DELIVERY_FEE_INVALID");
+    if (message.includes("CHECKOUT_DELIVERY_MARKUP_INVALID")) throw new Error("CHECKOUT_DELIVERY_MARKUP_INVALID");
+    if (message.includes("CHECKOUT_DELIVERY_TOTAL_MISMATCH")) throw new Error("CHECKOUT_DELIVERY_TOTAL_MISMATCH");
+    throw new Error(message || "CREATE_ORDER_FAILED");
+  }
+
+  const row = data;
+  console.log("tg_create_order response", {
+    order_id: row?.order_id ?? null,
+    has_reserved_until: Boolean(row?.reserved_until),
+  });
   if (!row?.order_id || !row?.reserved_until) {
     throw new Error("CREATE_ORDER_FAILED");
   }
@@ -273,25 +325,49 @@ export async function listOrderItemsByOrderIds(orderIds: string[]): Promise<TgOr
 }
 
 export async function listOrderShipments(orderId: string): Promise<TgOrderShipment[]> {
-  const { data, error } = await supabase
-    .from("tg_order_shipments")
-    .select("*")
-    .eq("order_id", orderId)
-    .order("created_at", { ascending: true });
+  ensureTgUserId(getCurrentTgUserId());
+  const userSessionToken = readTelegramUserSessionToken();
+  const { data, error } = await supabase.functions.invoke<{
+    ok: boolean;
+    mode: "user_by_order_id";
+    shipments: TgOrderShipment[];
+  }>("tg_order_shipments_read", {
+    body: {
+      mode: "user_by_order_id",
+      order_id: orderId,
+    },
+    headers: buildTelegramUserSessionHeaders(userSessionToken),
+  });
   if (error) throw error;
-  return (data as TgOrderShipment[]) ?? [];
+  if (!data?.ok || !Array.isArray(data.shipments)) throw new Error("SHIPMENTS_LOAD_FAILED");
+  return data.shipments;
 }
 
 export async function listOrderShipmentsByOrderIds(orderIds: string[]): Promise<TgOrderShipment[]> {
   const normalized = [...new Set(orderIds.map((value) => String(value ?? "").trim()).filter(Boolean))];
   if (!normalized.length) return [];
-  const { data, error } = await supabase
-    .from("tg_order_shipments")
-    .select("*")
-    .in("order_id", normalized)
-    .order("created_at", { ascending: true });
+
+  const adminToken = readAdminToken();
+  const hasAdminToken = Boolean(adminToken);
+  const requestBody = hasAdminToken
+    ? { mode: "admin_by_order_ids" as const, order_ids: normalized }
+    : { mode: "user_by_order_ids" as const, order_ids: normalized };
+
+  const userSessionToken = hasAdminToken ? "" : readTelegramUserSessionToken();
+
+  const { data, error } = await supabase.functions.invoke<{
+    ok: boolean;
+    mode: "user_by_order_ids" | "admin_by_order_ids";
+    shipments: TgOrderShipment[];
+  }>("tg_order_shipments_read", {
+    body: requestBody,
+    headers: hasAdminToken
+      ? buildAdminSessionHeaders(adminToken)
+      : buildTelegramUserSessionHeaders(userSessionToken),
+  });
   if (error) throw error;
-  return (data as TgOrderShipment[]) ?? [];
+  if (!data?.ok || !Array.isArray(data.shipments)) throw new Error("SHIPMENTS_LOAD_FAILED");
+  return data.shipments;
 }
 
 export async function calculateDeliveryQuote(params: {
@@ -317,70 +393,108 @@ export async function calculateDeliveryQuote(params: {
 }
 
 export async function getOrder(orderId: string): Promise<TgOrder | null> {
-  const { data, error } = await supabase.from("tg_orders").select("*").eq("id", orderId).maybeSingle();
+  const userSessionToken = readTelegramUserSessionToken();
+  const { data, error } = await supabase.functions.invoke<{
+    ok: boolean;
+    mode: "user_one";
+    order: TgOrder | null;
+  }>("tg_orders_read", {
+    body: {
+      mode: "user_one",
+      order_id: orderId,
+    },
+    headers: buildTelegramUserSessionHeaders(userSessionToken),
+  });
   if (error) throw error;
-  return (data as TgOrder | null) ?? null;
+  if (!data?.ok) throw new Error("ORDER_LOAD_FAILED");
+  return data.order ?? null;
 }
 
 export async function getOrderById(orderId: string): Promise<TgOrder | null> {
   return getOrder(orderId);
 }
 
-export async function listOrdersByUser(tgUserId: number): Promise<TgOrder[]> {
-  const { data, error } = await supabase
-    .from("tg_orders")
-    .select("*")
-    .eq("tg_user_id", tgUserId)
-    .order("created_at", { ascending: false });
-  if (error) throw error;
-  return (data as TgOrder[]) ?? [];
-}
-
-export async function getOrderWithTimeline(orderId: string, tgUserId: number): Promise<TgOrderWithTimeline> {
-  const { data, error } = await supabase.rpc("tg_get_order_with_timeline", {
-    p_order_id: orderId,
-    p_tg_user_id: tgUserId,
+export async function listOrdersByUser(): Promise<TgOrder[]> {
+  ensureTgUserId(getCurrentTgUserId());
+  const userSessionToken = readTelegramUserSessionToken();
+  const { data, error } = await supabase.functions.invoke<{
+    ok: boolean;
+    mode: "user_list";
+    orders: TgOrder[];
+  }>("tg_orders_read", {
+    body: {
+      mode: "user_list",
+    },
+    headers: buildTelegramUserSessionHeaders(userSessionToken),
   });
   if (error) throw error;
+  if (!data?.ok || !Array.isArray(data.orders)) throw new Error("ORDERS_LOAD_FAILED");
+  return data.orders;
+}
 
-  const payload = (data ?? null) as { order?: TgOrder; timeline?: TgOrderTimelineEvent[] } | null;
-  if (!payload?.order) {
+export async function getOrderWithTimeline(orderId: string): Promise<TgOrderWithTimeline> {
+  const userSessionToken = readTelegramUserSessionToken();
+  const { data, error } = await supabase.functions.invoke<{
+    ok: boolean;
+    mode: "user_by_order_id" | "admin_by_order_id";
+    order: TgOrder | null;
+    timeline: TgOrderTimelineEvent[];
+  }>("tg_order_with_timeline_read", {
+    body: {
+      mode: "user_by_order_id",
+      order_id: orderId,
+    },
+    headers: buildTelegramUserSessionHeaders(userSessionToken),
+  });
+  if (error) throw error;
+  if (!data?.ok || !data.order) {
     throw new Error("ORDER_TIMELINE_NOT_FOUND");
   }
 
   return {
-    order: payload.order,
-    timeline: Array.isArray(payload.timeline) ? payload.timeline : [],
+    order: data.order,
+    timeline: Array.isArray(data.timeline) ? data.timeline : [],
   };
 }
 
-export async function submitPaymentProof(orderId: string, tgUserId: number, proofKey: string): Promise<void> {
-  const { error } = await supabase.rpc("tg_submit_payment_proof", {
-    p_order_id: orderId,
-    p_tg_user_id: tgUserId,
-    p_payment_proof_key: proofKey,
-  });
-  if (error) {
-    const message = error.message ?? "";
-    if (message.includes("ORDER_RESERVATION_EXPIRED")) throw new Error("ORDER_RESERVATION_EXPIRED");
-    if (message.includes("ORDER_STATUS_NOT_SUBMITTABLE")) throw new Error("ORDER_STATUS_NOT_SUBMITTABLE");
-    throw error;
-  }
+export async function submitPaymentProof(orderId: string, proofKey: string): Promise<void> {
+  const userSessionToken = readTelegramUserSessionToken();
+  const { data, error } = await supabase.functions.invoke<{ ok?: boolean; error?: string }>(
+    "tg_submit_payment_proof",
+    {
+      body: {
+        order_id: orderId,
+        payment_proof_key: proofKey,
+      },
+      headers: buildTelegramUserSessionHeaders(userSessionToken),
+    },
+  );
+  if (error) throw error;
+  if (data?.ok) return;
+  const code = String(data?.error ?? "");
+  if (code === "ORDER_RESERVATION_EXPIRED") throw new Error("ORDER_RESERVATION_EXPIRED");
+  if (code === "ORDER_STATUS_NOT_SUBMITTABLE") throw new Error("ORDER_STATUS_NOT_SUBMITTABLE");
+  if (code === "FORBIDDEN") throw new Error("ORDER_NOT_FOUND_OR_FORBIDDEN");
+  throw new Error("SUBMIT_PAYMENT_PROOF_FAILED");
 }
 
-export async function cancelPendingOrder(orderId: string, tgUserId: number): Promise<void> {
-  const { error } = await supabase.rpc("tg_cancel_pending_order", {
-    p_order_id: orderId,
-    p_tg_user_id: tgUserId,
-  });
-  if (error) {
-    const message = error.message ?? "";
-    if (message.includes("ORDER_NOT_FOUND")) throw new Error("ORDER_NOT_FOUND");
-    if (message.includes("ORDER_ACCESS_DENIED")) throw new Error("ORDER_ACCESS_DENIED");
-    if (message.includes("ORDER_ALREADY_IN_PROCESS")) throw new Error("ORDER_ALREADY_IN_PROCESS");
-    if (message.includes("ORDER_STATUS_NOT_CANCELLABLE")) throw new Error("ORDER_STATUS_NOT_CANCELLABLE");
-    throw error;
-  }
+export async function cancelPendingOrder(orderId: string): Promise<void> {
+  const userSessionToken = readTelegramUserSessionToken();
+  const { data, error } = await supabase.functions.invoke<{ ok?: boolean; error?: string }>(
+    "tg_cancel_order",
+    {
+      body: { order_id: orderId },
+      headers: buildTelegramUserSessionHeaders(userSessionToken),
+    },
+  );
+  if (error) throw error;
+  if (data?.ok) return;
+  const code = String(data?.error ?? "");
+  if (code === "ORDER_NOT_FOUND") throw new Error("ORDER_NOT_FOUND");
+  if (code === "FORBIDDEN") throw new Error("ORDER_ACCESS_DENIED");
+  if (code === "ORDER_ALREADY_IN_PROCESS") throw new Error("ORDER_ALREADY_IN_PROCESS");
+  if (code === "ORDER_STATUS_NOT_CANCELLABLE") throw new Error("ORDER_STATUS_NOT_CANCELLABLE");
+  throw new Error("CANCEL_ORDER_FAILED");
 }
 
 export async function applyCheckoutOptionsToOrder(
@@ -389,9 +503,10 @@ export async function applyCheckoutOptionsToOrder(
   packagingType: PackagingType,
   addressPresetId: string | null,
 ): Promise<void> {
+  const safeTgUserId = ensureTgUserId(tgUserId);
   console.warn("Legacy checkout options flow is disabled", {
     orderId,
-    tgUserId,
+    tgUserId: safeTgUserId,
     packagingType,
     addressPresetId,
   });
@@ -399,13 +514,21 @@ export async function applyCheckoutOptionsToOrder(
 }
 
 export async function listOrdersByStatuses(statuses: TgOrderStatus[]): Promise<TgOrder[]> {
-  const { data, error } = await supabase
-    .from("tg_orders")
-    .select("*")
-    .in("status", statuses)
-    .order("created_at", { ascending: false });
+  const adminToken = readAdminToken();
+  const { data, error } = await supabase.functions.invoke<{
+    ok: boolean;
+    mode: "admin_by_statuses";
+    orders: TgOrder[];
+  }>("tg_orders_read", {
+    body: {
+      mode: "admin_by_statuses",
+      statuses,
+    },
+    headers: buildAdminSessionHeaders(adminToken),
+  });
   if (error) throw error;
-  return (data as TgOrder[]) ?? [];
+  if (!data?.ok || !Array.isArray(data.orders)) throw new Error("ORDERS_LOAD_FAILED");
+  return data.orders;
 }
 
 export type ConfirmOrderPaymentResult = {
@@ -547,10 +670,23 @@ function readAdminToken() {
   }
 }
 
+function readTelegramUserSessionToken() {
+  return getTelegramUserSessionToken();
+}
+
 function buildAdminSessionHeaders(adminToken: string): Record<string, string> | undefined {
   if (!adminToken) return undefined;
   return {
     "x-admin-token": adminToken,
+  };
+}
+
+function buildTelegramUserSessionHeaders(userSessionToken: string): Record<string, string> {
+  if (!userSessionToken) {
+    throw new Error(TG_IDENTITY_REQUIRED_ERROR);
+  }
+  return {
+    "x-tg-user-session": userSessionToken,
   };
 }
 
@@ -691,17 +827,25 @@ export async function listShipmentStatusHistoryByOrderIds(orderIds: string[]): P
 }
 
 export async function getAdminOrderEvents(orderId: string): Promise<AdminOrderEvent[]> {
-  const { data, error } = await supabase
-    .from("tg_order_events")
-    .select("*")
-    .eq("order_id", orderId)
-    .order("created_at", { ascending: false });
+  const adminToken = readAdminToken();
+  const { data, error } = await supabase.functions.invoke<{
+    ok: boolean;
+    order_id: string;
+    events: AdminOrderEvent[];
+  }>("tg_admin_order_events", {
+    body: { order_id: orderId },
+    headers: buildAdminSessionHeaders(adminToken),
+  });
 
   if (error) {
     throw error;
   }
 
-  return (data as AdminOrderEvent[]) ?? [];
+  if (!data?.ok || !Array.isArray(data.events)) {
+    throw new Error("ADMIN_ORDER_EVENTS_FAILED");
+  }
+
+  return data.events;
 }
 
 export async function rejectOrderPayment(orderId: string, reason = ""): Promise<void> {

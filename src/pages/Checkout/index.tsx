@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCartStore } from "../../entities/cart/model/useCartStore";
 import { useProductsStore } from "../../entities/product/model/useProductsStore";
-import { getCurrentTgUserId } from "../../shared/auth/tgUser";
+import { getCurrentTgUserId, isTgIdentityRequiredError, TG_IDENTITY_REQUIRED_MESSAGE } from "../../shared/auth/tgUser";
 import {
   calculateDeliveryQuote,
   createOrder,
@@ -86,7 +86,7 @@ export function CheckoutPage() {
   useEffect(() => {
     const loadAddresses = async () => {
       try {
-        const rows = await listAddressPresets(getCurrentTgUserId());
+        const rows = await listAddressPresets();
         setAddresses(rows);
         const selectedId = readSelectedPresetId();
         const active =
@@ -104,6 +104,9 @@ export function CheckoutPage() {
         }
       } catch (error) {
         console.error("checkout addresses load failed", error);
+        if (isTgIdentityRequiredError(error)) {
+          setErrorText(TG_IDENTITY_REQUIRED_MESSAGE);
+        }
       }
     };
     void loadAddresses();
@@ -239,9 +242,7 @@ export function CheckoutPage() {
 
     setIsSubmitting(true);
     try {
-      const tgUserId = getCurrentTgUserId();
       const createPayload = {
-        tg_user_id: tgUserId,
         post_ids: createOrderPostIds,
         delivery_type: "pickup" as const,
         fio: recipientFio.trim(),
@@ -270,7 +271,9 @@ export function CheckoutPage() {
     } catch (error) {
       console.error("checkout create flow failed", error);
       const message = error instanceof Error ? error.message : "UNKNOWN_ERROR";
-      if (message.includes("NOT_AVAILABLE")) {
+      if (isTgIdentityRequiredError(error)) {
+        setErrorText(TG_IDENTITY_REQUIRED_MESSAGE);
+      } else if (message.includes("NOT_AVAILABLE")) {
         setErrorText("Товар уже зарезервирован или продан.");
       } else if (message.includes("PERMISSION_DENIED")) {
         setErrorText("Нет прав на создание заказа. Проверьте настройки доступа.");

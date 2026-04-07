@@ -1,4 +1,4 @@
-# Заказы, резерв и подтверждение оплаты
+# Заказы, резервы и истечение оплаты
 
 ## Деплой функций
 
@@ -8,8 +8,6 @@ npx supabase functions deploy tg_yc_presign_payment_proof_put
 npx supabase functions deploy tg_yc_presign_payment_proof_get
 ```
 
-Для `tg_expire_orders` и `tg_yc_presign_payment_proof_put` выключите Verify JWT.
-
 ## Обязательные secrets
 
 - `SUPABASE_URL` (или `PROJECT_URL`)
@@ -18,8 +16,16 @@ npx supabase functions deploy tg_yc_presign_payment_proof_get
 - `YC_REGION` (`ru-central1`)
 - `YC_ACCESS_KEY`
 - `YC_SECRET_KEY`
+- `EXPIRE_ORDERS_CRON_SECRET` (или `CRON_SECRET`)
 
-## Cron для истечения резерва
+## Безопасный вызов tg_expire_orders
+
+`tg_expire_orders` нельзя оставлять публичным/open.  
+Вызов scheduler должен отправлять секретный заголовок:
+
+- Header: `x-cron-secret: <EXPIRE_ORDERS_CRON_SECRET>`
+
+Пример SQL cron:
 
 ```sql
 select cron.schedule(
@@ -29,14 +35,17 @@ select cron.schedule(
   select
     net.http_post(
       url := 'https://<project_ref>.supabase.co/functions/v1/tg_expire_orders',
-      headers := '{"Content-Type":"application/json"}'::jsonb,
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'x-cron-secret', '<EXPIRE_ORDERS_CRON_SECRET>'
+      ),
       body := '{}'::jsonb
     ) as request_id;
   $$
 );
 ```
 
-## Настройка таймера резерва
+## Таймер резерва
 
 ```sql
 update public.tg_settings
@@ -44,4 +53,3 @@ set value = '420'
 where key = 'order_payment_timeout_seconds';
 ```
 
-`420` секунд = 7 минут.

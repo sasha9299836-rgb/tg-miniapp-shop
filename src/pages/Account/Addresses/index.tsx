@@ -7,7 +7,7 @@ import { Button } from "../../../shared/ui/Button";
 import { ListItem } from "../../../shared/ui/ListItem";
 import { FioInput } from "../../../shared/ui/inputs/FioInput";
 import { PhoneInput } from "../../../shared/ui/inputs/PhoneInput";
-import { getCurrentTgUserId } from "../../../shared/auth/tgUser";
+import { getCurrentTgUserId, isTgIdentityRequiredError, TG_IDENTITY_REQUIRED_MESSAGE } from "../../../shared/auth/tgUser";
 import type { PickupPoint } from "../../../shared/api/shipping.repository";
 import { cdekProxyShippingRepository as shipping } from "../../../shared/api/shipping.cdekProxy";
 import {
@@ -207,7 +207,7 @@ export function AddressesPage() {
   );
 
   const reloadAddresses = async (preferredId?: string | null) => {
-    const rows = await listAddressPresets(tgUserId);
+    const rows = await listAddressPresets();
     setAddresses(rows);
     const selectedStored = readSelectedPresetId();
     const active =
@@ -221,16 +221,22 @@ export function AddressesPage() {
 
   useEffect(() => {
     const load = async () => {
+      if (!Number.isInteger(tgUserId) || tgUserId <= 0) {
+        setErrorText(TG_IDENTITY_REQUIRED_MESSAGE);
+        setAddresses([]);
+        setIsLoading(false);
+        return;
+      }
       setIsLoading(true);
       setErrorText(null);
       try {
         const [profile] = await Promise.all([
-          loadTelegramUserProfile(tgUserId),
+          loadTelegramUserProfile(),
           reloadAddresses(),
         ]);
         setUserProfile(profile);
       } catch (error) {
-        console.error("addresses load failed", getErrorDetails(error), error);
+        console.error("addresses load failed", getErrorDetails(error));
         setErrorText("Не удалось загрузить адреса.");
       } finally {
         setIsLoading(false);
@@ -261,7 +267,7 @@ export function AddressesPage() {
         setCitySearchDone(true);
         setCdekWarningText(null);
       } catch (error) {
-        console.error("address city search failed", getErrorDetails(error), error);
+        console.error("address city search failed", getErrorDetails(error));
         setCityOptions([]);
         setCitySearchDone(true);
         setCdekWarningText("Поиск городов временно недоступен.");
@@ -296,7 +302,7 @@ export function AddressesPage() {
         setPvzSearchDone(true);
         setCdekWarningText(null);
       } catch (error) {
-        console.error("address pvz search failed", getErrorDetails(error), error);
+        console.error("address pvz search failed", getErrorDetails(error));
         setPvzList([]);
         setPvzSearchDone(true);
         setCdekWarningText("Поиск временно недоступен. Можно сохранить текущие значения адреса.");
@@ -397,6 +403,10 @@ export function AddressesPage() {
   };
 
   const onSaveAddress = async () => {
+    if (!Number.isInteger(tgUserId) || tgUserId <= 0) {
+      setErrorText(TG_IDENTITY_REQUIRED_MESSAGE);
+      return;
+    }
     const validationError = validateForm();
     if (validationError) {
       setErrorText(validationError);
@@ -407,7 +417,6 @@ export function AddressesPage() {
     setErrorText(null);
     try {
       const savedId = await upsertAddressPreset({
-        tg_user_id: tgUserId,
         preset_id: editingAddressId,
         name: form.name.trim(),
         recipient_fio: form.recipientFio.trim(),
@@ -419,7 +428,7 @@ export function AddressesPage() {
         is_default: form.isDefault,
       });
       await reloadAddresses(savedId);
-      const savedRows = await listAddressPresets(tgUserId);
+      const savedRows = await listAddressPresets();
       const savedAddress = savedRows.find((row) => row.id === savedId) ?? null;
       if (savedAddress) {
         const mapped = mapAddressToForm(savedAddress);
@@ -436,9 +445,11 @@ export function AddressesPage() {
       setIsEditing(false);
       setNoticeText("Адрес сохранён.");
     } catch (error) {
-      console.error("address save failed", getErrorDetails(error), error);
+      console.error("address save failed", getErrorDetails(error));
       const message = error instanceof Error ? error.message : "";
-      if (message.includes("CITY_CODE_REQUIRED")) {
+      if (isTgIdentityRequiredError(error)) {
+        setErrorText(TG_IDENTITY_REQUIRED_MESSAGE);
+      } else if (message.includes("CITY_CODE_REQUIRED")) {
         setErrorText("Выберите город из справочника СДЭК.");
       } else if (message.includes("PVZ_CODE_REQUIRED")) {
         setErrorText("Выберите пункт выдачи из справочника СДЭК.");
@@ -452,11 +463,14 @@ export function AddressesPage() {
 
   const onSetDefault = async (address: TgAddressPreset) => {
     if (address.is_default) return;
+    if (!Number.isInteger(tgUserId) || tgUserId <= 0) {
+      setErrorText(TG_IDENTITY_REQUIRED_MESSAGE);
+      return;
+    }
     setDefaultChangingId(address.id);
     setErrorText(null);
     try {
       await upsertAddressPreset({
-        tg_user_id: tgUserId,
         preset_id: address.id,
         name: address.name,
         recipient_fio: address.recipient_fio,
@@ -469,7 +483,7 @@ export function AddressesPage() {
         });
       await reloadAddresses(address.id);
     } catch (error) {
-      console.error("set default address failed", getErrorDetails(error), error);
+      console.error("set default address failed", getErrorDetails(error));
       setErrorText("Не удалось сделать адрес основным.");
     } finally {
       setDefaultChangingId(null);
@@ -483,12 +497,11 @@ export function AddressesPage() {
     setDeleteLoadingId(address.id);
     setErrorText(null);
     try {
-      await deleteAddressPreset(tgUserId, address.id);
-      const rows = await listAddressPresets(tgUserId);
+      await deleteAddressPreset(address.id);
+      const rows = await listAddressPresets();
       if (address.is_default && rows.length > 0 && !rows.some((row) => row.is_default)) {
         const first = rows[0];
         await upsertAddressPreset({
-          tg_user_id: tgUserId,
           preset_id: first.id,
           name: first.name,
           recipient_fio: first.recipient_fio,
@@ -512,7 +525,7 @@ export function AddressesPage() {
         setEditingAddressId(null);
       }
     } catch (error) {
-      console.error("address delete failed", getErrorDetails(error), error);
+      console.error("address delete failed", getErrorDetails(error));
       setErrorText("Не удалось удалить адрес.");
     } finally {
       setDeleteLoadingId(null);

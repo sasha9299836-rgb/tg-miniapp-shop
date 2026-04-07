@@ -1,4 +1,6 @@
 import { supabase } from "./supabaseClient";
+import { TG_IDENTITY_REQUIRED_ERROR } from "../auth/tgUser";
+import { getTelegramUserSessionToken } from "../auth/tgUserSession";
 
 export const TG_SELECTED_ADDRESS_PRESET_ID_KEY = "tg_selected_address_preset_id";
 
@@ -19,7 +21,6 @@ export type TgAddressPreset = {
 };
 
 export type UpsertAddressPresetPayload = {
-  tg_user_id: number;
   preset_id?: string | null;
   name: string;
   recipient_fio: string;
@@ -31,47 +32,74 @@ export type UpsertAddressPresetPayload = {
   is_default?: boolean;
 };
 
-export async function listAddressPresets(tgUserId: number): Promise<TgAddressPreset[]> {
-  const { data, error } = await supabase.rpc("tg_list_address_presets", {
-    p_tg_user_id: tgUserId,
-  });
+function buildTelegramUserSessionHeaders(): Record<string, string> {
+  const token = getTelegramUserSessionToken();
+  if (!token) throw new Error(TG_IDENTITY_REQUIRED_ERROR);
+  return { "x-tg-user-session": token };
+}
+
+export async function listAddressPresets(): Promise<TgAddressPreset[]> {
+  const { data, error } = await supabase.functions.invoke<{ ok?: boolean; presets?: TgAddressPreset[] }>(
+    "tg_address_presets_secure",
+    {
+      body: { mode: "list" },
+      headers: buildTelegramUserSessionHeaders(),
+    },
+  );
   if (error) throw error;
-  return (data as TgAddressPreset[] | null) ?? [];
+  if (!data?.ok) throw new Error("ADDRESS_PRESETS_LOAD_FAILED");
+  return data.presets ?? [];
 }
 
 export async function upsertAddressPreset(payload: UpsertAddressPresetPayload): Promise<string> {
-  const { data, error } = await supabase.rpc("tg_upsert_address_preset", {
-    p_tg_user_id: payload.tg_user_id,
-    p_preset_id: payload.preset_id ?? null,
-    p_name: payload.name,
-    p_recipient_fio: payload.recipient_fio,
-    p_recipient_phone: payload.recipient_phone,
-    p_city: payload.city,
-    p_pvz: payload.pvz,
-    p_is_default: payload.is_default ?? false,
-    p_city_code: payload.city_code ?? null,
-    p_pvz_code: payload.pvz_code ?? null,
+  const { data, error } = await supabase.functions.invoke<{
+    ok?: boolean;
+    preset_id?: string | { tg_upsert_address_preset?: string } | Array<{ tg_upsert_address_preset?: string }>;
+  }>("tg_address_presets_secure", {
+    body: {
+      mode: "upsert",
+      preset_id: payload.preset_id ?? null,
+      name: payload.name,
+      recipient_fio: payload.recipient_fio,
+      recipient_phone: payload.recipient_phone,
+      city: payload.city,
+      pvz: payload.pvz,
+      is_default: payload.is_default ?? false,
+      city_code: payload.city_code ?? null,
+      pvz_code: payload.pvz_code ?? null,
+    },
+    headers: buildTelegramUserSessionHeaders(),
   });
   if (error) throw error;
+  if (!data?.ok) throw new Error("PRESET_SAVE_FAILED");
 
   const raw =
-    typeof data === "string"
-      ? data
-      : Array.isArray(data)
-      ? (data[0] as { tg_upsert_address_preset?: string } | undefined)?.tg_upsert_address_preset
-      : (data as { tg_upsert_address_preset?: string } | null)?.tg_upsert_address_preset;
+    typeof data.preset_id === "string"
+      ? data.preset_id
+      : Array.isArray(data.preset_id)
+      ? (data.preset_id[0] as { tg_upsert_address_preset?: string } | undefined)?.tg_upsert_address_preset
+      : (data.preset_id as { tg_upsert_address_preset?: string } | null)?.tg_upsert_address_preset;
 
   const id = String(raw ?? "").trim();
   if (!id) throw new Error("PRESET_SAVE_FAILED");
   return id;
 }
 
-export async function deleteAddressPreset(tgUserId: number, presetId: string): Promise<void> {
-  const { error } = await supabase.rpc("tg_delete_address_preset", {
-    p_tg_user_id: tgUserId,
-    p_preset_id: presetId,
-  });
+export async function deleteAddressPreset(presetId: string): Promise<void> {
+  const { data, error } = await supabase.functions.invoke<{ ok?: boolean; error?: string }>(
+    "tg_address_presets_secure",
+    {
+      body: { mode: "delete", preset_id: presetId },
+      headers: buildTelegramUserSessionHeaders(),
+    },
+  );
   if (error) throw error;
+  if (!data?.ok) {
+    const code = String(data?.error ?? "");
+    if (code === "FORBIDDEN") throw new Error("FORBIDDEN");
+    if (code === "NOT_FOUND") throw new Error("NOT_FOUND");
+    throw new Error("ADDRESS_PRESET_DELETE_FAILED");
+  }
 }
 
 export function readSelectedPresetId(): string | null {

@@ -1,6 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { useBlocker, useLocation, useNavigate } from "react-router-dom";
-import { getCurrentTgUserId } from "../../shared/auth/tgUser";
+import { isTgIdentityRequiredError, TG_IDENTITY_REQUIRED_MESSAGE } from "../../shared/auth/tgUser";
 import { getPaymentProofPutPresign } from "../../shared/api/paymentProofApi";
 import {
   cancelPendingOrder,
@@ -129,15 +129,8 @@ export function PaymentPage() {
     setIsSubmitting(true);
     setErrorText(null);
     try {
-      const tgUserId = getCurrentTgUserId();
-      if (!Number.isInteger(tgUserId) || tgUserId <= 0) {
-        setErrorText("Не удалось определить пользователя.");
-        return;
-      }
-
       const { url, key } = await getPaymentProofPutPresign({
         order_id: orderId,
-        tg_user_id: tgUserId,
         file_name: file.name,
         content_type: file.type || "application/octet-stream",
       });
@@ -149,7 +142,7 @@ export function PaymentPage() {
       });
       if (!uploadRes.ok) throw new Error("UPLOAD_FAILED");
 
-      await submitPaymentProof(orderId, tgUserId, key);
+      await submitPaymentProof(orderId, key);
       setIsProofSubmitted(true);
       clearLastOrderId();
     } catch (error) {
@@ -161,6 +154,8 @@ export function PaymentPage() {
         setErrorText("Время на оплату истекло. Заказ больше не ожидает подтверждение оплаты.");
       } else if (message === "ORDER_STATUS_NOT_SUBMITTABLE") {
         setErrorText("Для этого заказа уже нельзя отправить подтверждение оплаты.");
+      } else if (isTgIdentityRequiredError(error)) {
+        setErrorText(TG_IDENTITY_REQUIRED_MESSAGE);
       } else {
         setErrorText("Не удалось отправить подтверждение.");
       }
@@ -178,17 +173,11 @@ export function PaymentPage() {
   const onCancelOrderAndLeave = async () => {
     if (!orderId || !order || isCancellingOrder) return;
 
-    const tgUserId = getCurrentTgUserId();
-    if (!Number.isInteger(tgUserId) || tgUserId <= 0) {
-      setErrorText("Не удалось определить пользователя.");
-      return;
-    }
-
     setIsCancellingOrder(true);
     setErrorText(null);
 
     try {
-      await cancelPendingOrder(orderId, tgUserId);
+      await cancelPendingOrder(orderId);
       clearLastOrderId();
 
       if (navigationBlocker.state === "blocked") {
@@ -201,6 +190,8 @@ export function PaymentPage() {
       const message = error instanceof Error ? error.message : "UNKNOWN";
       if (message === "ORDER_ALREADY_IN_PROCESS" || message === "ORDER_STATUS_NOT_CANCELLABLE") {
         setErrorText("Заказ уже перешел в обработку и не может быть отменен.");
+      } else if (isTgIdentityRequiredError(error)) {
+        setErrorText(TG_IDENTITY_REQUIRED_MESSAGE);
       } else {
         setErrorText("Не удалось отменить заказ. Попробуйте еще раз.");
       }

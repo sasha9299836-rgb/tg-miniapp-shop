@@ -487,11 +487,47 @@ function toErrorMessage(error: unknown) {
   return String(error ?? "UNKNOWN_ERROR");
 }
 
+const SENSITIVE_LOG_KEYS = new Set([
+  "fio",
+  "phone",
+  "recipient",
+  "recipientName",
+  "recipientPhone",
+  "city",
+  "street",
+  "house",
+  "entrance",
+  "apartment",
+  "floor",
+  "address",
+  "cdek_pvz_address",
+  "delivery_point",
+  "receiver_city_code",
+  "response",
+  "payload",
+  "raw",
+]);
+
+function sanitizeLogDetails(value: unknown, depth = 0): unknown {
+  if (depth > 3) return "[truncated]";
+  if (Array.isArray(value)) {
+    return value.slice(0, 20).map((item) => sanitizeLogDetails(item, depth + 1));
+  }
+  if (!value || typeof value !== "object") return value;
+  const source = value as Record<string, unknown>;
+  const output: Record<string, unknown> = {};
+  for (const [key, nested] of Object.entries(source)) {
+    if (SENSITIVE_LOG_KEYS.has(key)) continue;
+    output[key] = sanitizeLogDetails(nested, depth + 1);
+  }
+  return output;
+}
+
 function toSafeErrorDetails(error: unknown) {
   if (error instanceof ShipmentProcessError) {
     return {
       code: error.code,
-      details: error.details ?? null,
+      details: sanitizeLogDetails(error.details ?? null),
     };
   }
   if (error instanceof Error) {
@@ -777,12 +813,6 @@ function buildCanonicalShipmentInput(row: Record<string, unknown>) {
 }
 
 function buildShipmentSnapshotPresence(row: Record<string, unknown>) {
-  const recipientName = String(row.fio ?? "").trim();
-  const recipientPhone = String(row.phone ?? "").trim();
-  const maskPhone = recipientPhone.length >= 4
-    ? `${"*".repeat(Math.max(0, recipientPhone.length - 4))}${recipientPhone.slice(-4)}`
-    : recipientPhone;
-
   return {
     originProfilePresent: isOriginProfile(row.origin_profile),
     originProfile: typeof row.origin_profile === "string" ? row.origin_profile : null,
@@ -790,12 +820,8 @@ function buildShipmentSnapshotPresence(row: Record<string, unknown>) {
     packagingPreset: typeof row.packaging_preset === "string" ? row.packaging_preset : null,
     recipientNamePresent: Boolean(String(row.fio ?? "").trim()),
     recipientPhonePresent: Boolean(String(row.phone ?? "").trim()),
-    recipientName: recipientName || null,
-    recipientPhoneMasked: maskPhone || null,
     receiverCityCodePresent: Boolean(String(row.receiver_city_code ?? "").trim()),
-    receiverCityCode: String(row.receiver_city_code ?? "").trim() || null,
     deliveryPointPresent: Boolean(String(row.delivery_point ?? "").trim()),
-    deliveryPoint: String(row.delivery_point ?? "").trim() || null,
     packageWeightPresent: Number(row.package_weight ?? 0) > 0,
     packageWeight: Number(row.package_weight ?? 0) || null,
     packageLengthPresent: Number(row.package_length ?? 0) > 0,
@@ -1282,7 +1308,10 @@ export async function createShipmentForOrder(
       };
     };
 
-    console.log("CDEK PROXY REQUEST URL:", createUrl);
+    logShipmentEvent("shipment_proxy_request_start", {
+      orderId,
+      target: "/api/shipping/create",
+    });
     const createdShipments: Array<{
       originProfile: OriginProfile;
       cdekUuid: string | null;
@@ -1383,7 +1412,12 @@ export async function createShipmentForOrder(
         originProfile: group.originProfile,
         status: createRes.status,
         ok: createRes.ok,
-        response: createJson,
+        hasUuid: Boolean(typeof createJson.uuid === "string" && createJson.uuid.trim()),
+        hasCdekNumber: Boolean(
+          (typeof createJson.cdekNumber === "string" && createJson.cdekNumber.trim()) ||
+          (typeof createJson.cdekNumber === "number" && Number.isFinite(createJson.cdekNumber)),
+        ),
+        trackingStatus: typeof createJson.trackingStatus === "string" ? createJson.trackingStatus : null,
       });
 
       let cdekUuid = typeof createJson.uuid === "string" ? createJson.uuid : null;
@@ -1434,7 +1468,11 @@ export async function createShipmentForOrder(
             attempt,
             status: statusRes.status,
             ok: statusRes.ok,
-            response: statusJson,
+            proxyOk: Boolean(statusJson?.ok),
+            hasStatusPayload: Boolean(statusJson?.status),
+            statusPayloadType: statusJson?.status && typeof statusJson.status === "object"
+              ? "object"
+              : typeof statusJson?.status,
           });
 
           if (statusRes.ok && statusJson?.ok) {

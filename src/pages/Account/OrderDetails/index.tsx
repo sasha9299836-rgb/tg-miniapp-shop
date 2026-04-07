@@ -1,6 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { getCurrentTgUserId } from "../../../shared/auth/tgUser";
+import { isTgIdentityRequiredError, TG_IDENTITY_REQUIRED_MESSAGE } from "../../../shared/auth/tgUser";
 import { getPackagingFeeRub } from "../../../shared/config/packaging";
 import {
   formatCdekStatus,
@@ -179,13 +179,12 @@ export function OrderDetailsPage() {
       return;
     }
 
-    const tgUserId = getCurrentTgUserId();
     const load = async () => {
       setIsLoading(true);
       setErrorText(null);
       try {
         const [result, history, items, shipments] = await Promise.all([
-          getOrderWithTimeline(orderId, tgUserId),
+          getOrderWithTimeline(orderId),
           getShipmentStatusHistory(orderId),
           listOrderItems(orderId),
           listOrderShipments(orderId),
@@ -229,8 +228,8 @@ export function OrderDetailsPage() {
           setPostsById(Object.fromEntries(postEntries.filter(Boolean) as Array<readonly [string, TgPost]>));
           setPostCoverById(Object.fromEntries(coverEntries));
         }
-      } catch {
-        setErrorText("Не удалось загрузить детали заказа.");
+      } catch (error) {
+        setErrorText(isTgIdentityRequiredError(error) ? TG_IDENTITY_REQUIRED_MESSAGE : "Не удалось загрузить детали заказа.");
       } finally {
         setIsLoading(false);
       }

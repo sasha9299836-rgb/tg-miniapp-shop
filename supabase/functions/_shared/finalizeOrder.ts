@@ -108,7 +108,6 @@ export async function finalizePaidOrder(
         event: "payment_confirm_rejected",
         orderId,
         error: rpcMessage,
-        raw: error,
         code: classified?.code ?? "CONFIRM_PAYMENT_FAILED",
       }),
     );
@@ -188,7 +187,7 @@ export async function finalizePaidOrder(
           paymentStatus: payment.current_status,
           stockDeductionStatus: payment.stock_deduction_status,
           shipmentError: shipmentError.code,
-          shipmentErrorDetails: shipmentError.details ?? null,
+          shipmentErrorDetailsPresent: shipmentError.details != null,
         }),
       );
       return {
