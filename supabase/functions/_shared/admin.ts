@@ -4,7 +4,7 @@ export const corsHeaders: HeadersInit = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "OPTIONS, POST",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-admin-token, x-tg-user-session, x-cdek-webhook-secret, x-webhook-secret, x-cron-secret, x-internal-secret",
+    "authorization, x-client-info, apikey, content-type, x-admin-token, x-tg-user-session, x-debug-id, x-cdek-webhook-secret, x-webhook-secret, x-cron-secret, x-internal-secret",
   "Access-Control-Max-Age": "86400",
   Vary: "Origin, Access-Control-Request-Headers, Access-Control-Request-Method",
 };
