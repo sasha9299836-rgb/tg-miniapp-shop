@@ -88,18 +88,6 @@ if (readFlagFromQuery()) {
   writeLocalFlag(true);
 }
 
-function isTelegramRuntimeDetected() {
-  try {
-    return Boolean(window.Telegram?.WebApp);
-  } catch {
-    return false;
-  }
-}
-
-function isDebugPanelEnabledEffective() {
-  return debugEnabled || isTelegramRuntimeDetected();
-}
-
 const state: TgDebugState = {
   debugId: readOrCreateDebugId(),
   runtimeDetected: false,
@@ -118,13 +106,13 @@ const state: TgDebugState = {
 
 let snapshot: TgDebugState & { debugEnabled: boolean } = {
   ...state,
-  debugEnabled: isDebugPanelEnabledEffective(),
+  debugEnabled,
 };
 
 function rebuildSnapshot() {
   snapshot = {
     ...state,
-    debugEnabled: isDebugPanelEnabledEffective(),
+    debugEnabled,
   };
 }
 
@@ -134,7 +122,7 @@ function emit() {
 }
 
 export function isTgDebugModeEnabled() {
-  return isDebugPanelEnabledEffective();
+  return debugEnabled;
 }
 
 export function enableTgDebugMode(enabled: boolean) {
