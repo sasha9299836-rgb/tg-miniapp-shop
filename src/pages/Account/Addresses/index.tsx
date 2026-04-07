@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Page } from "../../../shared/ui/Page";
 import { Card } from "../../../shared/ui/Card";
@@ -7,7 +7,7 @@ import { Button } from "../../../shared/ui/Button";
 import { ListItem } from "../../../shared/ui/ListItem";
 import { FioInput } from "../../../shared/ui/inputs/FioInput";
 import { PhoneInput } from "../../../shared/ui/inputs/PhoneInput";
-import { getCurrentTgUserId, isTgIdentityRequiredError, TG_IDENTITY_REQUIRED_MESSAGE } from "../../../shared/auth/tgUser";
+import { isTgIdentityRequiredError, TG_IDENTITY_REQUIRED_MESSAGE } from "../../../shared/auth/tgUser";
 import type { PickupPoint } from "../../../shared/api/shipping.repository";
 import { cdekProxyShippingRepository as shipping } from "../../../shared/api/shipping.cdekProxy";
 import {
@@ -64,7 +64,7 @@ function getErrorDetails(error: unknown) {
 function formatAddressSubtitle(address: TgAddressPreset) {
   const city = String(address.city ?? "").trim();
   const pvz = String(address.pvz ?? "").trim();
-  if (!pvz) return city ? `${city}, ПВЗ не выбран` : "ПВЗ не выбран";
+  if (!pvz) return city ? `${city}, РџР’Р— РЅРµ РІС‹Р±СЂР°РЅ` : "РџР’Р— РЅРµ РІС‹Р±СЂР°РЅ";
   return city ? `${city}, ${pvz}` : pvz;
 }
 
@@ -147,7 +147,6 @@ function buildFioFromProfile(profile: TgUserRecord | null): string {
 
 export function AddressesPage() {
   const nav = useNavigate();
-  const tgUserId = getCurrentTgUserId();
 
   const [addresses, setAddresses] = useState<TgAddressPreset[]>([]);
   const [userProfile, setUserProfile] = useState<TgUserRecord | null>(null);
@@ -221,12 +220,6 @@ export function AddressesPage() {
 
   useEffect(() => {
     const load = async () => {
-      if (!Number.isInteger(tgUserId) || tgUserId <= 0) {
-        setErrorText(TG_IDENTITY_REQUIRED_MESSAGE);
-        setAddresses([]);
-        setIsLoading(false);
-        return;
-      }
       setIsLoading(true);
       setErrorText(null);
       try {
@@ -237,13 +230,17 @@ export function AddressesPage() {
         setUserProfile(profile);
       } catch (error) {
         console.error("addresses load failed", getErrorDetails(error));
-        setErrorText("Не удалось загрузить адреса.");
+        if (isTgIdentityRequiredError(error)) {
+          setErrorText(TG_IDENTITY_REQUIRED_MESSAGE);
+        } else {
+          setErrorText("РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ Р°РґСЂРµСЃР°.");
+        }
       } finally {
         setIsLoading(false);
       }
     };
     void load();
-  }, [tgUserId]);
+  }, []);
 
   useEffect(() => {
     if (!noticeText) return;
@@ -270,7 +267,7 @@ export function AddressesPage() {
         console.error("address city search failed", getErrorDetails(error));
         setCityOptions([]);
         setCitySearchDone(true);
-        setCdekWarningText("Поиск городов временно недоступен.");
+        setCdekWarningText("РџРѕРёСЃРє РіРѕСЂРѕРґРѕРІ РІСЂРµРјРµРЅРЅРѕ РЅРµРґРѕСЃС‚СѓРїРµРЅ.");
       }
     }, 350);
 
@@ -287,7 +284,7 @@ export function AddressesPage() {
     if (!selectedCityCode) {
       setPvzList([]);
       setPvzSearchDone(false);
-      setCdekWarningText("Сначала выберите город.");
+      setCdekWarningText("РЎРЅР°С‡Р°Р»Р° РІС‹Р±РµСЂРёС‚Рµ РіРѕСЂРѕРґ.");
       return;
     }
 
@@ -305,7 +302,7 @@ export function AddressesPage() {
         console.error("address pvz search failed", getErrorDetails(error));
         setPvzList([]);
         setPvzSearchDone(true);
-        setCdekWarningText("Поиск временно недоступен. Можно сохранить текущие значения адреса.");
+        setCdekWarningText("РџРѕРёСЃРє РІСЂРµРјРµРЅРЅРѕ РЅРµРґРѕСЃС‚СѓРїРµРЅ. РњРѕР¶РЅРѕ СЃРѕС…СЂР°РЅРёС‚СЊ С‚РµРєСѓС‰РёРµ Р·РЅР°С‡РµРЅРёСЏ Р°РґСЂРµСЃР°.");
       }
     }, 350);
 
@@ -339,7 +336,7 @@ export function AddressesPage() {
     const prefillPhone = isFirstAddress ? String(userProfile?.phone ?? "").trim() : "";
     const mapped: AddressForm = {
       ...EMPTY_FORM,
-      name: `Профиль ${addresses.length + 1}`,
+      name: `РџСЂРѕС„РёР»СЊ ${addresses.length + 1}`,
       recipientFio: prefillFio,
       recipientPhone: prefillPhone,
     };
@@ -389,24 +386,20 @@ export function AddressesPage() {
   };
 
   const validateForm = () => {
-    if (!form.name.trim()) return "Введите название адреса.";
-    if (!form.recipientFio.trim()) return "Введите ФИО.";
-    if (!form.recipientPhone.trim()) return "Введите телефон.";
+    if (!form.name.trim()) return "Р’РІРµРґРёС‚Рµ РЅР°Р·РІР°РЅРёРµ Р°РґСЂРµСЃР°.";
+    if (!form.recipientFio.trim()) return "Р’РІРµРґРёС‚Рµ Р¤РРћ.";
+    if (!form.recipientPhone.trim()) return "Р’РІРµРґРёС‚Рµ С‚РµР»РµС„РѕРЅ.";
     if (!/^\+7\(\d{3}\) \d{3}-\d{2}-\d{2}$/.test(form.recipientPhone)) {
-      return "Телефон должен быть в формате +7(XXX) XXX-XX-XX.";
+      return "РўРµР»РµС„РѕРЅ РґРѕР»Р¶РµРЅ Р±С‹С‚СЊ РІ С„РѕСЂРјР°С‚Рµ +7(XXX) XXX-XX-XX.";
     }
-    if (!cityValue.trim()) return "Выберите город.";
-    if (!pvzValue.trim()) return "Выберите ПВЗ.";
-    if (!selectedCityCode) return "Выберите город из поиска СДЭК.";
-    if (!selectedPvzCode) return "Выберите ПВЗ из поиска СДЭК.";
+    if (!cityValue.trim()) return "Р’С‹Р±РµСЂРёС‚Рµ РіРѕСЂРѕРґ.";
+    if (!pvzValue.trim()) return "Р’С‹Р±РµСЂРёС‚Рµ РџР’Р—.";
+    if (!selectedCityCode) return "Р’С‹Р±РµСЂРёС‚Рµ РіРѕСЂРѕРґ РёР· РїРѕРёСЃРєР° РЎР”Р­Рљ.";
+    if (!selectedPvzCode) return "Р’С‹Р±РµСЂРёС‚Рµ РџР’Р— РёР· РїРѕРёСЃРєР° РЎР”Р­Рљ.";
     return null;
   };
 
   const onSaveAddress = async () => {
-    if (!Number.isInteger(tgUserId) || tgUserId <= 0) {
-      setErrorText(TG_IDENTITY_REQUIRED_MESSAGE);
-      return;
-    }
     const validationError = validateForm();
     if (validationError) {
       setErrorText(validationError);
@@ -443,18 +436,18 @@ export function AddressesPage() {
       setEditingAddressId(savedId);
       setMode("details");
       setIsEditing(false);
-      setNoticeText("Адрес сохранён.");
+      setNoticeText("РђРґСЂРµСЃ СЃРѕС…СЂР°РЅС‘РЅ.");
     } catch (error) {
       console.error("address save failed", getErrorDetails(error));
       const message = error instanceof Error ? error.message : "";
       if (isTgIdentityRequiredError(error)) {
         setErrorText(TG_IDENTITY_REQUIRED_MESSAGE);
       } else if (message.includes("CITY_CODE_REQUIRED")) {
-        setErrorText("Выберите город из справочника СДЭК.");
+        setErrorText("Р’С‹Р±РµСЂРёС‚Рµ РіРѕСЂРѕРґ РёР· СЃРїСЂР°РІРѕС‡РЅРёРєР° РЎР”Р­Рљ.");
       } else if (message.includes("PVZ_CODE_REQUIRED")) {
-        setErrorText("Выберите пункт выдачи из справочника СДЭК.");
+        setErrorText("Р’С‹Р±РµСЂРёС‚Рµ РїСѓРЅРєС‚ РІС‹РґР°С‡Рё РёР· СЃРїСЂР°РІРѕС‡РЅРёРєР° РЎР”Р­Рљ.");
       } else {
-        setErrorText("Не удалось сохранить адрес.");
+        setErrorText("РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕС…СЂР°РЅРёС‚СЊ Р°РґСЂРµСЃ.");
       }
     } finally {
       setIsSaving(false);
@@ -463,10 +456,6 @@ export function AddressesPage() {
 
   const onSetDefault = async (address: TgAddressPreset) => {
     if (address.is_default) return;
-    if (!Number.isInteger(tgUserId) || tgUserId <= 0) {
-      setErrorText(TG_IDENTITY_REQUIRED_MESSAGE);
-      return;
-    }
     setDefaultChangingId(address.id);
     setErrorText(null);
     try {
@@ -484,14 +473,14 @@ export function AddressesPage() {
       await reloadAddresses(address.id);
     } catch (error) {
       console.error("set default address failed", getErrorDetails(error));
-      setErrorText("Не удалось сделать адрес основным.");
+      setErrorText("РќРµ СѓРґР°Р»РѕСЃСЊ СЃРґРµР»Р°С‚СЊ Р°РґСЂРµСЃ РѕСЃРЅРѕРІРЅС‹Рј.");
     } finally {
       setDefaultChangingId(null);
     }
   };
 
   const onDelete = async (address: TgAddressPreset) => {
-    const confirmed = window.confirm("Удалить адрес? Это действие нельзя отменить.");
+    const confirmed = window.confirm("РЈРґР°Р»РёС‚СЊ Р°РґСЂРµСЃ? Р­С‚Рѕ РґРµР№СЃС‚РІРёРµ РЅРµР»СЊР·СЏ РѕС‚РјРµРЅРёС‚СЊ.");
     if (!confirmed) return;
 
     setDeleteLoadingId(address.id);
@@ -518,7 +507,7 @@ export function AddressesPage() {
         const active = rows.find((row) => row.is_default) ?? rows[0] ?? null;
         saveSelectedPresetId(active?.id ?? null);
       }
-      setNoticeText("Адрес удалён.");
+      setNoticeText("РђРґСЂРµСЃ СѓРґР°Р»С‘РЅ.");
       if (mode === "details" && editingAddressId === address.id) {
         setMode("list");
         setIsEditing(false);
@@ -526,7 +515,7 @@ export function AddressesPage() {
       }
     } catch (error) {
       console.error("address delete failed", getErrorDetails(error));
-      setErrorText("Не удалось удалить адрес.");
+      setErrorText("РќРµ СѓРґР°Р»РѕСЃСЊ СѓРґР°Р»РёС‚СЊ Р°РґСЂРµСЃ.");
     } finally {
       setDeleteLoadingId(null);
     }
@@ -535,42 +524,42 @@ export function AddressesPage() {
   if (mode === "details") {
     if (!isEditing) {
       return (
-        <Page title="Адрес">
+        <Page title="РђРґСЂРµСЃ">
           <Card className="ui-card--padded address-section">
-            <div className="address-section__title">Данные адреса</div>
+            <div className="address-section__title">Р”Р°РЅРЅС‹Рµ Р°РґСЂРµСЃР°</div>
             <div className="address-view-grid">
               <div className="address-view-row">
-                <span className="address-view-row__label">Название адреса</span>
-                <span className="address-view-row__value" title={form.name}>{form.name || "—"}</span>
+                <span className="address-view-row__label">РќР°Р·РІР°РЅРёРµ Р°РґСЂРµСЃР°</span>
+                <span className="address-view-row__value" title={form.name}>{form.name || "вЂ”"}</span>
               </div>
               <div className="address-view-row">
-                <span className="address-view-row__label">Получатель</span>
-                <span className="address-view-row__value" title={form.recipientFio}>{form.recipientFio || "—"}</span>
+                <span className="address-view-row__label">РџРѕР»СѓС‡Р°С‚РµР»СЊ</span>
+                <span className="address-view-row__value" title={form.recipientFio}>{form.recipientFio || "вЂ”"}</span>
               </div>
               <div className="address-view-row">
-                <span className="address-view-row__label">Телефон</span>
-                <span className="address-view-row__value">{form.recipientPhone || "—"}</span>
+                <span className="address-view-row__label">РўРµР»РµС„РѕРЅ</span>
+                <span className="address-view-row__value">{form.recipientPhone || "вЂ”"}</span>
               </div>
               <div className="address-view-row">
-                <span className="address-view-row__label">Город</span>
-                <span className="address-view-row__value">{cityValue || "—"}</span>
+                <span className="address-view-row__label">Р“РѕСЂРѕРґ</span>
+                <span className="address-view-row__value">{cityValue || "вЂ”"}</span>
               </div>
               <div className="address-view-row">
-                <span className="address-view-row__label">ПВЗ</span>
-                <span className="address-view-row__value address-view-row__value--ellipsis" title={pvzValue || "ПВЗ не выбран"}>
-                  {pvzValue || "ПВЗ не выбран"}
+                <span className="address-view-row__label">РџР’Р—</span>
+                <span className="address-view-row__value address-view-row__value--ellipsis" title={pvzValue || "РџР’Р— РЅРµ РІС‹Р±СЂР°РЅ"}>
+                  {pvzValue || "РџР’Р— РЅРµ РІС‹Р±СЂР°РЅ"}
                 </span>
               </div>
               <div className="address-view-row">
-                <span className="address-view-row__label">Основной</span>
-                <span className={`address-view-badge ${form.isDefault ? "is-on" : ""}`}>{form.isDefault ? "Да" : "Нет"}</span>
+                <span className="address-view-row__label">РћСЃРЅРѕРІРЅРѕР№</span>
+                <span className={`address-view-badge ${form.isDefault ? "is-on" : ""}`}>{form.isDefault ? "Р”Р°" : "РќРµС‚"}</span>
               </div>
             </div>
           </Card>
 
           <div className="address-actions">
-            <Button onClick={startEditCurrent}>Изменить</Button>
-            <Button variant="secondary" onClick={() => setMode("list")}>Назад</Button>
+            <Button onClick={startEditCurrent}>РР·РјРµРЅРёС‚СЊ</Button>
+            <Button variant="secondary" onClick={() => setMode("list")}>РќР°Р·Р°Рґ</Button>
           </div>
 
           {errorText ? <div className="address-error">{errorText}</div> : null}
@@ -580,16 +569,16 @@ export function AddressesPage() {
     }
 
     return (
-      <Page title="Адрес">
+      <Page title="РђРґСЂРµСЃ">
         <Card className="ui-card--padded address-section">
-          <div className="address-section__title">Параметры адреса</div>
+          <div className="address-section__title">РџР°СЂР°РјРµС‚СЂС‹ Р°РґСЂРµСЃР°</div>
           <Input
-            placeholder="Название адреса"
+            placeholder="РќР°Р·РІР°РЅРёРµ Р°РґСЂРµСЃР°"
             value={form.name}
             onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
           />
           <FioInput
-            placeholder="Введите ФИО"
+            placeholder="Р’РІРµРґРёС‚Рµ Р¤РРћ"
             value={form.recipientFio}
             onChange={(value) => setForm((prev) => ({ ...prev, recipientFio: value }))}
           />
@@ -604,14 +593,14 @@ export function AddressesPage() {
               checked={form.isDefault}
               onChange={(event) => setForm((prev) => ({ ...prev, isDefault: event.target.checked }))}
             />
-            <span>Сделать основным</span>
+            <span>РЎРґРµР»Р°С‚СЊ РѕСЃРЅРѕРІРЅС‹Рј</span>
           </label>
         </Card>
 
         <Card className="ui-card--padded address-section">
-          <div className="address-section__title">Город</div>
+          <div className="address-section__title">Р“РѕСЂРѕРґ</div>
           <Input
-            placeholder="Поиск города..."
+            placeholder="РџРѕРёСЃРє РіРѕСЂРѕРґР°..."
             value={cityQuery}
             onChange={(event) => {
               const nextValue = event.target.value;
@@ -623,8 +612,8 @@ export function AddressesPage() {
               }
             }}
           />
-          <div className="address-selected-pvz" title={cityValue || "Город не выбран"}>
-            {cityValue || "Город не выбран"}
+          <div className="address-selected-pvz" title={cityValue || "Р“РѕСЂРѕРґ РЅРµ РІС‹Р±СЂР°РЅ"}>
+            {cityValue || "Р“РѕСЂРѕРґ РЅРµ РІС‹Р±СЂР°РЅ"}
           </div>
           {(Array.isArray(cityOptions) ? cityOptions : []).length ? (
             <div className="address-list">
@@ -641,7 +630,7 @@ export function AddressesPage() {
                     setCitySearchDone(false);
                     resetPvzSelection();
                   }}
-                  right={cityValue === city.label ? <span className="address-badge">Выбран</span> : null}
+                  right={cityValue === city.label ? <span className="address-badge">Р’С‹Р±СЂР°РЅ</span> : null}
                   chevron={false}
                   divider={idx !== cityOptions.length - 1}
                   position={idx === 0 ? "first" : idx === cityOptions.length - 1 ? "last" : "middle"}
@@ -650,14 +639,14 @@ export function AddressesPage() {
             </div>
           ) : null}
           {citySearchDone && cityQuery.trim().length >= 2 && cityOptions.length === 0 ? (
-            <div className="address-muted">Ничего не найдено</div>
+            <div className="address-muted">РќРёС‡РµРіРѕ РЅРµ РЅР°Р№РґРµРЅРѕ</div>
           ) : null}
         </Card>
 
         <Card className="ui-card--padded address-section">
-          <div className="address-section__title">Пункт выдачи СДЭК</div>
+          <div className="address-section__title">РџСѓРЅРєС‚ РІС‹РґР°С‡Рё РЎР”Р­Рљ</div>
           <Input
-            placeholder="Поиск ПВЗ..."
+            placeholder="РџРѕРёСЃРє РџР’Р—..."
             value={pvzQuery}
             onChange={(event) => {
               const nextValue = event.target.value;
@@ -670,8 +659,8 @@ export function AddressesPage() {
               }
             }}
           />
-          <div className="address-selected-pvz" title={pvzValue || "ПВЗ не выбран"}>
-            {pvzValue || "ПВЗ не выбран"}
+          <div className="address-selected-pvz" title={pvzValue || "РџР’Р— РЅРµ РІС‹Р±СЂР°РЅ"}>
+            {pvzValue || "РџР’Р— РЅРµ РІС‹Р±СЂР°РЅ"}
           </div>
           {(Array.isArray(visiblePvz) ? visiblePvz : []).length ? (
             <div className="address-list">
@@ -686,9 +675,9 @@ export function AddressesPage() {
                     onClick={() => {
                       setSelectedPvzCode(point.code);
                       setPvzValue(label);
-                      setNoticeText("Пункт выдачи выбран.");
+                      setNoticeText("РџСѓРЅРєС‚ РІС‹РґР°С‡Рё РІС‹Р±СЂР°РЅ.");
                     }}
-                    right={isSelected ? <span className="address-badge">Выбран</span> : null}
+                    right={isSelected ? <span className="address-badge">Р’С‹Р±СЂР°РЅ</span> : null}
                     chevron={false}
                     divider={idx !== visiblePvz.length - 1}
                     position={idx === 0 ? "first" : idx === visiblePvz.length - 1 ? "last" : "middle"}
@@ -698,15 +687,15 @@ export function AddressesPage() {
             </div>
           ) : null}
           {pvzSearchDone && pvzQuery.trim().length >= 2 && visiblePvz.length === 0 ? (
-            <div className="address-muted">Ничего не найдено</div>
+            <div className="address-muted">РќРёС‡РµРіРѕ РЅРµ РЅР°Р№РґРµРЅРѕ</div>
           ) : null}
         </Card>
 
         <div className="address-actions">
           <Button onClick={() => void onSaveAddress()} disabled={isSaving}>
-            {isSaving ? "Сохраняем..." : "Сохранить"}
+            {isSaving ? "РЎРѕС…СЂР°РЅСЏРµРј..." : "РЎРѕС…СЂР°РЅРёС‚СЊ"}
           </Button>
-          <Button variant="secondary" onClick={cancelEdit}>Отмена</Button>
+          <Button variant="secondary" onClick={cancelEdit}>РћС‚РјРµРЅР°</Button>
         </div>
 
         {errorText ? <div className="address-error">{errorText}</div> : null}
@@ -716,11 +705,11 @@ export function AddressesPage() {
   }
 
   return (
-    <Page title="Адреса">
-      {isLoading ? <div className="address-muted">Загрузка...</div> : null}
+    <Page title="РђРґСЂРµСЃР°">
+      {isLoading ? <div className="address-muted">Р—Р°РіСЂСѓР·РєР°...</div> : null}
 
       {!isLoading && addresses.length === 0 ? (
-        <Button onClick={startCreate}>Добавить адрес</Button>
+        <Button onClick={startCreate}>Р”РѕР±Р°РІРёС‚СЊ Р°РґСЂРµСЃ</Button>
       ) : null}
 
       {addresses.length ? (
@@ -741,7 +730,7 @@ export function AddressesPage() {
                   <div className="address-card__subtitle" title={subtitle}>
                     {subtitle}
                   </div>
-                  {address.is_default ? <div className="address-card__default">По умолчанию</div> : null}
+                  {address.is_default ? <div className="address-card__default">РџРѕ СѓРјРѕР»С‡Р°РЅРёСЋ</div> : null}
                 </button>
 
                 <div className="address-card__actions">
@@ -750,18 +739,18 @@ export function AddressesPage() {
                     className={`address-icon-btn ${address.is_default ? "is-active" : ""}`}
                     onClick={() => void onSetDefault(address)}
                     disabled={Boolean(defaultChangingId || deleteLoadingId)}
-                    aria-label="Сделать основным"
+                    aria-label="РЎРґРµР»Р°С‚СЊ РѕСЃРЅРѕРІРЅС‹Рј"
                   >
-                    ★
+                    в…
                   </button>
                   <button
                     type="button"
                     className="address-icon-btn"
                     onClick={() => void onDelete(address)}
                     disabled={Boolean(defaultChangingId || deleteLoadingId)}
-                    aria-label="Удалить адрес"
+                    aria-label="РЈРґР°Р»РёС‚СЊ Р°РґСЂРµСЃ"
                   >
-                    🗑
+                    рџ—‘
                   </button>
                 </div>
               </Card>
@@ -770,8 +759,8 @@ export function AddressesPage() {
         </div>
       ) : null}
 
-      {addresses.length ? <Button onClick={startCreate}>Добавить адрес</Button> : null}
-      <Button variant="secondary" onClick={() => nav(-1)}>Назад</Button>
+      {addresses.length ? <Button onClick={startCreate}>Р”РѕР±Р°РІРёС‚СЊ Р°РґСЂРµСЃ</Button> : null}
+      <Button variant="secondary" onClick={() => nav(-1)}>РќР°Р·Р°Рґ</Button>
 
       {noticeText ? <div className="address-notice">{noticeText}</div> : null}
       {errorText ? <div className="address-error">{errorText}</div> : null}
@@ -781,3 +770,4 @@ export function AddressesPage() {
 }
 
 export default AddressesPage;
+
