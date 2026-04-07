@@ -92,6 +92,18 @@ if (readFlagFromQuery()) {
   writeLocalFlag(true);
 }
 
+function isTelegramRuntimeDetected() {
+  try {
+    return Boolean(window.Telegram?.WebApp);
+  } catch {
+    return false;
+  }
+}
+
+function isDebugPanelEnabledEffective() {
+  return debugEnabled || isTelegramRuntimeDetected();
+}
+
 const state: TgDebugState = {
   debugId: readOrCreateDebugId(),
   runtimeDetected: false,
@@ -109,7 +121,7 @@ const state: TgDebugState = {
 };
 
 export function isTgDebugModeEnabled() {
-  return debugEnabled;
+  return isDebugPanelEnabledEffective();
 }
 
 export function enableTgDebugMode(enabled: boolean) {
@@ -159,7 +171,7 @@ function subscribe(listener: () => void) {
 function getSnapshot() {
   return {
     ...state,
-    debugEnabled,
+    debugEnabled: isDebugPanelEnabledEffective(),
   };
 }
 
