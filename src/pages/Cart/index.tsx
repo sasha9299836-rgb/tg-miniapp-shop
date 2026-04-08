@@ -147,12 +147,6 @@ export function CartPage() {
   const deliveryTotalFee = deliveryQuote?.delivery_total_fee_rub ?? 0;
   const total = itemsSum + deliveryTotalFee;
   const totalQty = cart.totalQty();
-  const isPresetValid = Boolean(
-    selectedPreset?.recipient_fio.trim() &&
-      selectedPreset?.recipient_phone.trim() &&
-      selectedPreset?.city.trim() &&
-      selectedPreset?.pvz.trim(),
-  );
 
   if (!cart.items.length) {
     return (
@@ -234,23 +228,6 @@ export function CartPage() {
             </div>
           ) : null}
 
-          <div className="cart-section__title">Получатель и доставка</div>
-          {selectedPreset && isPresetValid ? (
-            <div className="cart-recipient__content">
-              <div className="cart-recipient__name">{selectedPreset.name}</div>
-              <div className="cart-recipient__line">{selectedPreset.recipient_fio}</div>
-              <div className="cart-recipient__line">{selectedPreset.recipient_phone}</div>
-              <div className="cart-recipient__line">{selectedPreset.city}</div>
-              <div className="cart-recipient__line">{selectedPreset.pvz}</div>
-            </div>
-          ) : (
-            <div className="cart-muted">
-              Выберите и заполните адрес получателя.
-            </div>
-          )}
-          <Button variant="secondary" onClick={() => nav("/account/addresses")}>
-            Изменить
-          </Button>
           {presetError ? <div className="cart-muted">{presetError}</div> : null}
           {!presets.length ? <div className="cart-muted">Адреса пока не добавлены.</div> : null}
         </Card>
