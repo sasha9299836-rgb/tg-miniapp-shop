@@ -211,8 +211,8 @@ export function AddressesPage() {
     const selectedStored = readSelectedPresetId();
     const active =
       rows.find((row) => row.id === preferredId) ??
-      rows.find((row) => row.id === selectedStored) ??
       rows.find((row) => row.is_default) ??
+      rows.find((row) => row.id === selectedStored) ??
       rows[0] ??
       null;
     saveSelectedPresetId(active?.id ?? null);

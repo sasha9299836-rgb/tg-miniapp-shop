@@ -90,8 +90,8 @@ export function CheckoutPage() {
         setAddresses(rows);
         const selectedId = readSelectedPresetId();
         const active =
-          rows.find((row) => row.id === selectedId) ??
           rows.find((row) => row.is_default) ??
+          rows.find((row) => row.id === selectedId) ??
           rows[0] ??
           null;
         setSelectedAddressId(active?.id ?? null);

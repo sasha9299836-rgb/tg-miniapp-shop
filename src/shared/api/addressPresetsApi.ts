@@ -33,7 +33,11 @@ export type UpsertAddressPresetPayload = {
 };
 
 async function buildTelegramUserSessionHeaders(): Promise<Record<string, string>> {
-  const token = await ensureTelegramUserSessionToken();
+  let token = await ensureTelegramUserSessionToken();
+  if (!token) {
+    await new Promise((resolve) => window.setTimeout(resolve, 250));
+    token = await ensureTelegramUserSessionToken();
+  }
   if (!token) throw new Error(TG_IDENTITY_REQUIRED_ERROR);
   return { "x-tg-user-session": token };
 }
