@@ -53,8 +53,9 @@ function inferTypeFromTitle(title: string): string | null {
 function OrdersEmptyIcon() {
   return (
     <svg className="orders-empty__icon" viewBox="0 0 24 24" aria-hidden>
+      <rect x="5.2" y="4.6" width="10.4" height="7.2" rx="1.6" fill="none" stroke="currentColor" strokeWidth="1.85" />
       <path
-        d="M2.8 12.7h8l2.2-5.8h4.8l2.4 3.4v2.4h-2.4"
+        d="M3.1 13h11.3l1.8-3.2h2.3l2.1 3.2v2.4h-2.2"
         fill="none"
         stroke="currentColor"
         strokeWidth="1.9"
@@ -62,17 +63,19 @@ function OrdersEmptyIcon() {
         strokeLinejoin="round"
       />
       <path
-        d="M5.2 8.1h3.7M4.2 10.4h3.7"
+        d="M4.6 9.2h2.7M3.6 11.2h2.9"
         fill="none"
         stroke="currentColor"
         strokeWidth="1.9"
         strokeLinecap="round"
       />
-      <circle cx="7.4" cy="15.5" r="2" fill="none" stroke="currentColor" strokeWidth="1.9" />
-      <circle cx="16.5" cy="15.5" r="2" fill="none" stroke="currentColor" strokeWidth="1.9" />
+      <circle cx="7.3" cy="16.2" r="2.05" fill="none" stroke="currentColor" strokeWidth="1.9" />
+      <circle cx="16.4" cy="16.2" r="2.05" fill="none" stroke="currentColor" strokeWidth="1.9" />
     </svg>
   );
 }
+
+const SKELETON_ROWS = 3;
 
 export function OrdersPage() {
   const nav = useNavigate();
@@ -143,10 +146,24 @@ export function OrdersPage() {
           <CardText>Здесь показаны ваши заказы и текущий статус по каждому из них.</CardText>
         </Card>
 
-        {isLoading ? <div>Загрузка...</div> : null}
-
         <div className="orders-list">
-          {orders.map((order, idx) => {
+          {isLoading ? (
+            Array.from({ length: SKELETON_ROWS }, (_, index) => (
+              <div key={`orders-skeleton-${index}`} className="orders-skeleton-card" aria-hidden>
+                <div className="orders-skeleton-card__left">
+                  <div className="orders-skeleton orders-skeleton--title" />
+                  <div className="orders-skeleton orders-skeleton--meta" />
+                  <div className="orders-skeleton orders-skeleton--metaShort" />
+                </div>
+                <div className="orders-skeleton-card__right">
+                  <div className="orders-skeleton orders-skeleton--pill" />
+                  <div className="orders-skeleton orders-skeleton--button" />
+                </div>
+              </div>
+            ))
+          ) : null}
+
+          {!isLoading && !errorText ? orders.map((order, idx) => {
             const totalRub =
               (order.price_rub ?? 0) + (order.delivery_total_fee_rub ?? 0) + getPackagingFeeRub(order.packaging_type);
             const orderItems = orderItemsByOrderId[order.id] ?? [];
@@ -223,7 +240,7 @@ export function OrdersPage() {
                 </div>
               </div>
             );
-          })}
+          }) : null}
 
           {!isLoading && !errorText && orders.length === 0 ? (
             <div className="orders-empty">
@@ -232,6 +249,9 @@ export function OrdersPage() {
               </div>
               <div className="orders-empty__title">У вас пока нет заказов</div>
               <div className="orders-empty__text">Здесь будут отображаться ваши заказы</div>
+              <button type="button" className="orders-empty__cta" onClick={() => nav("/catalog")}>
+                Перейти в каталог
+              </button>
             </div>
           ) : null}
         </div>
