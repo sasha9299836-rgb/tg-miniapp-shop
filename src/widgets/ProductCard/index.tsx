@@ -2,6 +2,7 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
 import type { Product } from "../../shared/types/product";
 import { FavoriteButton } from "../../shared/ui/FavoriteButton";
+import { getProductDisplayTitle } from "../../shared/lib/productTitle";
 import "./styles.css";
 
 export function ProductCard({
@@ -29,13 +30,7 @@ export function ProductCard({
   const safeIndex = total ? index % total : 0;
   const current = total ? images[safeIndex] : undefined;
   const showOldPrice = typeof product.oldPrice === "number" && product.oldPrice > product.price;
-  const cardTitle = useMemo(() => {
-    const title = String(product.title ?? "").trim();
-    const brand = String(product.brand ?? "").trim();
-    if (!brand) return title;
-    if (title.toLowerCase().includes(brand.toLowerCase())) return title;
-    return `${title} ${brand}`.trim();
-  }, [product.brand, product.title]);
+  const cardTitle = useMemo(() => getProductDisplayTitle(product), [product.brand, product.title]);
 
   const setSlide = (next: number) => {
     if (!total) return;

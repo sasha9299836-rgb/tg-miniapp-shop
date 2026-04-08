@@ -53,7 +53,19 @@ Deno.serve(async (req) => {
         p_city_code: body?.city_code ?? null,
         p_pvz_code: body?.pvz_code ?? null,
       });
-      if (error) return json({ error: "ADDRESS_PRESET_SAVE_FAILED", details: error.message }, 500);
+      if (error) {
+        const message = String(error.message ?? "");
+        if (message.includes("ADDRESS_PRESET_LIMIT_REACHED")) {
+          return json({ ok: false, mode, error: "ADDRESS_PRESET_LIMIT_REACHED" }, 200);
+        }
+        if (message.includes("CITY_CODE_REQUIRED")) {
+          return json({ ok: false, mode, error: "CITY_CODE_REQUIRED" }, 200);
+        }
+        if (message.includes("PVZ_CODE_REQUIRED")) {
+          return json({ ok: false, mode, error: "PVZ_CODE_REQUIRED" }, 200);
+        }
+        return json({ error: "ADDRESS_PRESET_SAVE_FAILED", details: message }, 500);
+      }
       return json({ ok: true, mode, preset_id: data ?? null });
     }
 

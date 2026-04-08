@@ -14,7 +14,8 @@ import {
   deleteAddressPreset,
   listAddressPresets,
   readSelectedPresetId,
-  saveSelectedPresetId,
+  readSelectedPresetSource,
+  saveSelectedPresetSelection,
   upsertAddressPreset,
   type TgAddressPreset,
 } from "../../../shared/api/addressPresetsApi";
@@ -145,6 +146,13 @@ function buildFioFromProfile(profile: TgUserRecord | null): string {
   return parts.join(" ").trim();
 }
 
+function buildUniqueProfileName(addresses: TgAddressPreset[]): string {
+  const used = new Set(addresses.map((item) => String(item.name ?? "").trim().toLowerCase()).filter(Boolean));
+  let index = 1;
+  while (used.has(`профиль ${index}`)) index += 1;
+  return `Профиль ${index}`;
+}
+
 export function AddressesPage() {
   const nav = useNavigate();
 
@@ -175,6 +183,7 @@ export function AddressesPage() {
   const [errorText, setErrorText] = useState<string | null>(null);
   const [noticeText, setNoticeText] = useState<string | null>(null);
   const [cdekWarningText, setCdekWarningText] = useState<string | null>(null);
+  const maxAddressesReached = addresses.length >= 10;
 
   const resetPvzSelection = () => {
     setPvzValue("");
@@ -209,13 +218,16 @@ export function AddressesPage() {
     const rows = await listAddressPresets();
     setAddresses(rows);
     const selectedStored = readSelectedPresetId();
+    const selectedSource = readSelectedPresetSource();
+    const manualSelected =
+      selectedSource === "manual" ? rows.find((row) => row.id === selectedStored) ?? null : null;
     const active =
       rows.find((row) => row.id === preferredId) ??
+      manualSelected ??
       rows.find((row) => row.is_default) ??
-      rows.find((row) => row.id === selectedStored) ??
       rows[0] ??
       null;
-    saveSelectedPresetId(active?.id ?? null);
+    saveSelectedPresetSelection(active?.id ?? null, manualSelected ? "manual" : "auto");
   };
 
   useEffect(() => {
@@ -331,12 +343,16 @@ export function AddressesPage() {
   };
 
   const startCreate = () => {
+    if (maxAddressesReached) {
+      setErrorText("Можно добавить не более 10 адресов.");
+      return;
+    }
     const isFirstAddress = addresses.length === 0;
     const prefillFio = isFirstAddress ? buildFioFromProfile(userProfile) : "";
     const prefillPhone = isFirstAddress ? String(userProfile?.phone ?? "").trim() : "";
     const mapped: AddressForm = {
       ...EMPTY_FORM,
-      name: `Профиль ${addresses.length + 1}`,
+      name: buildUniqueProfileName(addresses),
       recipientFio: prefillFio,
       recipientPhone: prefillPhone,
     };
@@ -418,11 +434,33 @@ export function AddressesPage() {
         city_code: selectedCityCode,
         pvz: pvzValue.trim(),
         pvz_code: selectedPvzCode,
-        is_default: form.isDefault,
+        is_default: currentEditingAddress?.is_default ?? false,
       });
-      await reloadAddresses(savedId);
-      const savedRows = await listAddressPresets();
-      const savedAddress = savedRows.find((row) => row.id === savedId) ?? null;
+      let savedRows = await listAddressPresets();
+      let savedAddress = savedRows.find((row) => row.id === savedId) ?? null;
+
+      if (savedAddress && !savedAddress.is_default) {
+        const confirmSetDefault = window.confirm("Сделать этот адрес основным?");
+        if (confirmSetDefault) {
+          await upsertAddressPreset({
+            preset_id: savedAddress.id,
+            name: savedAddress.name,
+            recipient_fio: savedAddress.recipient_fio,
+            recipient_phone: savedAddress.recipient_phone,
+            city: savedAddress.city,
+            city_code: savedAddress.city_code ?? null,
+            pvz: savedAddress.pvz,
+            pvz_code: savedAddress.pvz_code ?? null,
+            is_default: true,
+          });
+          savedRows = await listAddressPresets();
+          savedAddress = savedRows.find((row) => row.id === savedId) ?? null;
+        }
+      }
+
+      const active = savedRows.find((row) => row.id === savedId) ?? savedRows.find((row) => row.is_default) ?? savedRows[0] ?? null;
+      saveSelectedPresetSelection(active?.id ?? null, "auto");
+      setAddresses(savedRows);
       if (savedAddress) {
         const mapped = mapAddressToForm(savedAddress);
         setSavedForm(mapped);
@@ -436,7 +474,7 @@ export function AddressesPage() {
       setEditingAddressId(savedId);
       setMode("details");
       setIsEditing(false);
-      setNoticeText("Адрес сохранён.");
+      setNoticeText(savedAddress?.is_default ? "Адрес сохранён и установлен как основной." : "Адрес сохранён.");
     } catch (error) {
       console.error("address save failed", getErrorDetails(error));
       const message = error instanceof Error ? error.message : "";
@@ -446,6 +484,8 @@ export function AddressesPage() {
         setErrorText("Выберите город из справочника СДЭК.");
       } else if (message.includes("PVZ_CODE_REQUIRED")) {
         setErrorText("Выберите пункт выдачи из справочника СДЭК.");
+      } else if (message.includes("ADDRESS_PRESET_LIMIT_REACHED")) {
+        setErrorText("Можно добавить не более 10 адресов.");
       } else {
         setErrorText("Не удалось сохранить адрес.");
       }
@@ -505,7 +545,7 @@ export function AddressesPage() {
       } else {
         setAddresses(rows);
         const active = rows.find((row) => row.is_default) ?? rows[0] ?? null;
-        saveSelectedPresetId(active?.id ?? null);
+        saveSelectedPresetSelection(active?.id ?? null, "auto");
       }
       setNoticeText("Адрес удалён.");
       if (mode === "details" && editingAddressId === address.id) {
@@ -587,14 +627,6 @@ export function AddressesPage() {
             value={form.recipientPhone}
             onChange={(value) => setForm((prev) => ({ ...prev, recipientPhone: value }))}
           />
-          <label className="address-checkbox">
-            <input
-              type="checkbox"
-              checked={form.isDefault}
-              onChange={(event) => setForm((prev) => ({ ...prev, isDefault: event.target.checked }))}
-            />
-            <span>Сделать основным</span>
-          </label>
         </Card>
 
         <Card className="ui-card--padded address-section">
@@ -709,7 +741,7 @@ export function AddressesPage() {
       {isLoading ? <div className="address-muted">Загрузка...</div> : null}
 
       {!isLoading && addresses.length === 0 ? (
-        <Button onClick={startCreate}>Добавить адрес</Button>
+        <Button onClick={startCreate} disabled={maxAddressesReached}>Добавить адрес</Button>
       ) : null}
 
       {addresses.length ? (
@@ -759,7 +791,7 @@ export function AddressesPage() {
         </div>
       ) : null}
 
-      {addresses.length ? <Button onClick={startCreate}>Добавить адрес</Button> : null}
+      {addresses.length ? <Button onClick={startCreate} disabled={maxAddressesReached}>Добавить адрес</Button> : null}
       <Button variant="secondary" onClick={() => nav(-1)}>Назад</Button>
 
       {noticeText ? <div className="address-notice">{noticeText}</div> : null}

@@ -13,7 +13,8 @@ import {
 import {
   listAddressPresets,
   readSelectedPresetId,
-  saveSelectedPresetId,
+  readSelectedPresetSource,
+  saveSelectedPresetSelection,
   type TgAddressPreset,
 } from "../../shared/api/addressPresetsApi";
 import { EmptyState } from "../../shared/ui/EmptyState";
@@ -89,13 +90,16 @@ export function CheckoutPage() {
         const rows = await listAddressPresets();
         setAddresses(rows);
         const selectedId = readSelectedPresetId();
+        const selectedSource = readSelectedPresetSource();
+        const manualSelected =
+          selectedSource === "manual" ? rows.find((row) => row.id === selectedId) ?? null : null;
         const active =
+          manualSelected ??
           rows.find((row) => row.is_default) ??
-          rows.find((row) => row.id === selectedId) ??
           rows[0] ??
           null;
         setSelectedAddressId(active?.id ?? null);
-        saveSelectedPresetId(active?.id ?? null);
+        saveSelectedPresetSelection(active?.id ?? null, manualSelected ? "manual" : "auto");
         if (active) {
           setRecipientFio(active.recipient_fio);
           setRecipientPhone(active.recipient_phone);
@@ -123,7 +127,6 @@ export function CheckoutPage() {
     setRecipientPhone(selectedAddress.recipient_phone);
     setCity(selectedAddress.city);
     setPvz(selectedAddress.pvz);
-    saveSelectedPresetId(selectedAddress.id);
   }, [selectedAddress?.id]);
 
   const itemsWithProducts = useMemo(() => {
@@ -266,7 +269,7 @@ export function CheckoutPage() {
 
       const created = await createOrder(createPayload);
       saveLastOrderId(created.order_id);
-      saveSelectedPresetId(selectedAddressId);
+      saveSelectedPresetSelection(selectedAddressId, "manual");
       nav(`/payment?order=${encodeURIComponent(created.order_id)}`, { replace: true });
     } catch (error) {
       console.error("checkout create flow failed", error);
@@ -327,7 +330,11 @@ export function CheckoutPage() {
               <select
                 className="checkout-address-select"
                 value={selectedAddressId ?? ""}
-                onChange={(event) => setSelectedAddressId(event.target.value || null)}
+                onChange={(event) => {
+                  const nextId = event.target.value || null;
+                  setSelectedAddressId(nextId);
+                  saveSelectedPresetSelection(nextId, "manual");
+                }}
               >
                 {addresses.map((address) => (
                   <option key={address.id} value={address.id}>

@@ -3,6 +3,9 @@ import { TG_IDENTITY_REQUIRED_ERROR } from "../auth/tgUser";
 import { ensureTelegramUserSessionToken } from "../auth/tgUserSession";
 
 export const TG_SELECTED_ADDRESS_PRESET_ID_KEY = "tg_selected_address_preset_id";
+export const TG_SELECTED_ADDRESS_PRESET_SOURCE_KEY = "tg_selected_address_preset_source";
+
+export type AddressPresetSelectionSource = "auto" | "manual";
 
 export type TgAddressPreset = {
   id: string;
@@ -58,6 +61,7 @@ export async function listAddressPresets(): Promise<TgAddressPreset[]> {
 export async function upsertAddressPreset(payload: UpsertAddressPresetPayload): Promise<string> {
   const { data, error } = await supabase.functions.invoke<{
     ok?: boolean;
+    error?: string;
     preset_id?: string | { tg_upsert_address_preset?: string } | Array<{ tg_upsert_address_preset?: string }>;
   }>("tg_address_presets_secure", {
     body: {
@@ -75,7 +79,7 @@ export async function upsertAddressPreset(payload: UpsertAddressPresetPayload): 
     headers: await buildTelegramUserSessionHeaders(),
   });
   if (error) throw error;
-  if (!data?.ok) throw new Error("PRESET_SAVE_FAILED");
+  if (!data?.ok) throw new Error(String(data?.error ?? "PRESET_SAVE_FAILED"));
 
   const raw =
     typeof data.preset_id === "string"
@@ -115,14 +119,29 @@ export function readSelectedPresetId(): string | null {
   }
 }
 
-export function saveSelectedPresetId(presetId: string | null) {
+export function readSelectedPresetSource(): AddressPresetSelectionSource {
+  try {
+    const raw = (window.localStorage.getItem(TG_SELECTED_ADDRESS_PRESET_SOURCE_KEY) ?? "").trim();
+    return raw === "manual" ? "manual" : "auto";
+  } catch {
+    return "auto";
+  }
+}
+
+export function saveSelectedPresetSelection(presetId: string | null, source: AddressPresetSelectionSource = "auto") {
   try {
     if (!presetId) {
       window.localStorage.removeItem(TG_SELECTED_ADDRESS_PRESET_ID_KEY);
+      window.localStorage.removeItem(TG_SELECTED_ADDRESS_PRESET_SOURCE_KEY);
       return;
     }
     window.localStorage.setItem(TG_SELECTED_ADDRESS_PRESET_ID_KEY, presetId);
+    window.localStorage.setItem(TG_SELECTED_ADDRESS_PRESET_SOURCE_KEY, source);
   } catch {
     // ignore storage errors
   }
+}
+
+export function saveSelectedPresetId(presetId: string | null) {
+  saveSelectedPresetSelection(presetId, "auto");
 }

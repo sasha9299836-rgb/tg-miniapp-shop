@@ -6,10 +6,12 @@ import { isTgIdentityRequiredError, TG_IDENTITY_REQUIRED_MESSAGE } from "../../s
 import {
   listAddressPresets,
   readSelectedPresetId,
-  saveSelectedPresetId,
+  readSelectedPresetSource,
+  saveSelectedPresetSelection,
   type TgAddressPreset,
 } from "../../shared/api/addressPresetsApi";
 import { calculateDeliveryQuote, type DeliveryQuoteResult } from "../../shared/api/ordersApi";
+import { getProductDisplayTitle } from "../../shared/lib/productTitle";
 import { EmptyState } from "../../shared/ui/EmptyState";
 import { Button } from "../../shared/ui/Button";
 import { Card } from "../../shared/ui/Card";
@@ -62,13 +64,16 @@ export function CartPage() {
         const rows = await listAddressPresets();
         setPresets(rows);
         const selectedId = readSelectedPresetId();
+        const selectedSource = readSelectedPresetSource();
+        const manualSelected =
+          selectedSource === "manual" ? rows.find((row) => row.id === selectedId) ?? null : null;
         const active =
+          manualSelected ??
           rows.find((row) => row.is_default) ??
-          rows.find((row) => row.id === selectedId) ??
           rows[0] ??
           null;
         setSelectedPreset(active);
-        saveSelectedPresetId(active?.id ?? null);
+        saveSelectedPresetSelection(active?.id ?? null, manualSelected ? "manual" : "auto");
       } catch (error) {
         console.error("cart presets load failed", error);
         setPresetError(isTgIdentityRequiredError(error) ? TG_IDENTITY_REQUIRED_MESSAGE : "Не удалось загрузить адрес получателя.");
@@ -184,7 +189,7 @@ export function CartPage() {
               <div className="cart-item__row">
                 <img src={line.product.images?.[0]} alt={line.product.title} className="cart-item__image" />
                 <div>
-                  <div className="cart-item__title">{line.product.title}</div>
+                  <div className="cart-item__title">{getProductDisplayTitle(line.product)}</div>
                   {line.product.description ? (
                     <div className="cart-item__desc">{line.product.description}</div>
                   ) : null}
