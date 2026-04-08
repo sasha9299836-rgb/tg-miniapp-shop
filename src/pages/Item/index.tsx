@@ -13,7 +13,9 @@ import "./styles.css";
 export function ItemPage() {
   const nav = useNavigate();
   const { id } = useParams();
-  const productId = Number(id);
+  const productRef = String(id ?? "").trim();
+  const numericProductId = Number(productRef);
+  const hasNumericProductId = Number.isFinite(numericProductId);
   const { products, load, getById } = useProductsStore();
   const fav = useFavoritesStore();
   const cart = useCartStore();
@@ -39,7 +41,18 @@ export function ItemPage() {
     cart.registerCatalogItems(mapped);
   }, [products]);
 
-  const product = getById(productId);
+  const product = useMemo(() => {
+    if (!productRef) return undefined;
+
+    const byPostId = products.find((entry) => String(entry.postId ?? "").trim() === productRef);
+    if (byPostId) return byPostId;
+
+    if (hasNumericProductId) {
+      return getById(numericProductId);
+    }
+
+    return undefined;
+  }, [productRef, products, hasNumericProductId, numericProductId, getById]);
   const isFav = useMemo(
     () => (product ? fav.has({ id: product.id, postId: product.postId }) : false),
     [fav, product],
@@ -106,7 +119,7 @@ export function ItemPage() {
   };
 
   const buildTelegramMiniAppLink = () => {
-    const targetId = String(product?.postId ?? productId).trim();
+    const targetId = String(product?.postId ?? productRef).trim();
     return buildTelegramMiniAppProductLink(targetId);
   };
 

@@ -1,14 +1,32 @@
-import { useEffect, useState } from "react";
-import { Outlet } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { getTelegramStartParam } from "../../providers/telegram";
 import { TabBar } from "../../../widgets/TabBar";
 import "./AppLayout.css";
 
 const DESKTOP_PREVIEW_KEY = "tg_desktop_mobile_preview";
 
 export const AppLayout = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const startupRouteHandledRef = useRef(false);
   const [isDesktopScreen, setIsDesktopScreen] = useState(false);
   const [isLikelyMobileRuntime, setIsLikelyMobileRuntime] = useState(false);
   const [isMobilePreview, setIsMobilePreview] = useState(false);
+
+  useEffect(() => {
+    if (startupRouteHandledRef.current) return;
+    startupRouteHandledRef.current = true;
+
+    const startParam = getTelegramStartParam();
+    if (!startParam || !startParam.startsWith("item_")) return;
+
+    const itemRef = startParam.slice("item_".length).trim();
+    if (!itemRef) return;
+
+    if (location.pathname !== "/") return;
+    navigate(`/item/${encodeURIComponent(itemRef)}`, { replace: true });
+  }, [location.pathname, navigate]);
 
   useEffect(() => {
     const updateDesktopFlag = () => {

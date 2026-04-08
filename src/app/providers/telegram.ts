@@ -14,6 +14,7 @@ export type TelegramWebApp = {
       first_name?: string;
       last_name?: string;
     };
+    start_param?: string;
   };
   themeParams?: Record<string, string>;
   colorScheme?: "light" | "dark";
@@ -71,6 +72,25 @@ export function getTelegramUser(): TelegramUser | null {
     firstName,
     lastName,
   };
+}
+
+export function getTelegramStartParam(): string | null {
+  const tg = getTg();
+  const fromUnsafe = tg?.initDataUnsafe?.start_param;
+  if (typeof fromUnsafe === "string" && fromUnsafe.trim()) {
+    return fromUnsafe.trim();
+  }
+
+  const initData = String(tg?.initData ?? "").trim();
+  if (!initData) return null;
+
+  const params = new URLSearchParams(initData);
+  const fromInitData = params.get("start_param");
+  if (typeof fromInitData === "string" && fromInitData.trim()) {
+    return fromInitData.trim();
+  }
+
+  return null;
 }
 
 export function initTelegramWebApp() {
