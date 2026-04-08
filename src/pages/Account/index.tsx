@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAccountStore } from "../../entities/account/model/useAccountStore";
 import { useAdminStore } from "../../entities/account/model/useAdminStore";
-import { adminLogin } from "../../shared/api/adminApi";
 import { canUseAdminSessionByContext, getAdminAccessDebugState } from "../../shared/auth/adminAccess";
 import { Card, CardText, CardTitle } from "../../shared/ui/Card";
 import { ListItem } from "../../shared/ui/ListItem";
@@ -14,11 +13,8 @@ export function AccountPage() {
   const nav = useNavigate();
   const isDbAdmin = useAccountStore((s) => s.profile.isAdmin);
   const { mode, setMode } = useThemeStore();
-  const { load, setSessionToken, clearAdmin } = useAdminStore();
+  const { load, clearAdmin } = useAdminStore();
   const canUseAdminAccess = canUseAdminSessionByContext(isDbAdmin);
-  const [code, setCode] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [loginError, setLoginError] = useState<string | null>(null);
 
   useEffect(() => {
     void load();
@@ -34,72 +30,12 @@ export function AccountPage() {
     }
   }, [canUseAdminAccess, clearAdmin]);
 
-  const onLogin = async () => {
-    if (isSubmitting || !canUseAdminAccess) return;
-
-    setIsSubmitting(true);
-    setLoginError(null);
-    try {
-      const { session_token } = await adminLogin(code.trim());
-      setSessionToken(session_token);
-      nav("/admin");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      if (message === "INVALID_CODE") {
-        setLoginError("Неверный код");
-      } else {
-        setLoginError("Ошибка входа");
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   return (
     <Page>
       <div className="account-grid">
         <Card className="ui-card--padded account-card">
           <CardTitle>Аккаунт</CardTitle>
           <CardText>Профиль, лояльность, адреса и заказы.</CardText>
-
-          {canUseAdminAccess ? (
-            <div style={{ marginTop: 10 }}>
-              <input
-                type="password"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                placeholder="Код доступа"
-                style={{
-                  width: "100%",
-                  padding: "8px 10px",
-                  borderRadius: 10,
-                  border: "1px solid rgba(0,0,0,0.12)",
-                  font: "inherit",
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => void onLogin()}
-                style={{
-                  marginTop: 8,
-                  width: "100%",
-                  padding: "8px 10px",
-                  borderRadius: 10,
-                  border: "1px solid rgba(0,0,0,0.12)",
-                  background: "#f1f2f4",
-                  font: "inherit",
-                }}
-                disabled={!code.trim() || isSubmitting}
-              >
-                {isSubmitting ? "Проверка..." : "Войти в админку"}
-              </button>
-              {loginError ? (
-                <div style={{ marginTop: 8, color: "#b42318", fontSize: 13 }}>
-                  {loginError}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
 
           <div className="theme-toggle">
             <button

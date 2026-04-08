@@ -209,6 +209,31 @@ export function CartPage() {
         </div>
 
         <Card className="ui-card--padded cart-recipient">
+          <div className="cart-section__title">Адрес доставки</div>
+          {presets.length ? (
+            <select
+              className="cart-address-select"
+              value={selectedPreset?.id ?? ""}
+              onChange={(event) => {
+                const nextId = event.target.value || null;
+                const nextPreset = presets.find((row) => row.id === nextId) ?? null;
+                setSelectedPreset(nextPreset);
+                saveSelectedPresetSelection(nextPreset?.id ?? null, "manual");
+              }}
+            >
+              {presets.map((address) => (
+                <option key={address.id} value={address.id}>
+                  {address.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          {selectedPreset ? (
+            <div className="cart-address-hint">
+              {selectedPreset.city}, {selectedPreset.pvz}
+            </div>
+          ) : null}
+
           <div className="cart-section__title">Получатель и доставка</div>
           {selectedPreset && isPresetValid ? (
             <div className="cart-recipient__content">

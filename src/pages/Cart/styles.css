@@ -95,6 +95,23 @@
   gap: 10px;
 }
 
+.cart-address-select {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  min-height: 46px;
+  padding: 12px 14px;
+  font-size: 14px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+.cart-address-hint {
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .cart-recipient__content {
   display: grid;
   gap: 4px;

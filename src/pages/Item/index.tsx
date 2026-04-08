@@ -3,10 +3,15 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useProductsStore } from "../../entities/product/model/useProductsStore";
 import { useFavoritesStore } from "../../entities/favorites/model/useFavoritesStore";
 import { useCartStore } from "../../entities/cart/model/useCartStore";
+import { getProductDisplayTitle } from "../../shared/lib/productTitle";
 import { Button } from "../../shared/ui/Button";
 import { FavoriteButton } from "../../shared/ui/FavoriteButton";
 import { Page } from "../../shared/ui/Page";
 import "./styles.css";
+
+const TELEGRAM_BOT_USERNAME = String(import.meta.env.VITE_TELEGRAM_BOT_USERNAME ?? "").trim().replace(/^@+/, "");
+const TELEGRAM_MINIAPP_SHORT_NAME = String(import.meta.env.VITE_TELEGRAM_MINIAPP_SHORT_NAME ?? "").trim().replace(/^\/+|\/+$/g, "");
+const TELEGRAM_STARTAPP_PREFIX = String(import.meta.env.VITE_TELEGRAM_MINIAPP_STARTAPP_PREFIX ?? "item_").trim();
 
 export function ItemPage() {
   const nav = useNavigate();
@@ -103,26 +108,36 @@ export function ItemPage() {
     else nav("/catalog");
   };
 
-  const buildShareUrl = () => {
-    const origin = window.location.origin;
-    return `${origin}/item/${productId}`;
+  const buildTelegramMiniAppLink = () => {
+    if (!TELEGRAM_BOT_USERNAME) return "";
+    const targetId = String(product?.postId ?? productId).trim();
+    if (!targetId) return "";
+    const startapp = `${TELEGRAM_STARTAPP_PREFIX}${targetId}`;
+    const appPath = TELEGRAM_MINIAPP_SHORT_NAME ? `/${TELEGRAM_MINIAPP_SHORT_NAME}` : "";
+    return `https://t.me/${TELEGRAM_BOT_USERNAME}${appPath}?startapp=${encodeURIComponent(startapp)}`;
   };
 
   const onShare = async () => {
     if (!product) return;
 
-    const shareUrl = buildShareUrl();
-    const shareText = `${product.title} - ${shareUrl}`;
-    const shareLink = `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(product.title)}`;
+    const productTitle = getProductDisplayTitle(product).trim() || String(product.title ?? "").trim() || "Товар";
+    const priceText = `${product.price.toLocaleString("ru-RU")} рублей`;
+    const shareText = `${productTitle} ${priceText}`.trim();
+    const appLink = buildTelegramMiniAppLink();
+    const shareLink = appLink
+      ? `https://t.me/share/url?url=${encodeURIComponent(appLink)}&text=${encodeURIComponent(shareText)}`
+      : `https://t.me/share/url?text=${encodeURIComponent(shareText)}`;
     const tg = window.Telegram?.WebApp as {
       openTelegramLink?: (url: string) => void;
       switchInlineQuery?: (query: string, choose_chat_types?: string[]) => void;
     } | undefined;
 
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-    } catch {
-      // optional fallback
+    if (appLink) {
+      try {
+        await navigator.clipboard.writeText(appLink);
+      } catch {
+        // optional fallback
+      }
     }
 
     if (typeof tg?.openTelegramLink === "function") {
@@ -131,7 +146,7 @@ export function ItemPage() {
     }
 
     if (typeof tg?.switchInlineQuery === "function") {
-      tg.switchInlineQuery(shareText, ["users", "groups", "channels"]);
+      tg.switchInlineQuery(appLink ? `${shareText} ${appLink}` : shareText, ["users", "groups", "channels"]);
       return;
     }
 

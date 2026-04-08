@@ -496,6 +496,8 @@ export function AddressesPage() {
 
   const onSetDefault = async (address: TgAddressPreset) => {
     if (address.is_default) return;
+    const confirmed = window.confirm("Сделать этот адрес основным?");
+    if (!confirmed) return;
     setDefaultChangingId(address.id);
     setErrorText(null);
     try {
