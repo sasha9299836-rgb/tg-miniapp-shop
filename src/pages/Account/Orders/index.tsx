@@ -52,18 +52,24 @@ function inferTypeFromTitle(title: string): string | null {
 
 function OrdersEmptyIcon() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden>
+    <svg className="orders-empty__icon" viewBox="0 0 24 24" aria-hidden>
       <path
-        d="M3.5 13h7.8l2.3-6.5h5l2 3.2v3.3h-2.3"
+        d="M2.8 12.7h8l2.2-5.8h4.8l2.4 3.4v2.4h-2.4"
         fill="none"
         stroke="currentColor"
-        strokeWidth="1.8"
+        strokeWidth="1.9"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <path d="M6 10.3h2.8M4.8 7.8h3.2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      <circle cx="7.7" cy="15.6" r="1.9" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <circle cx="16.8" cy="15.6" r="1.9" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="M5.2 8.1h3.7M4.2 10.4h3.7"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+      />
+      <circle cx="7.4" cy="15.5" r="2" fill="none" stroke="currentColor" strokeWidth="1.9" />
+      <circle cx="16.5" cy="15.5" r="2" fill="none" stroke="currentColor" strokeWidth="1.9" />
     </svg>
   );
 }

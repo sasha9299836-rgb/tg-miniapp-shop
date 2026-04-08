@@ -48,6 +48,10 @@
   height: 64px;
 }
 
+.orders-empty__icon {
+  display: block;
+}
+
 .orders-empty__title {
   font-size: 36px;
   line-height: 1.12;
