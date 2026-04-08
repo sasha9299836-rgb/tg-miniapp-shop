@@ -50,6 +50,24 @@ function inferTypeFromTitle(title: string): string | null {
   return cleaned ? cleaned.toLowerCase() : null;
 }
 
+function OrdersEmptyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden>
+      <path
+        d="M3.5 13h7.8l2.3-6.5h5l2 3.2v3.3h-2.3"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M6 10.3h2.8M4.8 7.8h3.2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="7.7" cy="15.6" r="1.9" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="16.8" cy="15.6" r="1.9" fill="none" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
 export function OrdersPage() {
   const nav = useNavigate();
   const [orders, setOrders] = useState<TgOrder[]>([]);
@@ -201,7 +219,15 @@ export function OrdersPage() {
             );
           })}
 
-          {!isLoading && orders.length === 0 ? <div style={{ color: "var(--muted)" }}>Заказов пока нет.</div> : null}
+          {!isLoading && !errorText && orders.length === 0 ? (
+            <div className="orders-empty">
+              <div className="orders-empty__iconWrap">
+                <OrdersEmptyIcon />
+              </div>
+              <div className="orders-empty__title">У вас пока нет заказов</div>
+              <div className="orders-empty__text">Здесь будут отображаться ваши заказы</div>
+            </div>
+          ) : null}
         </div>
 
         {errorText ? <div style={{ color: "#b42318" }}>{errorText}</div> : null}
