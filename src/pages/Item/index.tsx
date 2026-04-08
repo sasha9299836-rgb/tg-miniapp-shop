@@ -4,14 +4,11 @@ import { useProductsStore } from "../../entities/product/model/useProductsStore"
 import { useFavoritesStore } from "../../entities/favorites/model/useFavoritesStore";
 import { useCartStore } from "../../entities/cart/model/useCartStore";
 import { getProductDisplayTitle } from "../../shared/lib/productTitle";
+import { buildTelegramMiniAppProductLink } from "../../shared/lib/telegramMiniAppLink";
 import { Button } from "../../shared/ui/Button";
 import { FavoriteButton } from "../../shared/ui/FavoriteButton";
 import { Page } from "../../shared/ui/Page";
 import "./styles.css";
-
-const TELEGRAM_BOT_USERNAME = String(import.meta.env.VITE_TELEGRAM_BOT_USERNAME ?? "").trim().replace(/^@+/, "");
-const TELEGRAM_MINIAPP_SHORT_NAME = String(import.meta.env.VITE_TELEGRAM_MINIAPP_SHORT_NAME ?? "").trim().replace(/^\/+|\/+$/g, "");
-const TELEGRAM_STARTAPP_PREFIX = String(import.meta.env.VITE_TELEGRAM_MINIAPP_STARTAPP_PREFIX ?? "item_").trim();
 
 export function ItemPage() {
   const nav = useNavigate();
@@ -109,12 +106,8 @@ export function ItemPage() {
   };
 
   const buildTelegramMiniAppLink = () => {
-    if (!TELEGRAM_BOT_USERNAME) return "";
     const targetId = String(product?.postId ?? productId).trim();
-    if (!targetId) return "";
-    const startapp = `${TELEGRAM_STARTAPP_PREFIX}${targetId}`;
-    const appPath = TELEGRAM_MINIAPP_SHORT_NAME ? `/${TELEGRAM_MINIAPP_SHORT_NAME}` : "";
-    return `https://t.me/${TELEGRAM_BOT_USERNAME}${appPath}?startapp=${encodeURIComponent(startapp)}`;
+    return buildTelegramMiniAppProductLink(targetId);
   };
 
   const onShare = async () => {

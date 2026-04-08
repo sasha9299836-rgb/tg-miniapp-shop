@@ -11,6 +11,7 @@ import {
   type TgAddressPreset,
 } from "../../shared/api/addressPresetsApi";
 import { calculateDeliveryQuote, type DeliveryQuoteResult } from "../../shared/api/ordersApi";
+import { formatCompactAddressHint } from "../../shared/lib/addressDisplay";
 import { getProductDisplayTitle } from "../../shared/lib/productTitle";
 import { EmptyState } from "../../shared/ui/EmptyState";
 import { Button } from "../../shared/ui/Button";
@@ -224,7 +225,7 @@ export function CartPage() {
           ) : null}
           {selectedPreset ? (
             <div className="cart-address-hint">
-              {selectedPreset.city}, {selectedPreset.pvz}
+              {formatCompactAddressHint(selectedPreset)}
             </div>
           ) : null}
 

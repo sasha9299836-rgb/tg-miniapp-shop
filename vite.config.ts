@@ -36,6 +36,9 @@ export default defineConfig(({ mode }) => {
     "VITE_CDEK_PROXY_BASE",
     "VITE_CDEK_PROXY_URL",
     "VITE_CDEK_PROXY_TARGET",
+    "VITE_TELEGRAM_BOT_USERNAME",
+    "VITE_TELEGRAM_MINIAPP_SHORT_NAME",
+    "VITE_TELEGRAM_MINIAPP_STARTAPP_PREFIX",
   ]);
 
   const defineEnv: Record<string, string> = {};
