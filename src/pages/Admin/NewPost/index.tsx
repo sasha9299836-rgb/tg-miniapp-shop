@@ -168,7 +168,22 @@ type UploadedPhoto = {
   photoNo: number;
   url: string;
   key: string;
+  mediaType: "image" | "video";
 };
+
+function inferMediaTypeFromUrl(url: string): "image" | "video" {
+  return /\.mp4(?:$|\?)/i.test(url) ? "video" : "image";
+}
+
+function inferMediaTypeFromFile(file: File): "image" | "video" | null {
+  const mime = String(file.type ?? "").toLowerCase();
+  if (mime.startsWith("image/")) return "image";
+  if (mime === "video/mp4") return "video";
+  const name = String(file.name ?? "").toLowerCase();
+  if (/\.(jpg|jpeg|png|webp)$/i.test(name)) return "image";
+  if (/\.mp4$/i.test(name)) return "video";
+  return null;
+}
 
 function normalizeConditionValue(value: string | null | undefined) {
   const raw = String(value ?? "").trim();
@@ -242,6 +257,7 @@ export function AdminNewPostPage() {
   const [isBrandSuggestionsOpen, setIsBrandSuggestionsOpen] = useState(false);
 
   const fetchRequestId = useRef(0);
+  const pendingUnsyncedUploadsRef = useRef<UploadedPhoto[]>([]);
   const parsedNalichieId = useMemo(() => Number(nalichieIdInput), [nalichieIdInput]);
   const normalizedNalichieId = Number.isInteger(parsedNalichieId) && parsedNalichieId > 0 ? parsedNalichieId : null;
   const costPrice = useMemo(() => {
@@ -278,11 +294,11 @@ export function AdminNewPostPage() {
   }, [brand]);
 
   const mainPreview: PhotoPreviewItem[] = useMemo(
-    () => mainPhotos.map((photo) => ({ id: photo.localId, photoNo: photo.photoNo, url: photo.url })),
+    () => mainPhotos.map((photo) => ({ id: photo.localId, photoNo: photo.photoNo, url: photo.url, mediaType: "image" })),
     [mainPhotos],
   );
   const defectPreview: PhotoPreviewItem[] = useMemo(
-    () => defectPhotos.map((photo) => ({ id: photo.localId, photoNo: photo.photoNo, url: photo.url })),
+    () => defectPhotos.map((photo) => ({ id: photo.localId, photoNo: photo.photoNo, url: photo.url, mediaType: photo.mediaType })),
     [defectPhotos],
   );
 
@@ -294,6 +310,7 @@ export function AdminNewPostPage() {
       photoNo: photo.photo_no,
       url: photo.url,
       key: photo.storage_key,
+      mediaType: "image",
     })));
   };
 
@@ -305,12 +322,25 @@ export function AdminNewPostPage() {
       photoNo: photo.photo_no,
       url: photo.public_url,
       key: photo.storage_key,
+      mediaType: photo.media_type ?? inferMediaTypeFromUrl(photo.public_url),
     })));
   };
 
   const hydrateAllPhotosFromDb = async (postId: string) => {
     await Promise.all([hydrateMainPhotosFromDb(postId), hydrateDefectPhotosFromDb(postId)]);
   };
+
+  useEffect(() => {
+    pendingUnsyncedUploadsRef.current = [...mainPhotos, ...defectPhotos].filter((photo) => !photo.dbId);
+  }, [mainPhotos, defectPhotos]);
+
+  useEffect(() => {
+    return () => {
+      const pending = pendingUnsyncedUploadsRef.current;
+      if (!pending.length) return;
+      void Promise.allSettled(pending.map((photo) => deleteYcObject(photo.key)));
+    };
+  }, []);
 
   const resetFormToEmpty = () => {
     fetchRequestId.current += 1;
@@ -548,6 +578,7 @@ export function AdminNewPostPage() {
         photo_no: photo.photoNo,
         storage_key: photo.key,
         public_url: photo.url,
+        media_type: photo.mediaType,
       });
     }
   };
@@ -621,6 +652,16 @@ export function AdminNewPostPage() {
       const itemIdForStorage = postType === "warehouse" ? (currentPost?.item_id ?? normalizedNalichieId) : null;
 
       for (const file of files) {
+        const mediaType = inferMediaTypeFromFile(file);
+        if (!mediaType) {
+          throw new Error(`Неподдерживаемый тип файла: ${file.name}`);
+        }
+        if (kind === "main" && mediaType !== "image") {
+          throw new Error("Для основных фото разрешены только изображения.");
+        }
+        if (kind === "defect" && !(mediaType === "image" || mediaType === "video")) {
+          throw new Error("Для медиа дефектов разрешены только изображения и MP4-видео.");
+        }
         const photoNo = nextPhotoNo;
         nextPhotoNo += 1;
         const { url, publicUrl, key } = await getYcPresignedPut(postIdForUpload, itemIdForStorage, file, photoNo, kind);
@@ -640,18 +681,19 @@ export function AdminNewPostPage() {
           photoNo,
           url: publicUrl,
           key,
+          mediaType,
         };
         if (kind === "main") setMainPhotos((prev) => [...prev, payload]);
         if (kind === "defect") setDefectPhotos((prev) => [...prev, payload]);
       }
 
-      setSuccessText(kind === "main" ? "Основные фотографии загружены." : "Фотографии дефектов загружены.");
+      setSuccessText(kind === "main" ? "Основные фотографии загружены." : "Медиа дефектов загружены.");
     } catch (error) {
       const message = (error as Error).message ?? "";
       if (message.includes("ALREADY_EXISTS") || message.includes("409")) {
-        setErrorText("Фото с таким номером уже загружено.");
+        setErrorText("Медиа с таким номером уже загружено.");
       } else {
-        setErrorText(`Ошибка загрузки фото: ${message || "неизвестная ошибка"}`);
+        setErrorText(`Ошибка загрузки медиа: ${message || "неизвестная ошибка"}`);
       }
     } finally {
       if (kind === "main") setIsUploadingPhotos(false);
@@ -986,11 +1028,12 @@ export function AdminNewPostPage() {
                   <textarea value={defectsText} onChange={(e) => setDefectsText(e.target.value)} placeholder={"Описание дефектов"} rows={3} style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }} />
                 </Field>
                 <PhotoUploader
-                  title={"Фотографии дефектов"}
+                  title={"Медиа дефектов"}
                   inputId="post-defect-files"
-                  selectLabel={"Выбрать файлы дефектов"}
+                  selectLabel={"Выбрать фото/видео дефектов"}
                   items={defectPreview}
-                  loadingText={isUploadingDefects ? "Загрузка фотографий дефектов..." : null}
+                  loadingText={isUploadingDefects ? "Загрузка медиа дефектов..." : null}
+                  accept="image/*,video/mp4"
                   isBusy={isUploadingDefects || isSaving || isPublishingNow || isScheduling}
                   onSelect={(files) => void uploadFiles(files, "defect")}
                   onRemove={(id) => void onDeleteDefectPhoto(id)}

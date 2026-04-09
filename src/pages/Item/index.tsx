@@ -62,7 +62,19 @@ export function ItemPage() {
     [cart, product],
   );
   const images = useMemo(() => (product?.images?.length ? product.images : []), [product?.images]);
-  const defectImages = useMemo(() => (product?.defectImages?.length ? product.defectImages : []), [product?.defectImages]);
+  const defectMedia = useMemo(() => {
+    if (!product) return [];
+    if (Array.isArray(product.defectMedia) && product.defectMedia.length) return product.defectMedia;
+    return (product.defectImages ?? []).map((url) => ({ type: "image" as const, url }));
+  }, [product]);
+  const defectImages = useMemo(
+    () => defectMedia.filter((item) => item.type === "image").map((item) => item.url),
+    [defectMedia],
+  );
+  const defectVideos = useMemo(
+    () => defectMedia.filter((item) => item.type === "video").map((item) => item.url),
+    [defectMedia],
+  );
   const total = images.length;
   const safeIndex = total ? photoIndex % total : 0;
   const currentImage = total ? images[safeIndex] : undefined;
@@ -70,7 +82,7 @@ export function ItemPage() {
   const viewerIndex = viewerTotal ? photoIndex % viewerTotal : 0;
   const viewerImage = viewerTotal ? viewerImages[viewerIndex] : undefined;
 
-  const hasDefectsSection = Boolean(product?.hasDefects || product?.defectsText?.trim() || defectImages.length);
+  const hasDefectsSection = Boolean(product?.hasDefects || product?.defectsText?.trim() || defectImages.length || defectVideos.length);
   const itemHeaderTitle = useMemo(() => {
     if (!product) return "";
     const itemType = String(product.title ?? "").trim();
@@ -227,6 +239,21 @@ export function ItemPage() {
                       <button key={`${product.id}-defect-${index}`} type="button" className="item-defect-grid__btn" onClick={() => openViewer(defectImages, index)}>
                         <img src={url} alt={`Дефект ${index + 1}`} className="item-defect-grid__img" />
                       </button>
+                    ))}
+                  </div>
+                ) : null}
+                {defectVideos.length > 0 ? (
+                  <div className="item-defect-grid">
+                    {defectVideos.map((url, index) => (
+                      <div key={`${product.id}-defect-video-${index}`} className="item-defect-grid__btn">
+                        <video
+                          src={url}
+                          className="item-defect-grid__img"
+                          controls
+                          preload="metadata"
+                          playsInline
+                        />
+                      </div>
                     ))}
                   </div>
                 ) : null}

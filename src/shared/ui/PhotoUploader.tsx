@@ -5,6 +5,7 @@ export type PhotoPreviewItem = {
   id: string;
   photoNo: number;
   url: string;
+  mediaType?: "image" | "video";
 };
 
 type Props = {
@@ -14,6 +15,7 @@ type Props = {
   items: PhotoPreviewItem[];
   loadingText?: string | null;
   isBusy?: boolean;
+  accept?: string;
   onSelect: (files: File[]) => void;
   onRemove: (id: string) => void;
 };
@@ -25,6 +27,7 @@ export function PhotoUploader({
   items,
   loadingText,
   isBusy = false,
+  accept = "image/*",
   onSelect,
   onRemove,
 }: Props) {
@@ -50,7 +53,7 @@ export function PhotoUploader({
         className="payment-upload__input"
         type="file"
         multiple
-        accept="image/*"
+        accept={accept}
         disabled={isBusy}
         onChange={onChange}
       />
@@ -62,8 +65,18 @@ export function PhotoUploader({
             .sort((a, b) => a.photoNo - b.photoNo)
             .map((photo) => (
               <div key={photo.id} style={{ display: "grid", gap: 6 }}>
-                <div style={{ fontSize: 13, color: "var(--muted)" }}>Фото {photo.photoNo}</div>
-                <img src={photo.url} alt="Фотография" style={{ width: 120, height: 120, objectFit: "cover", borderRadius: 8 }} />
+                <div style={{ fontSize: 13, color: "var(--muted)" }}>{photo.mediaType === "video" ? "Видео" : "Фото"} {photo.photoNo}</div>
+                {photo.mediaType === "video" ? (
+                  <video
+                    src={photo.url}
+                    controls
+                    preload="metadata"
+                    playsInline
+                    style={{ width: 160, maxWidth: "100%", borderRadius: 8, background: "#000" }}
+                  />
+                ) : (
+                  <img src={photo.url} alt="Фотография" style={{ width: 120, height: 120, objectFit: "cover", borderRadius: 8 }} />
+                )}
                 <Button variant="secondary" onClick={() => onRemove(photo.id)}>Удалить</Button>
               </div>
             ))}
@@ -72,4 +85,3 @@ export function PhotoUploader({
     </div>
   );
 }
-

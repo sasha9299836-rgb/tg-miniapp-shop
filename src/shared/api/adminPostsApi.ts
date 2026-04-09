@@ -1,5 +1,5 @@
 import { supabase } from "./supabaseClient";
-import type { Product } from "../types/product";
+import type { DefectMediaItem, Product } from "../types/product";
 
 export type NalichieItem = {
   id: number;
@@ -68,6 +68,7 @@ export type TgPostDefectPhoto = {
   photo_no: number;
   storage_key: string;
   public_url: string;
+  media_type: "image" | "video";
   created_at: string;
 };
 
@@ -301,10 +302,14 @@ export async function createPostDefectPhoto(payload: {
   photo_no: number;
   storage_key: string;
   public_url: string;
+  media_type?: "image" | "video";
 }) {
   const { data, error } = await supabase
     .from("tg_post_defect_photos")
-    .insert(payload)
+    .insert({
+      ...payload,
+      media_type: payload.media_type ?? "image",
+    })
     .select("*")
     .single();
   if (error) throw error;
@@ -454,16 +459,17 @@ export async function getPublishedCatalogProducts(): Promise<Product[]> {
 
   const { data: defectData, error: defectError } = await supabase
     .from("tg_post_defect_photos")
-    .select("post_id, public_url, photo_no")
+    .select("post_id, public_url, photo_no, media_type")
     .in("post_id", postIds)
     .order("photo_no", { ascending: true });
   if (defectError) throw defectError;
 
-  const defectsByPost = new Map<string, string[]>();
+  const defectsByPost = new Map<string, DefectMediaItem[]>();
   (defectData ?? []).forEach((row) => {
-    const entry = row as { post_id: string; public_url: string };
+    const entry = row as { post_id: string; public_url: string; media_type?: string | null };
     const current = defectsByPost.get(entry.post_id) ?? [];
-    current.push(entry.public_url);
+    const mediaType = entry.media_type === "video" ? "video" : "image";
+    current.push({ type: mediaType, url: entry.public_url });
     defectsByPost.set(entry.post_id, current);
   });
 
@@ -481,7 +487,8 @@ export async function getPublishedCatalogProducts(): Promise<Product[]> {
     condition: post.condition,
     hasDefects: post.has_defects,
     defectsText: post.defects_text,
-    defectImages: defectsByPost.get(post.id) ?? [],
+    defectMedia: defectsByPost.get(post.id) ?? [],
+    defectImages: (defectsByPost.get(post.id) ?? []).filter((item) => item.type === "image").map((item) => item.url),
     saleStatus: post.sale_status,
   }));
 }
@@ -515,6 +522,22 @@ export async function getCatalogProductsByPostIds(postIds: string[]): Promise<Pr
     photosByPost.set(entry.post_id, current);
   });
 
+  const { data: defectData, error: defectError } = await supabase
+    .from("tg_post_defect_photos")
+    .select("post_id, public_url, photo_no, media_type")
+    .in("post_id", normalized)
+    .order("photo_no", { ascending: true });
+  if (defectError) throw defectError;
+
+  const defectsByPost = new Map<string, DefectMediaItem[]>();
+  (defectData ?? []).forEach((row) => {
+    const entry = row as { post_id: string; public_url: string; media_type?: string | null };
+    const current = defectsByPost.get(entry.post_id) ?? [];
+    const mediaType = entry.media_type === "video" ? "video" : "image";
+    current.push({ type: mediaType, url: entry.public_url });
+    defectsByPost.set(entry.post_id, current);
+  });
+
   return posts.map((post) => ({
     id: post.item_id ?? syntheticIdFromUuid(post.id),
     postId: post.id,
@@ -529,7 +552,8 @@ export async function getCatalogProductsByPostIds(postIds: string[]): Promise<Pr
     condition: post.condition,
     hasDefects: post.has_defects,
     defectsText: post.defects_text,
-    defectImages: [],
+    defectMedia: defectsByPost.get(post.id) ?? [],
+    defectImages: (defectsByPost.get(post.id) ?? []).filter((item) => item.type === "image").map((item) => item.url),
     saleStatus: post.sale_status,
   }));
 }

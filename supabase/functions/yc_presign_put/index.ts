@@ -56,6 +56,7 @@ function extFromContentType(contentType: string): string | null {
   if (value.includes("image/jpeg") || value.includes("image/jpg")) return "jpg";
   if (value.includes("image/png")) return "png";
   if (value.includes("image/webp")) return "webp";
+  if (value.includes("video/mp4")) return "mp4";
   return null;
 }
 
@@ -64,7 +65,7 @@ function normalizeExt(ext: string | null): string | null {
   const cleaned = ext.toLowerCase().replace(/^\./, "").trim();
   if (!cleaned) return null;
   if (cleaned === "jpeg") return "jpg";
-  if (["jpg", "png", "webp"].includes(cleaned)) return cleaned;
+  if (["jpg", "png", "webp", "mp4"].includes(cleaned)) return cleaned;
   return null;
 }
 
@@ -92,10 +93,21 @@ function isSafePostId(value: string): boolean {
 
 function isAllowedStorageKey(key: string): boolean {
   const itemMain = /^\d+\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
-  const itemDefect = /^\d+\/defects\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
+  const itemDefectLegacy = /^\d+\/defects\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
+  const itemDefectImage = /^\d+\/defects\/images\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
+  const itemDefectVideo = /^\d+\/defects\/videos\/([1-9]|[1-4]\d|50)\.mp4$/i;
   const noItemMain = /^no-item\/[0-9a-f-]{36}\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
-  const noItemDefect = /^no-item\/[0-9a-f-]{36}\/defects\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
-  return itemMain.test(key) || itemDefect.test(key) || noItemMain.test(key) || noItemDefect.test(key);
+  const noItemDefectLegacy = /^no-item\/[0-9a-f-]{36}\/defects\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
+  const noItemDefectImage = /^no-item\/[0-9a-f-]{36}\/defects\/images\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
+  const noItemDefectVideo = /^no-item\/[0-9a-f-]{36}\/defects\/videos\/([1-9]|[1-4]\d|50)\.mp4$/i;
+  return itemMain.test(key)
+    || itemDefectLegacy.test(key)
+    || itemDefectImage.test(key)
+    || itemDefectVideo.test(key)
+    || noItemMain.test(key)
+    || noItemDefectLegacy.test(key)
+    || noItemDefectImage.test(key)
+    || noItemDefectVideo.test(key);
 }
 
 function parseAllowedOrigins(raw: string): Set<string> {
@@ -226,12 +238,13 @@ Deno.serve(async (req) => {
     if (photoNo <= 0 || !ext || itemId < 0) {
       return json({ error: "BAD_PAYLOAD" }, 400);
     }
+    if (kind === "main" && ext === "mp4") return json({ error: "BAD_PAYLOAD" }, 400);
     if (itemId === 0 && !postId) return json({ error: "BAD_PAYLOAD" }, 400);
     if (itemId === 0 && !isSafePostId(postId)) return json({ error: "BAD_PAYLOAD" }, 400);
 
     const basePrefix = itemId > 0 ? `${itemId}` : `no-item/${postId}`;
     const key = kind === "defect"
-      ? `${basePrefix}/defects/${photoNo}.${ext}`
+      ? `${basePrefix}/defects/${ext === "mp4" ? "videos" : "images"}/${photoNo}.${ext}`
       : `${basePrefix}/${photoNo}.${ext}`;
     if (!isAllowedStorageKey(key)) return json({ error: "BAD_PAYLOAD" }, 400);
 

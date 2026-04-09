@@ -57,6 +57,13 @@ export function FavoritesPage() {
     void run();
   }, [fav.postIds, isReady]);
 
+  const items = useMemo(() => {
+    const map = new Map(itemsByFavorites.map((item) => [item.postId, item]));
+    return fav.postIds
+      .map((postId) => map.get(postId))
+      .filter(Boolean) as Product[];
+  }, [itemsByFavorites, fav.postIds]);
+
   if (isChecking) {
     return (
       <Page>
@@ -79,13 +86,6 @@ export function FavoritesPage() {
       </Page>
     );
   }
-
-  const items = useMemo(() => {
-    const map = new Map(itemsByFavorites.map((item) => [item.postId, item]));
-    return fav.postIds
-      .map((postId) => map.get(postId))
-      .filter(Boolean) as Product[];
-  }, [itemsByFavorites, fav.postIds]);
 
   if (!fav.postIds.length) {
     return (

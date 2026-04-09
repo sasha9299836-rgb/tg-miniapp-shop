@@ -1,3 +1,8 @@
+export type DefectMediaItem = {
+  type: "image" | "video";
+  url: string;
+};
+
 export type Product = {
   id: number;
   postId?: string;
@@ -13,6 +18,7 @@ export type Product = {
   condition?: string | null;
   hasDefects?: boolean;
   defectsText?: string | null;
+  defectMedia?: DefectMediaItem[];
   defectImages?: string[];
   saleStatus?: "available" | "reserved" | "sold";
 };
