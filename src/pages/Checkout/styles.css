@@ -49,6 +49,39 @@
   gap: 10px;
 }
 
+.checkout-consents {
+  display: grid;
+  gap: 10px;
+}
+
+.checkout-consent-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.checkout-consent-row input[type="checkbox"] {
+  margin-top: 2px;
+  width: 16px;
+  height: 16px;
+}
+
+.checkout-consent-link {
+  color: var(--accent-strong);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.checkout-consent-hint {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .checkout-packaging-option {
   display: flex;
   align-items: center;

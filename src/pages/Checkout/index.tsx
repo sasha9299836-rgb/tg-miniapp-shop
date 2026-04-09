@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useCartStore } from "../../entities/cart/model/useCartStore";
 import { useProductsStore } from "../../entities/product/model/useProductsStore";
 import { getCurrentTgUserId, isTgIdentityRequiredError, TG_IDENTITY_REQUIRED_MESSAGE } from "../../shared/auth/tgUser";
@@ -59,6 +59,8 @@ export function CheckoutPage() {
   const [deliveryQuote, setDeliveryQuote] = useState<DeliveryQuoteResult | null>(null);
   const [deliveryQuoteError, setDeliveryQuoteError] = useState<string | null>(null);
   const [isDeliveryQuoteLoading, setIsDeliveryQuoteLoading] = useState(false);
+  const [isOfferAccepted, setIsOfferAccepted] = useState(false);
+  const [isPrivacyAccepted, setIsPrivacyAccepted] = useState(false);
 
   useEffect(() => {
     if (!products.length) void loadProducts();
@@ -200,6 +202,7 @@ export function CheckoutPage() {
 
   const deliveryTotalFee = deliveryQuote?.delivery_total_fee_rub ?? 0;
   const total = itemsSum + deliveryTotalFee;
+  const isLegalAccepted = isOfferAccepted && isPrivacyAccepted;
 
   const validate = (): string | null => {
     const tgUserId = getCurrentTgUserId();
@@ -377,9 +380,45 @@ export function CheckoutPage() {
         </Card>
 
         <div className="checkout-actions">
+          <Card className="ui-card--padded checkout-consents">
+            <label className="checkout-consent-row">
+              <input
+                type="checkbox"
+                checked={isOfferAccepted}
+                onChange={(event) => setIsOfferAccepted(event.target.checked)}
+              />
+              <span>
+                Я ознакомился и согласен с{" "}
+                <Link to="/account/offer" className="checkout-consent-link">
+                  Публичной офертой
+                </Link>
+              </span>
+            </label>
+
+            <label className="checkout-consent-row">
+              <input
+                type="checkbox"
+                checked={isPrivacyAccepted}
+                onChange={(event) => setIsPrivacyAccepted(event.target.checked)}
+              />
+              <span>
+                Я ознакомился и согласен с{" "}
+                <Link to="/account/privacy" className="checkout-consent-link">
+                  Политикой конфиденциальности
+                </Link>
+              </span>
+            </label>
+
+            {!isLegalAccepted ? (
+              <div className="checkout-consent-hint">
+                Чтобы продолжить, подтвердите согласие с офертой и политикой.
+              </div>
+            ) : null}
+          </Card>
+
           <Button
             onClick={() => void onCreateOrder()}
-            disabled={isSubmitting || !itemsWithProducts.length || isDeliveryQuoteLoading}
+            disabled={isSubmitting || !itemsWithProducts.length || isDeliveryQuoteLoading || !isLegalAccepted}
           >
             {isSubmitting ? "Создаем заказ..." : "Перейти к оплате"}
           </Button>
