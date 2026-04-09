@@ -45,7 +45,7 @@ function TelegramOutsideStub() {
   return (
     <div className="tg-launch-gate">
       <div className="tg-launch-gate__card glass">
-        <div className="tg-launch-gate__title">AESISLAND Mini App</div>
+        <div className="tg-launch-gate__title">AES ISLAND</div>
         <div className="tg-launch-gate__text">
           Приложение доступно только внутри Telegram Mini App.
         </div>

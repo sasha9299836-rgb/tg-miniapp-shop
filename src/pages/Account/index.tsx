@@ -100,6 +100,22 @@ export function AccountPage() {
             divider={false}
             chevron={false}
           />
+          <ListItem
+            title="Политика конфиденциальности"
+            subtitle="Как мы обрабатываем персональные данные"
+            onClick={() => nav("/account/privacy")}
+            position="single"
+            divider={false}
+            chevron={false}
+          />
+          <ListItem
+            title="Публичная оферта"
+            subtitle="Условия покупки и доставки"
+            onClick={() => nav("/account/offer")}
+            position="single"
+            divider={false}
+            chevron={false}
+          />
         </div>
       </div>
     </Page>

@@ -17,6 +17,8 @@ import { ProfilePage } from "../../pages/Account/Profile";
 import { LoyaltyPage } from "../../pages/Account/Loyalty";
 import { AddressesPage } from "../../pages/Account/Addresses";
 import { OrdersPage } from "../../pages/Account/Orders";
+import { PrivacyPage } from "../../pages/Account/Privacy";
+import { OfferPage } from "../../pages/Account/Offer";
 import { OrderDetailsPage } from "../../pages/Account/OrderDetails";
 import { AdminHome } from "../../pages/Admin";
 import { AdminNewPostPage } from "../../pages/Admin/NewPost";
@@ -58,6 +60,8 @@ const router = createBrowserRouter([
       { path: "/account/loyalty", element: <LoyaltyPage /> },
       { path: "/account/addresses", element: <AddressesPage /> },
       { path: "/account/orders", element: <OrdersPage /> },
+      { path: "/account/privacy", element: <PrivacyPage /> },
+      { path: "/account/offer", element: <OfferPage /> },
       { path: "/orders/:orderId", element: <OrderDetailsPage /> },
 
       { path: "/admin", element: <AdminGuard><AdminHome /></AdminGuard> },
