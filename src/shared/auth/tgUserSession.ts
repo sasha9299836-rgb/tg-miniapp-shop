@@ -2,6 +2,8 @@ import { setTgDebugState } from "../debug/tgDebug";
 
 const TG_USER_SESSION_TOKEN_KEY = "tg_user_session_token";
 const TG_USER_SESSION_EXPIRES_AT_KEY = "tg_user_session_expires_at";
+const TELEGRAM_BOOTSTRAP_WAIT_TIMEOUT_MS = 10_000;
+const TELEGRAM_BOOTSTRAP_POLL_MS = 80;
 let ensureSessionInFlight: Promise<string> | null = null;
 
 function isFutureIsoDate(value: string): boolean {
@@ -69,16 +71,20 @@ export function refreshTgDebugSessionFlags() {
 }
 
 
-async function waitForTelegramInitData(timeoutMs: number): Promise<string> {
+async function waitForTelegramInitDataOrSessionToken(timeoutMs: number): Promise<string> {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
+    const currentToken = getTelegramUserSessionToken();
+    if (currentToken) {
+      return "";
+    }
     try {
       const initData = String(window.Telegram?.WebApp?.initData ?? "").trim();
       if (initData) return initData;
     } catch {
       // no-op
     }
-    await new Promise((resolve) => window.setTimeout(resolve, 80));
+    await new Promise((resolve) => window.setTimeout(resolve, TELEGRAM_BOOTSTRAP_POLL_MS));
   }
   return "";
 }
@@ -99,7 +105,13 @@ export async function ensureTelegramUserSessionToken(): Promise<string> {
       return current;
     }
 
-    const initData = await waitForTelegramInitData(3000);
+    const initData = await waitForTelegramInitDataOrSessionToken(TELEGRAM_BOOTSTRAP_WAIT_TIMEOUT_MS);
+    const readyToken = getTelegramUserSessionToken();
+    if (readyToken) {
+      console.log("[tg-session] ensure: token appeared after bootstrap wait");
+      refreshTgDebugSessionFlags();
+      return readyToken;
+    }
     if (!initData) {
       console.log("[tg-session] ensure: initData missing after wait");
       refreshTgDebugSessionFlags();

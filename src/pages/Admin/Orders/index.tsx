@@ -607,7 +607,7 @@ export function AdminOrdersPage() {
       const orderIds = orderRows.map((row) => row.id);
       const [orderItems, orderShipments, shipmentHistory] = await Promise.all([
         listOrderItemsByOrderIds(orderIds),
-        listOrderShipmentsByOrderIds(orderIds),
+        listOrderShipmentsByOrderIds(orderIds, "admin"),
         listShipmentStatusHistoryByOrderIds(orderIds),
       ]);
 

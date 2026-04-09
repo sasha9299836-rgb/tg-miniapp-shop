@@ -1,6 +1,10 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { isTgIdentityRequiredError, TG_IDENTITY_REQUIRED_MESSAGE } from "../../../shared/auth/tgUser";
+import {
+  isTgIdentityRequiredError,
+  TG_IDENTITY_REQUIRED_ERROR,
+  TG_IDENTITY_REQUIRED_MESSAGE,
+} from "../../../shared/auth/tgUser";
 import { getPackagingFeeRub } from "../../../shared/config/packaging";
 import {
   formatCdekStatus,
@@ -17,6 +21,7 @@ import {
   type TgOrderShipment,
   type TgOrderTimelineEvent,
 } from "../../../shared/api/ordersApi";
+import { ensureTelegramUserSessionToken } from "../../../shared/auth/tgUserSession";
 import {
   getPostById,
   getPostPhotos,
@@ -183,6 +188,10 @@ export function OrderDetailsPage() {
       setIsLoading(true);
       setErrorText(null);
       try {
+        const userSessionToken = await ensureTelegramUserSessionToken();
+        if (!userSessionToken) {
+          throw new Error(TG_IDENTITY_REQUIRED_ERROR);
+        }
         const [result, history, items, shipments] = await Promise.all([
           getOrderWithTimeline(orderId),
           getShipmentStatusHistory(orderId),

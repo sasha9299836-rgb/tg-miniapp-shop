@@ -81,6 +81,8 @@ export type TgOrderWithTimeline = {
   timeline: TgOrderTimelineEvent[];
 };
 
+export type OrdersActorContext = "user" | "admin";
+
 export type ShipmentStatusHistoryEntry = {
   id: string;
   order_id: string;
@@ -341,17 +343,20 @@ export async function listOrderShipments(orderId: string): Promise<TgOrderShipme
   return data.shipments;
 }
 
-export async function listOrderShipmentsByOrderIds(orderIds: string[]): Promise<TgOrderShipment[]> {
+export async function listOrderShipmentsByOrderIds(
+  orderIds: string[],
+  actor: OrdersActorContext = "user",
+): Promise<TgOrderShipment[]> {
   const normalized = [...new Set(orderIds.map((value) => String(value ?? "").trim()).filter(Boolean))];
   if (!normalized.length) return [];
 
-  const adminToken = readAdminToken();
-  const hasAdminToken = Boolean(adminToken);
-  const requestBody = hasAdminToken
+  const adminToken = actor === "admin" ? readAdminToken() : "";
+  const useAdminFlow = actor === "admin" && Boolean(adminToken);
+  const requestBody = useAdminFlow
     ? { mode: "admin_by_order_ids" as const, order_ids: normalized }
     : { mode: "user_by_order_ids" as const, order_ids: normalized };
 
-  const userSessionToken = hasAdminToken ? "" : await readTelegramUserSessionToken();
+  const userSessionToken = useAdminFlow ? "" : await readTelegramUserSessionToken();
 
   const { data, error } = await supabase.functions.invoke<{
     ok: boolean;
@@ -359,7 +364,7 @@ export async function listOrderShipmentsByOrderIds(orderIds: string[]): Promise<
     shipments: TgOrderShipment[];
   }>("tg_order_shipments_read", {
     body: requestBody,
-    headers: hasAdminToken
+    headers: useAdminFlow
       ? buildAdminSessionHeaders(adminToken)
       : buildTelegramUserSessionHeaders(userSessionToken),
   });

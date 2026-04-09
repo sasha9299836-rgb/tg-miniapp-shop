@@ -241,6 +241,13 @@ textarea {
   font-family: var(--font-family);
 }
 
+input:not([type="checkbox"]):not([type="radio"]),
+textarea {
+  color: var(--text);
+  caret-color: var(--text);
+  -webkit-text-fill-color: var(--text);
+}
+
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,

@@ -61,10 +61,105 @@ const PACKAGING_OPTIONS: Array<{ value: TgPostPackagingPreset; label: string }> 
   { value: "A2", label: "Пакет А2" },
 ];
 
+const PACKAGING_BY_ITEM_TYPE: Record<string, TgPostPackagingPreset> = {
+  "футболка": "A4",
+  "поло": "A4",
+  "кепка": "A4",
+  "сумка": "A4",
+  "лонгслив": "A4",
+  "куртка": "A3",
+  "зип-худи": "A3",
+  "олимпийка": "A3",
+  "ветровка": "A3",
+  "пуховик": "A3",
+  "штаны": "A3",
+  "овершот": "A3",
+  "джинсы": "A3",
+  "свитшот": "A3",
+  "харингтон": "A3",
+  "бомбер": "A3",
+  "рубашка": "A3",
+  "худи": "A3",
+  "шорты": "A3",
+  "кардиган": "A3",
+  "свитер": "A3",
+  "регбийка": "A3",
+  "рюкзак": "A3",
+  "1/4 зип": "A3",
+  "жилетка": "A3",
+  "костюм": "A3",
+};
+
+const ITEM_TYPE_SUGGESTIONS = [
+  "куртка",
+  "зип-худи",
+  "олимпийка",
+  "ветровка",
+  "пуховик",
+  "штаны",
+  "овершот",
+  "джинсы",
+  "свитшот",
+  "футболка",
+  "харингтон",
+  "бомбер",
+  "сумка",
+  "поло",
+  "рубашка",
+  "лонгслив",
+  "худи",
+  "шорты",
+  "кардиган",
+  "кепка",
+  "свитер",
+  "регбийка",
+  "рюкзак",
+  "1/4 зип",
+  "жилетка",
+  "костюм",
+] as const;
+
+const BRAND_SUGGESTIONS = [
+  "Ma.Strum",
+  "C.P. Company",
+  "Sergio Tacchini",
+  "Marshall Artist",
+  "Stone Island",
+  "Evisu",
+  "Fred Perry",
+  "Alpha Industries",
+  "Lonsdale",
+  "Nemen",
+  "Pit Bull",
+  "Vetements",
+  "Barbour",
+  "Adidas",
+  "Aquascutum",
+  "Chrome Hearts",
+  "Weekend Offender",
+  "Polo Ralph Lauren",
+  "Ellesse",
+  "Shadow Balance",
+  "Thor Steinar",
+  "Tommy Hilfiger",
+  "Lyle & Scott",
+  "The North Face",
+  "Berghaus",
+  "Lacoste",
+  "Hardcore United",
+] as const;
+
 const ALLOWED_NALICHIE_STATUSES = new Set(["in_stock", "in_transit"]);
 
 function getOriginProfileByPostType(postType: TgPostType): TgPostOriginProfile {
   return postType === "consignment" ? "YAN" : "ODN";
+}
+
+function normalizeItemTypeKey(value: string | null | undefined): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
 }
 
 type UploadedPhoto = {
@@ -142,6 +237,9 @@ export function AdminNewPostPage() {
   const [isUnscheduling, setIsUnscheduling] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [successText, setSuccessText] = useState<string | null>(null);
+  const [manualPackagingOverrideTypeKey, setManualPackagingOverrideTypeKey] = useState<string | null>(null);
+  const [isTypeSuggestionsOpen, setIsTypeSuggestionsOpen] = useState(false);
+  const [isBrandSuggestionsOpen, setIsBrandSuggestionsOpen] = useState(false);
 
   const fetchRequestId = useRef(0);
   const parsedNalichieId = useMemo(() => Number(nalichieIdInput), [nalichieIdInput]);
@@ -162,6 +260,22 @@ export function AdminNewPostPage() {
     () => (CONDITION_OPTIONS.includes(condition) ? CONDITION_OPTIONS : [condition, ...CONDITION_OPTIONS]),
     [condition],
   );
+  const normalizedItemTypeKey = useMemo(() => normalizeItemTypeKey(title), [title]);
+  const mappedPackagingByType = useMemo(
+    () => PACKAGING_BY_ITEM_TYPE[normalizedItemTypeKey] ?? null,
+    [normalizedItemTypeKey],
+  );
+  const lastAutoAppliedTypeKey = useRef<string | null>(null);
+  const filteredTypeSuggestions = useMemo(() => {
+    const query = title.trim().toLowerCase();
+    if (!query) return ITEM_TYPE_SUGGESTIONS.slice(0, 8);
+    return ITEM_TYPE_SUGGESTIONS.filter((value) => value.toLowerCase().startsWith(query)).slice(0, 8);
+  }, [title]);
+  const filteredBrandSuggestions = useMemo(() => {
+    const query = brand.trim().toLowerCase();
+    if (!query) return BRAND_SUGGESTIONS.slice(0, 8);
+    return BRAND_SUGGESTIONS.filter((value) => value.toLowerCase().startsWith(query)).slice(0, 8);
+  }, [brand]);
 
   const mainPreview: PhotoPreviewItem[] = useMemo(
     () => mainPhotos.map((photo) => ({ id: photo.localId, photoNo: photo.photoNo, url: photo.url })),
@@ -218,9 +332,16 @@ export function AdminNewPostPage() {
     setPackagingPreset("A3");
     setFieldError(null);
     setIsAutoFetching(false);
+    setIsTypeSuggestionsOpen(false);
+    setIsBrandSuggestionsOpen(false);
+    setManualPackagingOverrideTypeKey(null);
+    lastAutoAppliedTypeKey.current = null;
   };
 
   const hydrateFromPost = (post: TgPost) => {
+    const nextTypeKey = normalizeItemTypeKey(post.title);
+    lastAutoAppliedTypeKey.current = nextTypeKey || null;
+    setManualPackagingOverrideTypeKey(nextTypeKey || null);
     setCurrentPost(post);
     setPostType(post.post_type ?? "warehouse");
     setNalichieIdInput(post.nalichie_id == null ? "" : String(post.nalichie_id));
@@ -235,6 +356,24 @@ export function AdminNewPostPage() {
     setScheduleAtInput(toMoscowInputValue(post.scheduled_at));
     setPackagingPreset(post.packaging_preset ?? "A3");
   };
+
+  useEffect(() => {
+    if (!mappedPackagingByType) return;
+
+    const typeChanged = lastAutoAppliedTypeKey.current !== normalizedItemTypeKey;
+    if (typeChanged) {
+      setPackagingPreset(mappedPackagingByType);
+      setManualPackagingOverrideTypeKey(null);
+      lastAutoAppliedTypeKey.current = normalizedItemTypeKey;
+      return;
+    }
+
+    if (manualPackagingOverrideTypeKey === normalizedItemTypeKey) {
+      return;
+    }
+
+    setPackagingPreset((prev) => (prev === mappedPackagingByType ? prev : mappedPackagingByType));
+  }, [mappedPackagingByType, normalizedItemTypeKey, manualPackagingOverrideTypeKey]);
 
   const loadByPostId = async (postId: string) => {
     setIsAutoFetching(true);
@@ -700,14 +839,118 @@ export function AdminNewPostPage() {
 
         {canRenderProductForm ? (
           <div style={{ display: "grid", gap: 16 }}>
-            <Field label={"Название"}>
-              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={"Название"} style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }} />
+            <Field label={"Тип вещи"}>
+              <div style={{ position: "relative" }}>
+                <input
+                  value={title}
+                  onChange={(e) => {
+                    setTitle(e.target.value);
+                    setIsTypeSuggestionsOpen(true);
+                  }}
+                  onFocus={() => setIsTypeSuggestionsOpen(true)}
+                  onBlur={() => window.setTimeout(() => setIsTypeSuggestionsOpen(false), 120)}
+                  placeholder={"худи, свитшот"}
+                  style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }}
+                />
+                {isTypeSuggestionsOpen && filteredTypeSuggestions.length ? (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "calc(100% + 4px)",
+                      left: 0,
+                      right: 0,
+                      zIndex: 5,
+                      borderRadius: 10,
+                      border: "1px solid rgba(0,0,0,0.12)",
+                      background: "var(--surface)",
+                      boxShadow: "0 8px 20px rgba(0,0,0,0.12)",
+                      maxHeight: 220,
+                      overflowY: "auto",
+                    }}
+                  >
+                    {filteredTypeSuggestions.map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          setTitle(option);
+                          setIsTypeSuggestionsOpen(false);
+                        }}
+                        style={{
+                          width: "100%",
+                          textAlign: "left",
+                          border: 0,
+                          background: "transparent",
+                          padding: "8px 10px",
+                          cursor: "pointer",
+                          color: "var(--text)",
+                        }}
+                      >
+                        {option}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             </Field>
             <Field label={"Бренд"}>
-              <input value={brand} onChange={(e) => setBrand(e.target.value)} placeholder={"Бренд"} style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }} />
+              <div style={{ position: "relative" }}>
+                <input
+                  value={brand}
+                  onChange={(e) => {
+                    setBrand(e.target.value);
+                    setIsBrandSuggestionsOpen(true);
+                  }}
+                  onFocus={() => setIsBrandSuggestionsOpen(true)}
+                  onBlur={() => window.setTimeout(() => setIsBrandSuggestionsOpen(false), 120)}
+                  placeholder={"Nike"}
+                  style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }}
+                />
+                {isBrandSuggestionsOpen && filteredBrandSuggestions.length ? (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "calc(100% + 4px)",
+                      left: 0,
+                      right: 0,
+                      zIndex: 5,
+                      borderRadius: 10,
+                      border: "1px solid rgba(0,0,0,0.12)",
+                      background: "var(--surface)",
+                      boxShadow: "0 8px 20px rgba(0,0,0,0.12)",
+                      maxHeight: 220,
+                      overflowY: "auto",
+                    }}
+                  >
+                    {filteredBrandSuggestions.map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          setBrand(option);
+                          setIsBrandSuggestionsOpen(false);
+                        }}
+                        style={{
+                          width: "100%",
+                          textAlign: "left",
+                          border: 0,
+                          background: "transparent",
+                          padding: "8px 10px",
+                          cursor: "pointer",
+                          color: "var(--text)",
+                        }}
+                      >
+                        {option}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             </Field>
             <Field label={"Описание"}>
-              <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder={"Описание"} rows={4} style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }} />
+              <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder={"Легкая, приятный хлопок"} rows={4} style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }} />
             </Field>
             <Field label={"Состояние"}>
               <select value={condition} onChange={(e) => setCondition(e.target.value)} style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }}>
@@ -719,7 +962,7 @@ export function AdminNewPostPage() {
               </select>
             </Field>
             <Field label={"Размер"}>
-              <input value={size} onChange={(e) => setSize(e.target.value)} placeholder={"Размер"} style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }} />
+              <input value={size} onChange={(e) => setSize(e.target.value)} placeholder={"XL"} style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }} />
             </Field>
             <Field label={"Цена"}>
               <input
@@ -757,7 +1000,20 @@ export function AdminNewPostPage() {
             <Field label={"Упаковка"}>
               <select
                 value={packagingPreset}
-                onChange={(e) => setPackagingPreset(e.target.value as TgPostPackagingPreset)}
+                onChange={(e) => {
+                  const nextValue = e.target.value as TgPostPackagingPreset;
+                  setPackagingPreset(nextValue);
+                  if (!normalizedItemTypeKey) {
+                    setManualPackagingOverrideTypeKey(null);
+                    return;
+                  }
+                  const suggested = PACKAGING_BY_ITEM_TYPE[normalizedItemTypeKey] ?? null;
+                  if (suggested && suggested !== nextValue) {
+                    setManualPackagingOverrideTypeKey(normalizedItemTypeKey);
+                    return;
+                  }
+                  setManualPackagingOverrideTypeKey(null);
+                }}
                 style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }}
               >
                 {PACKAGING_OPTIONS.map((option) => (

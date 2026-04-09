@@ -1,6 +1,10 @@
 ﻿import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { isTgIdentityRequiredError, TG_IDENTITY_REQUIRED_MESSAGE } from "../../../shared/auth/tgUser";
+import {
+  isTgIdentityRequiredError,
+  TG_IDENTITY_REQUIRED_ERROR,
+  TG_IDENTITY_REQUIRED_MESSAGE,
+} from "../../../shared/auth/tgUser";
 import {
   listOrderItemsByOrderIds,
   listOrdersByUser,
@@ -9,6 +13,7 @@ import {
   type TgOrderItem,
   type TgOrderShipment,
 } from "../../../shared/api/ordersApi";
+import { ensureTelegramUserSessionToken } from "../../../shared/auth/tgUserSession";
 import { supabase } from "../../../shared/api/supabaseClient";
 import { getPackagingFeeRub } from "../../../shared/config/packaging";
 import { getUnifiedOrderStatus } from "../../../shared/lib/shipmentStatus";
@@ -50,31 +55,6 @@ function inferTypeFromTitle(title: string): string | null {
   return cleaned ? cleaned.toLowerCase() : null;
 }
 
-function OrdersEmptyIcon() {
-  return (
-    <svg className="orders-empty__icon" viewBox="0 0 24 24" aria-hidden>
-      <rect x="5.2" y="4.6" width="10.4" height="7.2" rx="1.6" fill="none" stroke="currentColor" strokeWidth="1.85" />
-      <path
-        d="M3.1 13h11.3l1.8-3.2h2.3l2.1 3.2v2.4h-2.2"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.9"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M4.6 9.2h2.7M3.6 11.2h2.9"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.9"
-        strokeLinecap="round"
-      />
-      <circle cx="7.3" cy="16.2" r="2.05" fill="none" stroke="currentColor" strokeWidth="1.9" />
-      <circle cx="16.4" cy="16.2" r="2.05" fill="none" stroke="currentColor" strokeWidth="1.9" />
-    </svg>
-  );
-}
-
 const SKELETON_ROWS = 3;
 
 export function OrdersPage() {
@@ -91,10 +71,14 @@ export function OrdersPage() {
       setIsLoading(true);
       setErrorText(null);
       try {
+        const userSessionToken = await ensureTelegramUserSessionToken();
+        if (!userSessionToken) {
+          throw new Error(TG_IDENTITY_REQUIRED_ERROR);
+        }
         const rows = await listOrdersByUser();
         const orderIds = rows.map((row) => row.id);
         const [shipments, orderItems] = await Promise.all([
-          listOrderShipmentsByOrderIds(orderIds),
+          listOrderShipmentsByOrderIds(orderIds, "user"),
           listOrderItemsByOrderIds(orderIds),
         ]);
         const grouped = shipments.reduce<Record<string, TgOrderShipment[]>>((acc, shipment) => {
@@ -244,9 +228,6 @@ export function OrdersPage() {
 
           {!isLoading && !errorText && orders.length === 0 ? (
             <div className="orders-empty">
-              <div className="orders-empty__iconWrap">
-                <OrdersEmptyIcon />
-              </div>
               <div className="orders-empty__title">У вас пока нет заказов</div>
               <div className="orders-empty__text">Здесь будут отображаться ваши заказы</div>
               <button type="button" className="orders-empty__cta" onClick={() => nav("/catalog")}>
