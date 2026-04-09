@@ -171,8 +171,17 @@ type UploadedPhoto = {
   mediaType: "image" | "video";
 };
 
+type PendingUpload = {
+  localId: string;
+  file: File;
+  photoNo: number;
+  mediaType: "image" | "video";
+  previewUrl: string;
+  status: "pending" | "uploading" | "failed";
+};
+
 function inferMediaTypeFromUrl(url: string): "image" | "video" {
-  return /\.mp4(?:$|\?)/i.test(url) ? "video" : "image";
+  return /\.(mp4|mov)(?:$|\?)/i.test(url) ? "video" : "image";
 }
 
 function inferMediaTypeFromFile(file: File): "image" | "video" | null {
@@ -230,6 +239,8 @@ export function AdminNewPostPage() {
   const [draftUploadId] = useState(() => crypto.randomUUID());
   const [mainPhotos, setMainPhotos] = useState<UploadedPhoto[]>([]);
   const [defectPhotos, setDefectPhotos] = useState<UploadedPhoto[]>([]);
+  const [pendingMainUploads, setPendingMainUploads] = useState<PendingUpload[]>([]);
+  const [pendingDefectUploads, setPendingDefectUploads] = useState<PendingUpload[]>([]);
 
   const [title, setTitle] = useState("");
   const [brand, setBrand] = useState("");
@@ -258,6 +269,8 @@ export function AdminNewPostPage() {
 
   const fetchRequestId = useRef(0);
   const pendingUnsyncedUploadsRef = useRef<UploadedPhoto[]>([]);
+  const pendingMainUploadsRef = useRef<PendingUpload[]>([]);
+  const pendingDefectUploadsRef = useRef<PendingUpload[]>([]);
   const parsedNalichieId = useMemo(() => Number(nalichieIdInput), [nalichieIdInput]);
   const normalizedNalichieId = Number.isInteger(parsedNalichieId) && parsedNalichieId > 0 ? parsedNalichieId : null;
   const costPrice = useMemo(() => {
@@ -292,14 +305,33 @@ export function AdminNewPostPage() {
     if (!query) return BRAND_SUGGESTIONS.slice(0, 8);
     return BRAND_SUGGESTIONS.filter((value) => value.toLowerCase().startsWith(query)).slice(0, 8);
   }, [brand]);
+  const hasPendingUploads = pendingMainUploads.length > 0 || pendingDefectUploads.length > 0;
 
   const mainPreview: PhotoPreviewItem[] = useMemo(
-    () => mainPhotos.map((photo) => ({ id: photo.localId, photoNo: photo.photoNo, url: photo.url, mediaType: "image" })),
-    [mainPhotos],
+    () => [
+      ...mainPhotos.map((photo) => ({ id: photo.localId, photoNo: photo.photoNo, url: photo.url, mediaType: "image" as const, status: "uploaded" as const })),
+      ...pendingMainUploads.map((upload) => ({
+        id: upload.localId,
+        photoNo: upload.photoNo,
+        url: upload.previewUrl,
+        mediaType: upload.mediaType,
+        status: upload.status,
+      })),
+    ],
+    [mainPhotos, pendingMainUploads],
   );
   const defectPreview: PhotoPreviewItem[] = useMemo(
-    () => defectPhotos.map((photo) => ({ id: photo.localId, photoNo: photo.photoNo, url: photo.url, mediaType: photo.mediaType })),
-    [defectPhotos],
+    () => [
+      ...defectPhotos.map((photo) => ({ id: photo.localId, photoNo: photo.photoNo, url: photo.url, mediaType: photo.mediaType, status: "uploaded" as const })),
+      ...pendingDefectUploads.map((upload) => ({
+        id: upload.localId,
+        photoNo: upload.photoNo,
+        url: upload.previewUrl,
+        mediaType: upload.mediaType,
+        status: upload.status,
+      })),
+    ],
+    [defectPhotos, pendingDefectUploads],
   );
 
   const hydrateMainPhotosFromDb = async (postId: string) => {
@@ -335,6 +367,14 @@ export function AdminNewPostPage() {
   }, [mainPhotos, defectPhotos]);
 
   useEffect(() => {
+    pendingMainUploadsRef.current = pendingMainUploads;
+  }, [pendingMainUploads]);
+
+  useEffect(() => {
+    pendingDefectUploadsRef.current = pendingDefectUploads;
+  }, [pendingDefectUploads]);
+
+  useEffect(() => {
     return () => {
       const pending = pendingUnsyncedUploadsRef.current;
       if (!pending.length) return;
@@ -342,14 +382,25 @@ export function AdminNewPostPage() {
     };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      pendingMainUploadsRef.current.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
+      pendingDefectUploadsRef.current.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
+    };
+  }, []);
+
   const resetFormToEmpty = () => {
     fetchRequestId.current += 1;
+    pendingMainUploads.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
+    pendingDefectUploads.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
     setPostType("warehouse");
     setNalichieIdInput("");
     setItemData(null);
     setCurrentPost(null);
     setMainPhotos([]);
     setDefectPhotos([]);
+    setPendingMainUploads([]);
+    setPendingDefectUploads([]);
     setTitle("");
     setBrand("");
     setDescription("");
@@ -546,11 +597,15 @@ export function AdminNewPostPage() {
   const onPostTypeChange = (nextType: TgPostType) => {
     setPostType(nextType);
     if (nextType === "consignment") {
+      pendingMainUploads.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
+      pendingDefectUploads.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
       setNalichieIdInput("");
       setItemData(null);
       setCurrentPost(null);
       setMainPhotos([]);
       setDefectPhotos([]);
+      setPendingMainUploads([]);
+      setPendingDefectUploads([]);
       setFieldError(null);
       return;
     }
@@ -642,7 +697,7 @@ export function AdminNewPostPage() {
     }
   };
 
-  const uploadFiles = async (files: File[], kind: "main" | "defect") => {
+  const stageSelectedFiles = (files: File[], kind: "main" | "defect") => {
     setErrorText(null);
     setSuccessText(null);
     if (!files.length) {
@@ -650,66 +705,130 @@ export function AdminNewPostPage() {
       return;
     }
 
-    if (kind === "main") setIsUploadingPhotos(true);
-    if (kind === "defect") setIsUploadingDefects(true);
+    const uploadedList = kind === "main" ? mainPhotos : defectPhotos;
+    const pendingList = kind === "main" ? pendingMainUploads : pendingDefectUploads;
+    let nextPhotoNo = [...uploadedList, ...pendingList].reduce((max, photo) => Math.max(max, photo.photoNo), 0) + 1;
+    const staged: PendingUpload[] = [];
 
-    try {
-      const list = kind === "main" ? mainPhotos : defectPhotos;
-      let nextPhotoNo = list.reduce((max, photo) => Math.max(max, photo.photoNo), 0) + 1;
-      const postIdForUpload = currentPost?.id ?? draftUploadId;
-      const itemIdForStorage = postType === "warehouse" ? (currentPost?.item_id ?? normalizedNalichieId) : null;
-
-      for (const file of files) {
-        const mediaType = inferMediaTypeFromFile(file);
-        if (!mediaType) {
-          throw new Error(`Неподдерживаемый тип файла: ${file.name}`);
-        }
-        if (kind === "main" && mediaType !== "image") {
-          throw new Error("Для основных фото разрешены только изображения.");
-        }
-        if (kind === "defect" && !(mediaType === "image" || mediaType === "video")) {
-          throw new Error("Для медиа дефектов разрешены только изображения и MP4/MOV-видео.");
-        }
-        const photoNo = nextPhotoNo;
-        nextPhotoNo += 1;
-        const { url, publicUrl, key } = await getYcPresignedPut(postIdForUpload, itemIdForStorage, file, photoNo, kind);
-
-        const uploadRes = await fetch(url, {
-          method: "PUT",
-          headers: { "Content-Type": file.type || "application/octet-stream" },
-          body: file,
-        });
-
-        if (!(uploadRes.status === 200 || uploadRes.status === 204)) {
-          throw new Error(`Ошибка загрузки файла ${file.name}: ${uploadRes.status}`);
-        }
-
-        const payload: UploadedPhoto = {
-          localId: crypto.randomUUID(),
-          photoNo,
-          url: publicUrl,
-          key,
-          mediaType,
-        };
-        if (kind === "main") setMainPhotos((prev) => [...prev, payload]);
-        if (kind === "defect") setDefectPhotos((prev) => [...prev, payload]);
+    for (const file of files) {
+      const mediaType = inferMediaTypeFromFile(file);
+      if (!mediaType) {
+        setErrorText(`Неподдерживаемый тип файла: ${file.name}`);
+        continue;
       }
-
-      setSuccessText(kind === "main" ? "Основные фотографии загружены." : "Медиа дефектов загружены.");
-    } catch (error) {
-      const message = (error as Error).message ?? "";
-      if (message.includes("ALREADY_EXISTS") || message.includes("409")) {
-        setErrorText("Медиа с таким номером уже загружено.");
-      } else {
-        setErrorText(`Ошибка загрузки медиа: ${message || "неизвестная ошибка"}`);
+      if (kind === "main" && mediaType !== "image") {
+        setErrorText("Для основных фото разрешены только изображения.");
+        continue;
       }
-    } finally {
-      if (kind === "main") setIsUploadingPhotos(false);
-      if (kind === "defect") setIsUploadingDefects(false);
+      const previewUrl = URL.createObjectURL(file);
+      staged.push({
+        localId: crypto.randomUUID(),
+        file,
+        photoNo: nextPhotoNo,
+        mediaType,
+        previewUrl,
+        status: "pending",
+      });
+      nextPhotoNo += 1;
     }
+
+    if (!staged.length) return;
+    if (kind === "main") setPendingMainUploads((prev) => [...prev, ...staged]);
+    if (kind === "defect") setPendingDefectUploads((prev) => [...prev, ...staged]);
   };
 
+  const uploadPendingItem = async (item: PendingUpload, kind: "main" | "defect") => {
+    const postIdForUpload = currentPost?.id ?? draftUploadId;
+    const itemIdForStorage = postType === "warehouse" ? (currentPost?.item_id ?? normalizedNalichieId) : null;
+    const { url, publicUrl, key } = await getYcPresignedPut(postIdForUpload, itemIdForStorage, item.file, item.photoNo, kind);
+
+    const uploadRes = await fetch(url, {
+      method: "PUT",
+      headers: { "Content-Type": item.file.type || "application/octet-stream" },
+      body: item.file,
+    });
+
+    if (!(uploadRes.status === 200 || uploadRes.status === 204)) {
+      throw new Error(`Ошибка загрузки файла ${item.file.name}: ${uploadRes.status}`);
+    }
+
+    const payload: UploadedPhoto = {
+      localId: crypto.randomUUID(),
+      photoNo: item.photoNo,
+      url: publicUrl,
+      key,
+      mediaType: item.mediaType,
+    };
+    if (kind === "main") setMainPhotos((prev) => [...prev, payload]);
+    if (kind === "defect") setDefectPhotos((prev) => [...prev, payload]);
+    setSuccessText(kind === "main" ? "Основные фотографии загружены." : "Медиа дефектов загружены.");
+  };
+
+  useEffect(() => {
+    if (isUploadingPhotos) return;
+    const next = pendingMainUploads.find((entry) => entry.status === "pending");
+    if (!next) return;
+    setPendingMainUploads((prev) => prev.map((entry) => (
+      entry.localId === next.localId ? { ...entry, status: "uploading" } : entry
+    )));
+    setIsUploadingPhotos(true);
+    void uploadPendingItem(next, "main")
+      .then(() => {
+        URL.revokeObjectURL(next.previewUrl);
+        setPendingMainUploads((prev) => prev.filter((entry) => entry.localId !== next.localId));
+      })
+      .catch((error) => {
+        const message = (error as Error).message ?? "";
+        if (message.includes("ALREADY_EXISTS") || message.includes("409")) {
+          setErrorText("Медиа с таким номером уже загружено.");
+        } else {
+          setErrorText(`Ошибка загрузки медиа: ${message || "неизвестная ошибка"}`);
+        }
+        setPendingMainUploads((prev) => prev.map((entry) => (
+          entry.localId === next.localId ? { ...entry, status: "failed" } : entry
+        )));
+      })
+      .finally(() => {
+        setIsUploadingPhotos(false);
+      });
+  }, [pendingMainUploads, isUploadingPhotos, currentPost?.id, currentPost?.item_id, draftUploadId, postType, normalizedNalichieId]);
+
+  useEffect(() => {
+    if (isUploadingDefects) return;
+    const next = pendingDefectUploads.find((entry) => entry.status === "pending");
+    if (!next) return;
+    setPendingDefectUploads((prev) => prev.map((entry) => (
+      entry.localId === next.localId ? { ...entry, status: "uploading" } : entry
+    )));
+    setIsUploadingDefects(true);
+    void uploadPendingItem(next, "defect")
+      .then(() => {
+        URL.revokeObjectURL(next.previewUrl);
+        setPendingDefectUploads((prev) => prev.filter((entry) => entry.localId !== next.localId));
+      })
+      .catch((error) => {
+        const message = (error as Error).message ?? "";
+        if (message.includes("ALREADY_EXISTS") || message.includes("409")) {
+          setErrorText("Медиа с таким номером уже загружено.");
+        } else {
+          setErrorText(`Ошибка загрузки медиа: ${message || "неизвестная ошибка"}`);
+        }
+        setPendingDefectUploads((prev) => prev.map((entry) => (
+          entry.localId === next.localId ? { ...entry, status: "failed" } : entry
+        )));
+      })
+      .finally(() => {
+        setIsUploadingDefects(false);
+      });
+  }, [pendingDefectUploads, isUploadingDefects, currentPost?.id, currentPost?.item_id, draftUploadId, postType, normalizedNalichieId]);
+
   const onDeleteMainPhoto = async (localId: string) => {
+    const pending = pendingMainUploads.find((entry) => entry.localId === localId);
+    if (pending) {
+      URL.revokeObjectURL(pending.previewUrl);
+      setPendingMainUploads((prev) => prev.filter((entry) => entry.localId !== localId));
+      return;
+    }
     const photo = mainPhotos.find((entry) => entry.localId === localId);
     if (!photo) return;
     setErrorText(null);
@@ -728,6 +847,12 @@ export function AdminNewPostPage() {
   };
 
   const onDeleteDefectPhoto = async (localId: string) => {
+    const pending = pendingDefectUploads.find((entry) => entry.localId === localId);
+    if (pending) {
+      URL.revokeObjectURL(pending.previewUrl);
+      setPendingDefectUploads((prev) => prev.filter((entry) => entry.localId !== localId));
+      return;
+    }
     const photo = defectPhotos.find((entry) => entry.localId === localId);
     if (!photo) return;
     setErrorText(null);
@@ -875,9 +1000,9 @@ export function AdminNewPostPage() {
           inputId="post-main-files"
           selectLabel={"Выбрать файлы"}
           items={mainPreview}
-          loadingText={isUploadingPhotos ? "Загрузка фотографий..." : null}
+          loadingText={isUploadingPhotos ? "Загрузка фотографий..." : pendingMainUploads.length ? "Файлы добавлены в очередь." : null}
           isBusy={isUploadingPhotos || isSaving || isPublishingNow || isScheduling}
-          onSelect={(files) => void uploadFiles(files, "main")}
+          onSelect={(files) => stageSelectedFiles(files, "main")}
           onRemove={(id) => void onDeleteMainPhoto(id)}
         />
 
@@ -1040,10 +1165,10 @@ export function AdminNewPostPage() {
                   inputId="post-defect-files"
                   selectLabel={"Выбрать фото/видео дефектов"}
                   items={defectPreview}
-                  loadingText={isUploadingDefects ? "Загрузка медиа дефектов..." : null}
+                  loadingText={isUploadingDefects ? "Загрузка медиа дефектов..." : pendingDefectUploads.length ? "Файлы добавлены в очередь." : null}
                   accept="image/*,video/mp4,video/quicktime,.mov"
                   isBusy={isUploadingDefects || isSaving || isPublishingNow || isScheduling}
-                  onSelect={(files) => void uploadFiles(files, "defect")}
+                  onSelect={(files) => stageSelectedFiles(files, "defect")}
                   onRemove={(id) => void onDeleteDefectPhoto(id)}
                 />
               </>
@@ -1086,13 +1211,13 @@ export function AdminNewPostPage() {
         </div>
 
         <div style={{ display: "grid", gap: 8 }}>
-          <Button onClick={() => void saveAsDraft()} disabled={isSaving || isUploadingPhotos || isUploadingDefects || isPublishingNow || isScheduling || isUnscheduling}>
+          <Button onClick={() => void saveAsDraft()} disabled={isSaving || isUploadingPhotos || isUploadingDefects || hasPendingUploads || isPublishingNow || isScheduling || isUnscheduling}>
             {isSaving ? "Сохраняем..." : "Сохранить черновик"}
           </Button>
-          <Button variant="secondary" onClick={() => void onSchedule()} disabled={isScheduling || isSaving || isUnscheduling}>
+          <Button variant="secondary" onClick={() => void onSchedule()} disabled={isScheduling || isSaving || isUploadingPhotos || isUploadingDefects || hasPendingUploads || isUnscheduling}>
             {isScheduling ? "Планируем..." : scheduleButtonLabel}
           </Button>
-          <Button variant="secondary" onClick={() => void onPublishNow()} disabled={isPublishingNow || isSaving || isUnscheduling}>
+          <Button variant="secondary" onClick={() => void onPublishNow()} disabled={isPublishingNow || isSaving || isUploadingPhotos || isUploadingDefects || hasPendingUploads || isUnscheduling}>
             {isPublishingNow ? "Публикуем..." : "Опубликовать пост"}
           </Button>
           {currentPost?.status === "scheduled" ? (

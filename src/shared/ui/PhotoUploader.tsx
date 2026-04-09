@@ -6,6 +6,7 @@ export type PhotoPreviewItem = {
   photoNo: number;
   url: string;
   mediaType?: "image" | "video";
+  status?: "pending" | "uploading" | "failed" | "uploaded";
 };
 
 type Props = {
@@ -65,7 +66,18 @@ export function PhotoUploader({
             .sort((a, b) => a.photoNo - b.photoNo)
             .map((photo) => (
               <div key={photo.id} style={{ display: "grid", gap: 6 }}>
-                <div style={{ fontSize: 13, color: "var(--muted)" }}>{photo.mediaType === "video" ? "Видео" : "Фото"} {photo.photoNo}</div>
+                <div style={{ fontSize: 13, color: "var(--muted)" }}>
+                  {photo.mediaType === "video" ? "Видео" : "Фото"} {photo.photoNo}
+                </div>
+                {photo.status && photo.status !== "uploaded" ? (
+                  <div style={{ fontSize: 12, color: photo.status === "failed" ? "#b42318" : "var(--muted)" }}>
+                    {photo.status === "pending"
+                      ? "Ожидает загрузки"
+                      : photo.status === "uploading"
+                      ? "Загрузка..."
+                      : "Ошибка загрузки"}
+                  </div>
+                ) : null}
                 {photo.mediaType === "video" ? (
                   <video
                     src={photo.url}
