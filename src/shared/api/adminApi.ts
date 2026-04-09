@@ -1,4 +1,6 @@
 import { supabase } from "./supabaseClient";
+import { TG_IDENTITY_REQUIRED_ERROR } from "../auth/tgUser";
+import { ensureTelegramUserSessionToken } from "../auth/tgUserSession";
 
 type AdminLoginResponse = {
   session_token?: string;
@@ -53,4 +55,36 @@ export async function adminMe(session_token: string): Promise<{ is_admin: boolea
   }
 
   return { is_admin: Boolean(data?.is_admin) };
+}
+
+export async function bootstrapAdminSessionFromTelegramUserSession(): Promise<{ session_token: string; expires_at: string }> {
+  const userSessionToken = await ensureTelegramUserSessionToken();
+  if (!userSessionToken) {
+    throw new Error(TG_IDENTITY_REQUIRED_ERROR);
+  }
+
+  const { data, error } = await supabase.functions.invoke<{ ok?: boolean; session_token?: string; expires_at?: string; error?: string }>(
+    "tg_admin_session_bootstrap",
+    {
+      body: {},
+      headers: {
+        "x-tg-user-session": userSessionToken,
+      },
+    },
+  );
+
+  if (error) {
+    throw new Error(error.message || "ADMIN_BOOTSTRAP_FAILED");
+  }
+
+  const sessionToken = String(data?.session_token ?? "").trim();
+  const expiresAt = String(data?.expires_at ?? "").trim();
+  if (!sessionToken || !expiresAt) {
+    throw new Error(String(data?.error ?? "ADMIN_BOOTSTRAP_FAILED"));
+  }
+
+  return {
+    session_token: sessionToken,
+    expires_at: expiresAt,
+  };
 }

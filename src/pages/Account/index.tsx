@@ -13,7 +13,7 @@ export function AccountPage() {
   const nav = useNavigate();
   const isDbAdmin = useAccountStore((s) => s.profile.isAdmin);
   const { mode, setMode } = useThemeStore();
-  const { load, clearAdmin } = useAdminStore();
+  const { load, isAdmin, isLoading } = useAdminStore();
   const canUseAdminAccess = canUseAdminSessionByContext(isDbAdmin);
 
   useEffect(() => {
@@ -23,12 +23,6 @@ export function AccountPage() {
   useEffect(() => {
     console.log("[admin-access][AccountPage]", getAdminAccessDebugState(isDbAdmin));
   }, [isDbAdmin, canUseAdminAccess]);
-
-  useEffect(() => {
-    if (!canUseAdminAccess) {
-      clearAdmin();
-    }
-  }, [canUseAdminAccess, clearAdmin]);
 
   return (
     <Page>
@@ -58,11 +52,21 @@ export function AccountPage() {
         </Card>
 
         <div className="account-list">
-          {canUseAdminAccess ? (
+          {canUseAdminAccess && isAdmin ? (
             <ListItem
               title="Админка"
               subtitle="Управление данными"
               onClick={() => nav("/admin")}
+              position="single"
+              divider={false}
+              chevron={false}
+            />
+          ) : null}
+          {canUseAdminAccess && !isAdmin && isLoading ? (
+            <ListItem
+              title="Админка"
+              subtitle="Проверяем доступ..."
+              onClick={() => undefined}
               position="single"
               divider={false}
               chevron={false}
@@ -123,3 +127,4 @@ export function AccountPage() {
 }
 
 export default AccountPage;
+

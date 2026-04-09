@@ -51,7 +51,6 @@ export const useAdminStore = create<State>((set) => ({
     const canUseByContext = canUseAdminSessionByContext(isDbAdmin);
     console.log("[admin-access][useAdminStore.load]", getAdminAccessDebugState(isDbAdmin));
     if (!canUseByContext) {
-      writeSessionToken(null);
       set({ isAdmin: false, isLoading: false });
       return;
     }

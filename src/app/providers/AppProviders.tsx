@@ -3,6 +3,7 @@ import { useAccountStore } from "../../entities/account/model/useAccountStore";
 import { useAdminStore } from "../../entities/account/model/useAdminStore";
 import { useCartStore } from "../../entities/cart/model/useCartStore";
 import { useFavoritesStore } from "../../entities/favorites/model/useFavoritesStore";
+import { bootstrapAdminSessionFromTelegramUserSession } from "../../shared/api/adminApi";
 import { verifyTelegramIdentity } from "../../shared/api/telegramIdentityApi";
 import { upsertTelegramUser } from "../../shared/api/telegramUsersApi";
 import TgDebugPanel from "../../shared/debug/TgDebugPanel";
@@ -125,6 +126,15 @@ export function AppProviders({ children }: { children: ReactNode }) {
             // no-op
           }
           useAdminStore.getState().setDbAdmin(Boolean(row.is_admin));
+          if (Boolean(row.is_admin)) {
+            try {
+              const adminSession = await bootstrapAdminSessionFromTelegramUserSession();
+              useAdminStore.getState().setSessionToken(adminSession.session_token);
+            } catch (error) {
+              const message = error instanceof Error ? error.message : "ADMIN_SESSION_BOOTSTRAP_FAILED";
+              console.log(`[tg-user-bootstrap] admin session bootstrap failed: ${message}`);
+            }
+          }
           setTgDebugState({
             currentUserLoaded: true,
             currentUserTelegramIdPresent: Boolean(row.telegram_id),
