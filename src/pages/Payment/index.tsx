@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { useBlocker, useLocation, useNavigate } from "react-router-dom";
 import { isTgIdentityRequiredError, TG_IDENTITY_REQUIRED_MESSAGE } from "../../shared/auth/tgUser";
+import { useUserSessionReadiness } from "../../shared/auth/useUserSessionReadiness";
 import { getPaymentProofPutPresign } from "../../shared/api/paymentProofApi";
 import {
   cancelPendingOrder,
@@ -30,6 +31,7 @@ function formatTimeLeft(seconds: number): string {
 export function PaymentPage() {
   const nav = useNavigate();
   const location = useLocation();
+  const { isReady, isChecking, errorText: readinessErrorText } = useUserSessionReadiness();
   const queryOrderId = useMemo(() => new URLSearchParams(location.search).get("order"), [location.search]);
   const fallbackOrderId = readLastOrderId();
   const orderId = queryOrderId || fallbackOrderId;
@@ -45,6 +47,7 @@ export function PaymentPage() {
   const [errorText, setErrorText] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!isReady) return;
     if (!orderId) return;
 
     const load = async () => {
@@ -66,7 +69,7 @@ export function PaymentPage() {
     };
 
     void load();
-  }, [orderId]);
+  }, [isReady, orderId]);
 
   useEffect(() => {
     if (!file || !file.type.startsWith("image/")) {
@@ -110,6 +113,30 @@ export function PaymentPage() {
   );
 
   const navigationBlocker = useBlocker(hasPendingPaymentOrder);
+
+  if (isChecking) {
+    return (
+      <Page>
+        <div className="payment-page">
+          <div style={{ color: "var(--muted)" }}>Загрузка...</div>
+        </div>
+      </Page>
+    );
+  }
+
+  if (readinessErrorText) {
+    return (
+      <Page>
+        <div className="payment-page">
+          <Card className="ui-card--padded">
+            <CardTitle>Ошибка доступа</CardTitle>
+            <CardText>{readinessErrorText}</CardText>
+          </Card>
+          <Button variant="secondary" onClick={() => nav("/catalog")}>В каталог</Button>
+        </div>
+      </Page>
+    );
+  }
 
   const onSubmitPaymentProof = async () => {
     if (!orderId || !order) {

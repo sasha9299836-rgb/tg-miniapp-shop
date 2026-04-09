@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useCartStore } from "../../entities/cart/model/useCartStore";
 import { useProductsStore } from "../../entities/product/model/useProductsStore";
 import { getCurrentTgUserId, isTgIdentityRequiredError, TG_IDENTITY_REQUIRED_MESSAGE } from "../../shared/auth/tgUser";
+import { useUserSessionReadiness } from "../../shared/auth/useUserSessionReadiness";
 import {
   calculateDeliveryQuote,
   createOrder,
@@ -46,6 +47,7 @@ export function CheckoutPage() {
   const cart = useCartStore();
   const products = useProductsStore((state) => state.products);
   const loadProducts = useProductsStore((state) => state.load);
+  const { isReady, isChecking, errorText: readinessErrorText } = useUserSessionReadiness();
 
   const [addresses, setAddresses] = useState<TgAddressPreset[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
@@ -63,16 +65,19 @@ export function CheckoutPage() {
   const [isPrivacyAccepted, setIsPrivacyAccepted] = useState(false);
 
   useEffect(() => {
+    if (!isReady) return;
     if (!products.length) void loadProducts();
     void cart.load();
-  }, [products.length, loadProducts]);
+  }, [isReady, products.length, loadProducts]);
 
   useEffect(() => {
+    if (!isReady) return;
     const mapped = products.map((product) => ({ id: product.id, postId: product.postId }));
     cart.registerCatalogItems(mapped);
-  }, [products]);
+  }, [isReady, products]);
 
   useEffect(() => {
+    if (!isReady) return;
     const availablePostIds = products
       .filter((product) => product.saleStatus === "available")
       .map((product) => String(product.postId ?? "").trim())
@@ -82,11 +87,12 @@ export function CheckoutPage() {
       if (removed > 0) {
         const note = cart.consumeNotice();
         if (note) setErrorText(note);
-      }
-    });
-  }, [products]);
+        }
+      });
+  }, [isReady, products]);
 
   useEffect(() => {
+    if (!isReady) return;
     const loadAddresses = async () => {
       try {
         const rows = await listAddressPresets();
@@ -116,7 +122,7 @@ export function CheckoutPage() {
       }
     };
     void loadAddresses();
-  }, []);
+  }, [isReady]);
 
   const selectedAddress = useMemo(
     () => addresses.find((address) => address.id === selectedAddressId) ?? null,
@@ -164,6 +170,7 @@ export function CheckoutPage() {
   );
 
   useEffect(() => {
+    if (!isReady) return;
     const run = async () => {
       if (
         !quotePostIds.length ||
@@ -193,7 +200,7 @@ export function CheckoutPage() {
       }
     };
     void run();
-  }, [quotePostIds, selectedAddress?.city_code, selectedAddress?.pvz_code]);
+  }, [isReady, quotePostIds, selectedAddress?.city_code, selectedAddress?.pvz_code]);
 
   const itemsSum = useMemo(
     () => itemsWithProducts.reduce((sum, item) => sum + item.product.price * item.qty, 0),
@@ -203,6 +210,27 @@ export function CheckoutPage() {
   const deliveryTotalFee = deliveryQuote?.delivery_total_fee_rub ?? 0;
   const total = itemsSum + deliveryTotalFee;
   const isLegalAccepted = isOfferAccepted && isPrivacyAccepted;
+
+  if (isChecking) {
+    return (
+      <Page>
+        <div className="checkout-page">
+          <div style={{ color: "var(--muted)" }}>Загрузка...</div>
+        </div>
+      </Page>
+    );
+  }
+
+  if (readinessErrorText) {
+    return (
+      <Page>
+        <div className="checkout-page">
+          <div style={{ color: "#b42318" }}>{readinessErrorText}</div>
+          <Button variant="secondary" onClick={() => nav("/catalog")}>В каталог</Button>
+        </div>
+      </Page>
+    );
+  }
 
   const validate = (): string | null => {
     const tgUserId = getCurrentTgUserId();

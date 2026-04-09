@@ -8,6 +8,7 @@ import {
   type TgUserRecord,
 } from "../../../shared/api/telegramUsersApi";
 import { listAddressPresets } from "../../../shared/api/addressPresetsApi";
+import { useUserSessionReadiness } from "../../../shared/auth/useUserSessionReadiness";
 import { useTelegramUser } from "../../../shared/auth/useTelegramUser";
 import { normalizeFio } from "../../../shared/lib/formatFio";
 import { extractNationalDigits } from "../../../shared/lib/formatPhone";
@@ -59,6 +60,7 @@ export function ProfilePage() {
   const { profile, setProfile } = useAccountStore();
   const setDbAdmin = useAdminStore((s) => s.setDbAdmin);
   const tgUser = useTelegramUser();
+  const { isReady, isChecking, errorText: readinessErrorText } = useUserSessionReadiness();
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -69,6 +71,7 @@ export function ProfilePage() {
   );
 
   useEffect(() => {
+    if (!isReady) return;
     let active = true;
     setIsLoadingProfile(true);
     void loadTelegramUserProfile()
@@ -127,7 +130,26 @@ export function ProfilePage() {
     return () => {
       active = false;
     };
-  }, [setDbAdmin, setProfile]);
+  }, [isReady, setDbAdmin, setProfile]);
+
+  if (isChecking) {
+    return (
+      <Page title="Личные данные">
+        <div style={{ color: "var(--muted)" }}>Загрузка...</div>
+      </Page>
+    );
+  }
+
+  if (readinessErrorText) {
+    return (
+      <Page title="Личные данные">
+        <div style={{ color: "#b42318" }}>{readinessErrorText}</div>
+        <Button variant="secondary" onClick={() => nav(-1)}>
+          Назад
+        </Button>
+      </Page>
+    );
+  }
 
   const handleSave = async () => {
     setFormError(null);

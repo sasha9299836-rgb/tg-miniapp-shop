@@ -4,6 +4,7 @@ import { useProductsStore } from "../../entities/product/model/useProductsStore"
 import { useFavoritesStore } from "../../entities/favorites/model/useFavoritesStore";
 import { useCartStore } from "../../entities/cart/model/useCartStore";
 import { getCatalogProductsByPostIds } from "../../shared/api/adminPostsApi";
+import { useUserSessionReadiness } from "../../shared/auth/useUserSessionReadiness";
 import type { Product } from "../../shared/types/product";
 import { EmptyState } from "../../shared/ui/EmptyState";
 import { Button } from "../../shared/ui/Button";
@@ -16,16 +17,19 @@ export function FavoritesPage() {
   const { products, load } = useProductsStore();
   const fav = useFavoritesStore();
   const cart = useCartStore();
+  const { isReady, isChecking, errorText: readinessErrorText } = useUserSessionReadiness();
   const [itemsByFavorites, setItemsByFavorites] = useState<Product[]>([]);
 
   useEffect(() => {
+    if (!isReady) return;
     void load();
-  }, [load]);
+  }, [isReady, load]);
 
   useEffect(() => {
+    if (!isReady) return;
     void fav.load();
     void cart.load();
-  }, []);
+  }, [isReady]);
 
   useEffect(() => {
     const mapped = products.map((product) => ({ id: product.id, postId: product.postId }));
@@ -34,6 +38,7 @@ export function FavoritesPage() {
   }, [products]);
 
   useEffect(() => {
+    if (!isReady) return;
     const run = async () => {
       if (!fav.postIds.length) {
         setItemsByFavorites([]);
@@ -50,7 +55,30 @@ export function FavoritesPage() {
       }
     };
     void run();
-  }, [fav.postIds]);
+  }, [fav.postIds, isReady]);
+
+  if (isChecking) {
+    return (
+      <Page>
+        <div className="favorites-page">
+          <div style={{ color: "var(--muted)" }}>Загрузка...</div>
+        </div>
+      </Page>
+    );
+  }
+
+  if (readinessErrorText) {
+    return (
+      <Page>
+        <div className="favorites-page">
+          <div style={{ color: "#b42318" }}>{readinessErrorText}</div>
+          <div className="favorites-actions">
+            <Button onClick={() => nav("/catalog")}>В каталог</Button>
+          </div>
+        </div>
+      </Page>
+    );
+  }
 
   const items = useMemo(() => {
     const map = new Map(itemsByFavorites.map((item) => [item.postId, item]));

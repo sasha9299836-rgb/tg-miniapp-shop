@@ -8,6 +8,7 @@ import { ListItem } from "../../../shared/ui/ListItem";
 import { FioInput } from "../../../shared/ui/inputs/FioInput";
 import { PhoneInput } from "../../../shared/ui/inputs/PhoneInput";
 import { isTgIdentityRequiredError, TG_IDENTITY_REQUIRED_MESSAGE } from "../../../shared/auth/tgUser";
+import { useUserSessionReadiness } from "../../../shared/auth/useUserSessionReadiness";
 import type { PickupPoint } from "../../../shared/api/shipping.repository";
 import { cdekProxyShippingRepository as shipping } from "../../../shared/api/shipping.cdekProxy";
 import {
@@ -155,6 +156,7 @@ function buildUniqueProfileName(addresses: TgAddressPreset[]): string {
 
 export function AddressesPage() {
   const nav = useNavigate();
+  const { isReady, isChecking, errorText: readinessErrorText } = useUserSessionReadiness();
 
   const [addresses, setAddresses] = useState<TgAddressPreset[]>([]);
   const [userProfile, setUserProfile] = useState<TgUserRecord | null>(null);
@@ -231,6 +233,7 @@ export function AddressesPage() {
   };
 
   useEffect(() => {
+    if (!isReady) return;
     const load = async () => {
       setIsLoading(true);
       setErrorText(null);
@@ -252,7 +255,7 @@ export function AddressesPage() {
       }
     };
     void load();
-  }, []);
+  }, [isReady]);
 
   useEffect(() => {
     if (!noticeText) return;
@@ -562,6 +565,23 @@ export function AddressesPage() {
       setDeleteLoadingId(null);
     }
   };
+
+  if (isChecking) {
+    return (
+      <Page title="Адреса">
+        <div className="address-muted">Загрузка...</div>
+      </Page>
+    );
+  }
+
+  if (readinessErrorText) {
+    return (
+      <Page title="Адреса">
+        <div className="address-error">{readinessErrorText}</div>
+        <Button variant="secondary" onClick={() => nav(-1)}>Назад</Button>
+      </Page>
+    );
+  }
 
   if (mode === "details") {
     if (!isEditing) {

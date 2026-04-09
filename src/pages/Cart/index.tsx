@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useCartStore } from "../../entities/cart/model/useCartStore";
 import { useProductsStore } from "../../entities/product/model/useProductsStore";
 import { isTgIdentityRequiredError, TG_IDENTITY_REQUIRED_MESSAGE } from "../../shared/auth/tgUser";
+import { useUserSessionReadiness } from "../../shared/auth/useUserSessionReadiness";
 import {
   listAddressPresets,
   readSelectedPresetId,
@@ -23,6 +24,7 @@ export function CartPage() {
   const nav = useNavigate();
   const cart = useCartStore();
   const { products, load } = useProductsStore();
+  const { isReady, isChecking, errorText: readinessErrorText } = useUserSessionReadiness();
   const [presets, setPresets] = useState<TgAddressPreset[]>([]);
   const [selectedPreset, setSelectedPreset] = useState<TgAddressPreset | null>(null);
   const [presetError, setPresetError] = useState<string | null>(null);
@@ -31,16 +33,19 @@ export function CartPage() {
   const [isDeliveryQuoteLoading, setIsDeliveryQuoteLoading] = useState(false);
 
   useEffect(() => {
+    if (!isReady) return;
     void load();
     void cart.load();
-  }, [load]);
+  }, [isReady, load]);
 
   useEffect(() => {
+    if (!isReady) return;
     const mapped = products.map((product) => ({ id: product.id, postId: product.postId }));
     cart.registerCatalogItems(mapped);
-  }, [products]);
+  }, [isReady, products]);
 
   useEffect(() => {
+    if (!isReady) return;
     const availablePostIds = products
       .filter((product) => product.saleStatus === "available")
       .map((product) => String(product.postId ?? "").trim())
@@ -56,9 +61,10 @@ export function CartPage() {
         }
       }
     });
-  }, [products]);
+  }, [isReady, products]);
 
   useEffect(() => {
+    if (!isReady) return;
     const loadPresets = async () => {
       try {
         setPresetError(null);
@@ -82,7 +88,7 @@ export function CartPage() {
     };
 
     void loadPresets();
-  }, []);
+  }, [isReady]);
 
   const lines = useMemo(() => {
     return cart.items
@@ -117,6 +123,7 @@ export function CartPage() {
   );
 
   useEffect(() => {
+    if (!isReady) return;
     const run = async () => {
       if (!quotePostIds.length || !selectedPreset?.city_code || !selectedPreset?.pvz_code) {
         setDeliveryQuote(null);
@@ -142,12 +149,35 @@ export function CartPage() {
       }
     };
     void run();
-  }, [quotePostIds, selectedPreset?.city_code, selectedPreset?.pvz_code]);
+  }, [isReady, quotePostIds, selectedPreset?.city_code, selectedPreset?.pvz_code]);
 
   const itemsSum = useMemo(() => lines.reduce((sum, line) => sum + line.lineSum, 0), [lines]);
   const deliveryTotalFee = deliveryQuote?.delivery_total_fee_rub ?? 0;
   const total = itemsSum + deliveryTotalFee;
   const totalQty = cart.totalQty();
+
+  if (isChecking) {
+    return (
+      <Page>
+        <div className="cart-page">
+          <div style={{ color: "var(--muted)" }}>Загрузка...</div>
+        </div>
+      </Page>
+    );
+  }
+
+  if (readinessErrorText) {
+    return (
+      <Page>
+        <div className="cart-page">
+          <div style={{ color: "#b42318" }}>{readinessErrorText}</div>
+          <div className="cart-actions">
+            <Button onClick={() => nav("/catalog")}>В каталог</Button>
+          </div>
+        </div>
+      </Page>
+    );
+  }
 
   if (!cart.items.length) {
     return (
