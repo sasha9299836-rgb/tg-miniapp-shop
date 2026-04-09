@@ -668,7 +668,7 @@ export function AdminNewPostPage() {
           throw new Error("Для основных фото разрешены только изображения.");
         }
         if (kind === "defect" && !(mediaType === "image" || mediaType === "video")) {
-          throw new Error("Для медиа дефектов разрешены только изображения и MP4-видео.");
+          throw new Error("Для медиа дефектов разрешены только изображения и MP4/MOV-видео.");
         }
         const photoNo = nextPhotoNo;
         nextPhotoNo += 1;

@@ -245,7 +245,7 @@ Deno.serve(async (req) => {
 
     const basePrefix = itemId > 0 ? `${itemId}` : `no-item/${postId}`;
     const key = kind === "defect"
-      ? `${basePrefix}/defects/${ext === "mp4" ? "videos" : "images"}/${photoNo}.${ext}`
+      ? `${basePrefix}/defects/${(ext === "mp4" || ext === "mov") ? "videos" : "images"}/${photoNo}.${ext}`
       : `${basePrefix}/${photoNo}.${ext}`;
     if (!isAllowedStorageKey(key)) return json({ error: "BAD_PAYLOAD" }, 400);
 
