@@ -57,6 +57,7 @@ function extFromContentType(contentType: string): string | null {
   if (value.includes("image/png")) return "png";
   if (value.includes("image/webp")) return "webp";
   if (value.includes("video/mp4")) return "mp4";
+  if (value.includes("video/quicktime")) return "mov";
   return null;
 }
 
@@ -65,7 +66,7 @@ function normalizeExt(ext: string | null): string | null {
   const cleaned = ext.toLowerCase().replace(/^\./, "").trim();
   if (!cleaned) return null;
   if (cleaned === "jpeg") return "jpg";
-  if (["jpg", "png", "webp", "mp4"].includes(cleaned)) return cleaned;
+  if (["jpg", "png", "webp", "mp4", "mov"].includes(cleaned)) return cleaned;
   return null;
 }
 
@@ -95,11 +96,11 @@ function isAllowedStorageKey(key: string): boolean {
   const itemMain = /^\d+\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
   const itemDefectLegacy = /^\d+\/defects\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
   const itemDefectImage = /^\d+\/defects\/images\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
-  const itemDefectVideo = /^\d+\/defects\/videos\/([1-9]|[1-4]\d|50)\.mp4$/i;
+  const itemDefectVideo = /^\d+\/defects\/videos\/([1-9]|[1-4]\d|50)\.(mp4|mov)$/i;
   const noItemMain = /^no-item\/[0-9a-f-]{36}\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
   const noItemDefectLegacy = /^no-item\/[0-9a-f-]{36}\/defects\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
   const noItemDefectImage = /^no-item\/[0-9a-f-]{36}\/defects\/images\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
-  const noItemDefectVideo = /^no-item\/[0-9a-f-]{36}\/defects\/videos\/([1-9]|[1-4]\d|50)\.mp4$/i;
+  const noItemDefectVideo = /^no-item\/[0-9a-f-]{36}\/defects\/videos\/([1-9]|[1-4]\d|50)\.(mp4|mov)$/i;
   return itemMain.test(key)
     || itemDefectLegacy.test(key)
     || itemDefectImage.test(key)
@@ -238,7 +239,7 @@ Deno.serve(async (req) => {
     if (photoNo <= 0 || !ext || itemId < 0) {
       return json({ error: "BAD_PAYLOAD" }, 400);
     }
-    if (kind === "main" && ext === "mp4") return json({ error: "BAD_PAYLOAD" }, 400);
+    if (kind === "main" && (ext === "mp4" || ext === "mov")) return json({ error: "BAD_PAYLOAD" }, 400);
     if (itemId === 0 && !postId) return json({ error: "BAD_PAYLOAD" }, 400);
     if (itemId === 0 && !isSafePostId(postId)) return json({ error: "BAD_PAYLOAD" }, 400);
 

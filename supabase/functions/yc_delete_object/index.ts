@@ -111,11 +111,11 @@ function isAllowedStorageKey(key: string): boolean {
   const itemMain = /^\d+\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
   const itemDefectLegacy = /^\d+\/defects\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
   const itemDefectImage = /^\d+\/defects\/images\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
-  const itemDefectVideo = /^\d+\/defects\/videos\/([1-9]|[1-4]\d|50)\.mp4$/i;
+  const itemDefectVideo = /^\d+\/defects\/videos\/([1-9]|[1-4]\d|50)\.(mp4|mov)$/i;
   const noItemMain = /^no-item\/[0-9a-f-]{36}\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
   const noItemDefectLegacy = /^no-item\/[0-9a-f-]{36}\/defects\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
   const noItemDefectImage = /^no-item\/[0-9a-f-]{36}\/defects\/images\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
-  const noItemDefectVideo = /^no-item\/[0-9a-f-]{36}\/defects\/videos\/([1-9]|[1-4]\d|50)\.mp4$/i;
+  const noItemDefectVideo = /^no-item\/[0-9a-f-]{36}\/defects\/videos\/([1-9]|[1-4]\d|50)\.(mp4|mov)$/i;
   return itemMain.test(key)
     || itemDefectLegacy.test(key)
     || itemDefectImage.test(key)

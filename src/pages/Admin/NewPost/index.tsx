@@ -178,10 +178,10 @@ function inferMediaTypeFromUrl(url: string): "image" | "video" {
 function inferMediaTypeFromFile(file: File): "image" | "video" | null {
   const mime = String(file.type ?? "").toLowerCase();
   if (mime.startsWith("image/")) return "image";
-  if (mime === "video/mp4") return "video";
+  if (mime === "video/mp4" || mime === "video/quicktime") return "video";
   const name = String(file.name ?? "").toLowerCase();
   if (/\.(jpg|jpeg|png|webp)$/i.test(name)) return "image";
-  if (/\.mp4$/i.test(name)) return "video";
+  if (/\.(mp4|mov)$/i.test(name)) return "video";
   return null;
 }
 
@@ -1033,7 +1033,7 @@ export function AdminNewPostPage() {
                   selectLabel={"Выбрать фото/видео дефектов"}
                   items={defectPreview}
                   loadingText={isUploadingDefects ? "Загрузка медиа дефектов..." : null}
-                  accept="image/*,video/mp4"
+                  accept="image/*,video/mp4,video/quicktime,.mov"
                   isBusy={isUploadingDefects || isSaving || isPublishingNow || isScheduling}
                   onSelect={(files) => void uploadFiles(files, "defect")}
                   onRemove={(id) => void onDeleteDefectPhoto(id)}
