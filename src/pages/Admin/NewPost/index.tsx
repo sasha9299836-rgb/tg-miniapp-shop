@@ -548,6 +548,9 @@ export function AdminNewPostPage() {
     if (nextType === "consignment") {
       setNalichieIdInput("");
       setItemData(null);
+      setCurrentPost(null);
+      setMainPhotos([]);
+      setDefectPhotos([]);
       setFieldError(null);
       return;
     }
@@ -561,7 +564,7 @@ export function AdminNewPostPage() {
     const unsyncedDefect = defectPhotos.filter((photo) => !photo.dbId);
 
     for (const photo of unsyncedMain) {
-      await createPostPhoto({
+      const created = await createPostPhoto({
         post_id: postId,
         item_id: postType === "warehouse" ? normalizedNalichieId : null,
         photo_no: photo.photoNo,
@@ -570,16 +573,22 @@ export function AdminNewPostPage() {
         sort_order: photo.photoNo - 1,
         kind: "main",
       });
+      setMainPhotos((prev) => prev.map((entry) => (
+        entry.localId === photo.localId ? { ...entry, dbId: created.id } : entry
+      )));
     }
 
     for (const photo of unsyncedDefect) {
-      await createPostDefectPhoto({
+      const created = await createPostDefectPhoto({
         post_id: postId,
         photo_no: photo.photoNo,
         storage_key: photo.key,
         public_url: photo.url,
         media_type: photo.mediaType,
       });
+      setDefectPhotos((prev) => prev.map((entry) => (
+        entry.localId === photo.localId ? { ...entry, dbId: created.id } : entry
+      )));
     }
   };
 
@@ -614,7 +623,6 @@ export function AdminNewPostPage() {
 
     await syncUploadedPhotosToPost(saved.id);
     hydrateFromPost(saved);
-    await hydrateAllPhotosFromDb(saved.id);
     return saved;
   };
 
