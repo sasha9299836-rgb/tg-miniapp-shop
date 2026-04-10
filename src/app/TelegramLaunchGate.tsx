@@ -10,24 +10,33 @@ type RuntimeProbe = {
 };
 
 function probeTelegramRuntime(): RuntimeProbe {
-  const webApp = window.Telegram?.WebApp;
-  const hasRuntime = Boolean(webApp);
-  if (!webApp) {
+  try {
+    const webApp = window.Telegram?.WebApp;
+    const hasRuntime = Boolean(webApp);
+    if (!webApp) {
+      return {
+        hasRuntime: false,
+        hasInitData: false,
+        hasTelegramUser: false,
+      };
+    }
+
+    const hasInitData = typeof webApp.initData === "string" && webApp.initData.trim().length > 0;
+    const hasTelegramUser = typeof webApp.initDataUnsafe?.user?.id === "number" && webApp.initDataUnsafe.user.id > 0;
+
     return {
-      hasRuntime: false,
+      hasRuntime,
+      hasInitData,
+      hasTelegramUser,
+    };
+  } catch (error) {
+    console.error("[tg-launch-gate] probe runtime failed", error);
+    return {
+      hasRuntime: Boolean(window.Telegram?.WebApp),
       hasInitData: false,
       hasTelegramUser: false,
     };
   }
-
-  const hasInitData = typeof webApp.initData === "string" && webApp.initData.trim().length > 0;
-  const hasTelegramUser = typeof webApp.initDataUnsafe?.user?.id === "number" && webApp.initDataUnsafe.user.id > 0;
-
-  return {
-    hasRuntime,
-    hasInitData,
-    hasTelegramUser,
-  };
 }
 
 function hasStrongTelegramSignal(runtime: RuntimeProbe): boolean {
@@ -35,10 +44,15 @@ function hasStrongTelegramSignal(runtime: RuntimeProbe): boolean {
 }
 
 function resolveInitialState(): GateState {
-  const runtime = probeTelegramRuntime();
-  if (!runtime.hasRuntime) return "outside_telegram";
-  if (hasStrongTelegramSignal(runtime)) return "telegram_allowed";
-  return "checking";
+  try {
+    const runtime = probeTelegramRuntime();
+    if (!runtime.hasRuntime) return "outside_telegram";
+    if (hasStrongTelegramSignal(runtime)) return "telegram_allowed";
+    return "checking";
+  } catch (error) {
+    console.error("[tg-launch-gate] resolve initial state failed", error);
+    return window.Telegram?.WebApp ? "telegram_allowed" : "outside_telegram";
+  }
 }
 
 function TelegramOutsideStub() {
@@ -75,24 +89,30 @@ export function TelegramLaunchGate({ children }: { children: ReactNode }) {
 
     const runCheck = () => {
       if (cancelled) return;
-      const runtime = probeTelegramRuntime();
+      try {
+        const runtime = probeTelegramRuntime();
 
-      if (!runtime.hasRuntime) {
-        setState("outside_telegram");
-        return;
+        if (!runtime.hasRuntime) {
+          setState("outside_telegram");
+          return;
+        }
+
+        if (hasStrongTelegramSignal(runtime)) {
+          setState("telegram_allowed");
+          return;
+        }
+
+        if (Date.now() - startedAt >= checkWindowMs) {
+          // If runtime exists but strong signal is unavailable, allow app instead of endless checking.
+          setState("telegram_allowed");
+          return;
+        }
+
+        window.setTimeout(runCheck, 90);
+      } catch (error) {
+        console.error("[tg-launch-gate] runCheck failed", error);
+        setState(window.Telegram?.WebApp ? "telegram_allowed" : "outside_telegram");
       }
-
-      if (hasStrongTelegramSignal(runtime)) {
-        setState("telegram_allowed");
-        return;
-      }
-
-      if (Date.now() - startedAt >= checkWindowMs) {
-        setState("outside_telegram");
-        return;
-      }
-
-      window.setTimeout(runCheck, 90);
     };
 
     const onRuntimeEvent = () => {

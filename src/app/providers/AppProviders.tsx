@@ -32,132 +32,145 @@ export function AppProviders({ children }: { children: ReactNode }) {
     let isCancelled = false;
     let attempts = 0;
 
-    initTelegramWebApp();
-    setTgDebugState({
-      runtimeDetected: Boolean(getTelegramWebApp()),
-      initDataPresent: Boolean(String(getTelegramWebApp()?.initData ?? "").trim()),
-      initDataLength: String(getTelegramWebApp()?.initData ?? "").trim().length,
-    });
-    console.log("[tg-user-bootstrap] start");
-
-    const tryBootstrap = async () => {
-      if (isCancelled) return;
-      if (bootstrapInFlight) return;
-      attempts += 1;
-
-      const tgUser = getTelegramUser();
+    try {
+      initTelegramWebApp();
+    } catch (error) {
+      console.error("[tg-user-bootstrap] initTelegramWebApp failed", error);
+    }
+    try {
       setTgDebugState({
         runtimeDetected: Boolean(getTelegramWebApp()),
         initDataPresent: Boolean(String(getTelegramWebApp()?.initData ?? "").trim()),
         initDataLength: String(getTelegramWebApp()?.initData ?? "").trim().length,
       });
-      if (!tgUser) {
-        console.log(`[tg-user-bootstrap] no Telegram user yet (attempt ${attempts}/${TELEGRAM_USER_BOOTSTRAP_MAX_ATTEMPTS})`);
-        return;
-      }
-      if (lastBootstrappedTelegramId === tgUser.id) {
-        console.log(`[tg-user-bootstrap] already bootstrapped for telegram_id=${tgUser.id}`);
-        return;
-      }
+    } catch (error) {
+      console.error("[tg-user-bootstrap] set debug state failed on start", error);
+    }
+    console.log("[tg-user-bootstrap] start");
 
-      const initData = String(getTelegramWebApp()?.initData ?? "").trim();
-      if (initData && !verifyInFlight) {
-        setTgDebugState({ verifyRequested: true });
-        const hasUserSession = getTelegramUserSessionToken().length > 0;
-        if (!hasUserSession || lastVerifiedTelegramId !== tgUser.id) {
-          verifyInFlight = true;
-          try {
-            const session = await verifyTelegramIdentity(initData);
-            if (!isCancelled) {
-              setTelegramUserSessionToken(session.sessionToken, session.expiresAt);
-              refreshTgDebugSessionFlags();
-              setTgDebugState({ verifySuccess: true });
-              setLastAuthErrorCode(null);
-              lastVerifiedTelegramId = session.telegramId;
+    const tryBootstrap = async () => {
+      try {
+        if (isCancelled) return;
+        if (bootstrapInFlight) return;
+        attempts += 1;
+
+        const tgUser = getTelegramUser();
+        setTgDebugState({
+          runtimeDetected: Boolean(getTelegramWebApp()),
+          initDataPresent: Boolean(String(getTelegramWebApp()?.initData ?? "").trim()),
+          initDataLength: String(getTelegramWebApp()?.initData ?? "").trim().length,
+        });
+        if (!tgUser) {
+          console.log(`[tg-user-bootstrap] no Telegram user yet (attempt ${attempts}/${TELEGRAM_USER_BOOTSTRAP_MAX_ATTEMPTS})`);
+          return;
+        }
+        if (lastBootstrappedTelegramId === tgUser.id) {
+          console.log(`[tg-user-bootstrap] already bootstrapped for telegram_id=${tgUser.id}`);
+          return;
+        }
+
+        const initData = String(getTelegramWebApp()?.initData ?? "").trim();
+        if (initData && !verifyInFlight) {
+          setTgDebugState({ verifyRequested: true });
+          const hasUserSession = getTelegramUserSessionToken().length > 0;
+          if (!hasUserSession || lastVerifiedTelegramId !== tgUser.id) {
+            verifyInFlight = true;
+            try {
+              const session = await verifyTelegramIdentity(initData);
+              if (!isCancelled) {
+                setTelegramUserSessionToken(session.sessionToken, session.expiresAt);
+                refreshTgDebugSessionFlags();
+                setTgDebugState({ verifySuccess: true });
+                setLastAuthErrorCode(null);
+                lastVerifiedTelegramId = session.telegramId;
+              }
+            } catch (error) {
+              const message = error instanceof Error ? error.message : "VERIFY_FAILED";
+              console.log(`[tg-user-bootstrap] verify failed: ${message}`);
+              setTgDebugState({ verifySuccess: false });
+              setLastAuthErrorCode(message);
+              if (!isCancelled) {
+                clearTelegramUserSessionToken();
+                refreshTgDebugSessionFlags();
+              }
+            } finally {
+              verifyInFlight = false;
             }
-          } catch (error) {
-            const message = error instanceof Error ? error.message : "VERIFY_FAILED";
-            console.log(`[tg-user-bootstrap] verify failed: ${message}`);
-            setTgDebugState({ verifySuccess: false });
-            setLastAuthErrorCode(message);
-            if (!isCancelled) {
-              clearTelegramUserSessionToken();
-              refreshTgDebugSessionFlags();
-            }
-          } finally {
-            verifyInFlight = false;
           }
         }
-      }
-      if (!getTelegramUserSessionToken()) {
-        refreshTgDebugSessionFlags();
-        return;
-      }
-
-      console.log("[tg-user-bootstrap] Telegram user resolved", {
-        telegram_id: tgUser.id,
-        has_username: Boolean(tgUser.username),
-        has_first_name: Boolean(tgUser.firstName),
-        has_last_name: Boolean(tgUser.lastName),
-      });
-
-      bootstrapInFlight = true;
-      try {
-        console.log("[tg-user-bootstrap] upsert payload", {
-          p_telegram_id: tgUser.id,
+        if (!getTelegramUserSessionToken()) {
+          refreshTgDebugSessionFlags();
+          return;
+        }
+   
+        console.log("[tg-user-bootstrap] Telegram user resolved", {
+          telegram_id: tgUser.id,
           has_username: Boolean(tgUser.username),
           has_first_name: Boolean(tgUser.firstName),
           has_last_name: Boolean(tgUser.lastName),
         });
-        const row = await upsertTelegramUser({
-          username: tgUser.username,
-          firstName: tgUser.firstName,
-          lastName: tgUser.lastName,
-        });
-        console.log("[tg-user-bootstrap] upsert success", {
-          telegram_id: row.telegram_id,
-          has_username: Boolean(row.telegram_username),
-          is_admin: Boolean(row.is_admin),
-        });
-        if (!isCancelled) {
-          try {
-            window.localStorage.setItem("tg_user_id", String(row.telegram_id));
-          } catch {
-            // no-op
-          }
-          useAdminStore.getState().setDbAdmin(Boolean(row.is_admin));
-          if (Boolean(row.is_admin)) {
+
+        bootstrapInFlight = true;
+        try {
+          console.log("[tg-user-bootstrap] upsert payload", {
+            p_telegram_id: tgUser.id,
+            has_username: Boolean(tgUser.username),
+            has_first_name: Boolean(tgUser.firstName),
+            has_last_name: Boolean(tgUser.lastName),
+          });
+          const row = await upsertTelegramUser({
+            username: tgUser.username,
+            firstName: tgUser.firstName,
+            lastName: tgUser.lastName,
+          });
+          console.log("[tg-user-bootstrap] upsert success", {
+            telegram_id: row.telegram_id,
+            has_username: Boolean(row.telegram_username),
+            is_admin: Boolean(row.is_admin),
+          });
+          if (!isCancelled) {
             try {
-              const adminSession = await bootstrapAdminSessionFromTelegramUserSession();
-              useAdminStore.getState().setSessionToken(adminSession.session_token);
-            } catch (error) {
-              const message = error instanceof Error ? error.message : "ADMIN_SESSION_BOOTSTRAP_FAILED";
-              console.log(`[tg-user-bootstrap] admin session bootstrap failed: ${message}`);
+              window.localStorage.setItem("tg_user_id", String(row.telegram_id));
+            } catch {
+              // no-op
             }
+            useAdminStore.getState().setDbAdmin(Boolean(row.is_admin));
+            if (Boolean(row.is_admin)) {
+              try {
+                const adminSession = await bootstrapAdminSessionFromTelegramUserSession();
+                useAdminStore.getState().setSessionToken(adminSession.session_token);
+              } catch (error) {
+                const message = error instanceof Error ? error.message : "ADMIN_SESSION_BOOTSTRAP_FAILED";
+                console.log(`[tg-user-bootstrap] admin session bootstrap failed: ${message}`);
+              }
+            }
+            setTgDebugState({
+              currentUserLoaded: true,
+              currentUserTelegramIdPresent: Boolean(row.telegram_id),
+              currentUserIsAdmin: Boolean(row.is_admin),
+            });
+            useAccountStore.getState().applyTelegramProfile({
+              telegramId: row.telegram_id,
+              telegramUsername: row.telegram_username,
+              telegramFirstName: row.telegram_first_name,
+              telegramLastName: row.telegram_last_name,
+              isAdmin: Boolean(row.is_admin),
+              registeredAt: row.registered_at,
+            });
+            void useFavoritesStore.getState().load();
+            void useCartStore.getState().load();
+            lastBootstrappedTelegramId = row.telegram_id;
           }
-          setTgDebugState({
-            currentUserLoaded: true,
-            currentUserTelegramIdPresent: Boolean(row.telegram_id),
-            currentUserIsAdmin: Boolean(row.is_admin),
-          });
-          useAccountStore.getState().applyTelegramProfile({
-            telegramId: row.telegram_id,
-            telegramUsername: row.telegram_username,
-            telegramFirstName: row.telegram_first_name,
-            telegramLastName: row.telegram_last_name,
-            isAdmin: Boolean(row.is_admin),
-            registeredAt: row.registered_at,
-          });
-          void useFavoritesStore.getState().load();
-          void useCartStore.getState().load();
-          lastBootstrappedTelegramId = row.telegram_id;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "UNKNOWN_ERROR";
+          console.log(`[tg-user-bootstrap] upsert error: ${message}`);
+          setLastAuthErrorCode(message);
+        } finally {
+          bootstrapInFlight = false;
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : "UNKNOWN_ERROR";
-        console.log(`[tg-user-bootstrap] upsert error: ${message}`);
-        setLastAuthErrorCode(message);
-      } finally {
-        bootstrapInFlight = false;
+        console.error("[tg-user-bootstrap] tryBootstrap crashed", error);
+        setLastAuthErrorCode(error instanceof Error ? error.message : "BOOTSTRAP_CRASH");
       }
     };
 
