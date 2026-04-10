@@ -6,7 +6,7 @@ export type PhotoPreviewItem = {
   photoNo: number;
   url: string;
   mediaType?: "image" | "video";
-  status?: "pending" | "uploading" | "failed" | "uploaded";
+  status?: "validating" | "pending" | "uploading" | "failed" | "uploaded";
 };
 
 type Props = {
@@ -71,7 +71,9 @@ export function PhotoUploader({
                 </div>
                 {photo.status && photo.status !== "uploaded" ? (
                   <div style={{ fontSize: 12, color: photo.status === "failed" ? "#b42318" : "var(--muted)" }}>
-                    {photo.status === "pending"
+                    {photo.status === "validating"
+                      ? "Проверяем длительность..."
+                      : photo.status === "pending"
                       ? "Ожидает загрузки"
                       : photo.status === "uploading"
                       ? "Загрузка..."

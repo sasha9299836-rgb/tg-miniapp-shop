@@ -177,8 +177,10 @@ type PendingUpload = {
   photoNo: number;
   mediaType: "image" | "video";
   previewUrl: string;
-  status: "pending" | "uploading" | "failed";
+  status: "validating" | "pending" | "uploading" | "failed";
 };
+
+const MAX_DEFECT_VIDEO_DURATION_SECONDS = 120;
 
 function inferMediaTypeFromUrl(url: string): "image" | "video" {
   return /\.(mp4|mov)(?:$|\?)/i.test(url) ? "video" : "image";
@@ -192,6 +194,75 @@ function inferMediaTypeFromFile(file: File): "image" | "video" | null {
   if (/\.(jpg|jpeg|png|webp)$/i.test(name)) return "image";
   if (/\.(mp4|mov)$/i.test(name)) return "video";
   return null;
+}
+
+function waitForAppToBeInteractive(): Promise<void> {
+  return new Promise((resolve) => {
+    const afterPaint = () => {
+      window.setTimeout(resolve, 150);
+    };
+
+    const scheduleAfterPaint = () => {
+      if (typeof window.requestAnimationFrame === "function") {
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(afterPaint);
+        });
+        return;
+      }
+      window.setTimeout(afterPaint, 0);
+    };
+
+    const finishIfVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      cleanup();
+      scheduleAfterPaint();
+    };
+
+    const cleanup = () => {
+      document.removeEventListener("visibilitychange", finishIfVisible);
+      window.removeEventListener("focus", finishIfVisible);
+      window.removeEventListener("pageshow", finishIfVisible);
+    };
+
+    if (document.visibilityState === "visible") {
+      scheduleAfterPaint();
+      return;
+    }
+
+    document.addEventListener("visibilitychange", finishIfVisible);
+    window.addEventListener("focus", finishIfVisible);
+    window.addEventListener("pageshow", finishIfVisible);
+  });
+}
+
+function readVideoDurationSeconds(previewUrl: string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement("video");
+
+    const cleanup = () => {
+      video.onloadedmetadata = null;
+      video.onerror = null;
+      video.removeAttribute("src");
+      video.load();
+    };
+
+    video.preload = "metadata";
+    video.playsInline = true;
+    video.onloadedmetadata = () => {
+      const duration = Number(video.duration);
+      cleanup();
+      if (!Number.isFinite(duration) || duration <= 0) {
+        reject(new Error("Не удалось определить длительность видео."));
+        return;
+      }
+      resolve(duration);
+    };
+    video.onerror = () => {
+      cleanup();
+      reject(new Error("Не удалось прочитать длительность видео."));
+    };
+    video.src = previewUrl;
+  });
 }
 
 function normalizeConditionValue(value: string | null | undefined) {
@@ -271,6 +342,8 @@ export function AdminNewPostPage() {
   const pendingUnsyncedUploadsRef = useRef<UploadedPhoto[]>([]);
   const pendingMainUploadsRef = useRef<PendingUpload[]>([]);
   const pendingDefectUploadsRef = useRef<PendingUpload[]>([]);
+  const pendingMainActivationRef = useRef<string | null>(null);
+  const pendingDefectActivationRef = useRef<string | null>(null);
   const parsedNalichieId = useMemo(() => Number(nalichieIdInput), [nalichieIdInput]);
   const normalizedNalichieId = Number.isInteger(parsedNalichieId) && parsedNalichieId > 0 ? parsedNalichieId : null;
   const costPrice = useMemo(() => {
@@ -727,7 +800,7 @@ export function AdminNewPostPage() {
         photoNo: nextPhotoNo,
         mediaType,
         previewUrl,
-        status: "pending",
+        status: mediaType === "video" ? "validating" : "pending",
       });
       nextPhotoNo += 1;
     }
@@ -736,6 +809,40 @@ export function AdminNewPostPage() {
     if (kind === "main") setPendingMainUploads((prev) => [...prev, ...staged]);
     if (kind === "defect") setPendingDefectUploads((prev) => [...prev, ...staged]);
   };
+
+  useEffect(() => {
+    const next = pendingDefectUploads.find((entry) => entry.status === "validating" && entry.mediaType === "video");
+    if (!next) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        await waitForAppToBeInteractive();
+        if (cancelled) return;
+        const durationSeconds = await readVideoDurationSeconds(next.previewUrl);
+        if (cancelled) return;
+        if (durationSeconds > MAX_DEFECT_VIDEO_DURATION_SECONDS) {
+          URL.revokeObjectURL(next.previewUrl);
+          setPendingDefectUploads((prev) => prev.filter((entry) => entry.localId !== next.localId));
+          setErrorText("Видео дефекта должно быть не длиннее 2 минут.");
+          return;
+        }
+        setPendingDefectUploads((prev) => prev.map((entry) => (
+          entry.localId === next.localId ? { ...entry, status: "pending" } : entry
+        )));
+      } catch (error) {
+        if (cancelled) return;
+        URL.revokeObjectURL(next.previewUrl);
+        setPendingDefectUploads((prev) => prev.filter((entry) => entry.localId !== next.localId));
+        setErrorText((error as Error).message || "Не удалось проверить длительность видео.");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingDefectUploads]);
 
   const uploadPendingItem = async (item: PendingUpload, kind: "main" | "defect") => {
     const postIdForUpload = currentPost?.id ?? draftUploadId;
@@ -765,19 +872,25 @@ export function AdminNewPostPage() {
   };
 
   useEffect(() => {
-    if (isUploadingPhotos) return;
+    if (isUploadingPhotos || pendingMainActivationRef.current) return;
     const next = pendingMainUploads.find((entry) => entry.status === "pending");
     if (!next) return;
-    setPendingMainUploads((prev) => prev.map((entry) => (
-      entry.localId === next.localId ? { ...entry, status: "uploading" } : entry
-    )));
-    setIsUploadingPhotos(true);
-    void uploadPendingItem(next, "main")
-      .then(() => {
+    pendingMainActivationRef.current = next.localId;
+    let cancelled = false;
+    void (async () => {
+      try {
+        await waitForAppToBeInteractive();
+        if (cancelled) return;
+        setPendingMainUploads((prev) => prev.map((entry) => (
+          entry.localId === next.localId ? { ...entry, status: "uploading" } : entry
+        )));
+        setIsUploadingPhotos(true);
+        await uploadPendingItem(next, "main");
+        if (cancelled) return;
         URL.revokeObjectURL(next.previewUrl);
         setPendingMainUploads((prev) => prev.filter((entry) => entry.localId !== next.localId));
-      })
-      .catch((error) => {
+      } catch (error) {
+        if (cancelled) return;
         const message = (error as Error).message ?? "";
         if (message.includes("ALREADY_EXISTS") || message.includes("409")) {
           setErrorText("Медиа с таким номером уже загружено.");
@@ -787,26 +900,42 @@ export function AdminNewPostPage() {
         setPendingMainUploads((prev) => prev.map((entry) => (
           entry.localId === next.localId ? { ...entry, status: "failed" } : entry
         )));
-      })
-      .finally(() => {
-        setIsUploadingPhotos(false);
-      });
+      } finally {
+        pendingMainActivationRef.current = null;
+        if (!cancelled) {
+          setIsUploadingPhotos(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (pendingMainActivationRef.current === next.localId) {
+        pendingMainActivationRef.current = null;
+      }
+    };
   }, [pendingMainUploads, isUploadingPhotos, currentPost?.id, currentPost?.item_id, draftUploadId, postType, normalizedNalichieId]);
 
   useEffect(() => {
-    if (isUploadingDefects) return;
+    if (isUploadingDefects || pendingDefectActivationRef.current) return;
     const next = pendingDefectUploads.find((entry) => entry.status === "pending");
     if (!next) return;
-    setPendingDefectUploads((prev) => prev.map((entry) => (
-      entry.localId === next.localId ? { ...entry, status: "uploading" } : entry
-    )));
-    setIsUploadingDefects(true);
-    void uploadPendingItem(next, "defect")
-      .then(() => {
+    pendingDefectActivationRef.current = next.localId;
+    let cancelled = false;
+    void (async () => {
+      try {
+        await waitForAppToBeInteractive();
+        if (cancelled) return;
+        setPendingDefectUploads((prev) => prev.map((entry) => (
+          entry.localId === next.localId ? { ...entry, status: "uploading" } : entry
+        )));
+        setIsUploadingDefects(true);
+        await uploadPendingItem(next, "defect");
+        if (cancelled) return;
         URL.revokeObjectURL(next.previewUrl);
         setPendingDefectUploads((prev) => prev.filter((entry) => entry.localId !== next.localId));
-      })
-      .catch((error) => {
+      } catch (error) {
+        if (cancelled) return;
         const message = (error as Error).message ?? "";
         if (message.includes("ALREADY_EXISTS") || message.includes("409")) {
           setErrorText("Медиа с таким номером уже загружено.");
@@ -816,10 +945,20 @@ export function AdminNewPostPage() {
         setPendingDefectUploads((prev) => prev.map((entry) => (
           entry.localId === next.localId ? { ...entry, status: "failed" } : entry
         )));
-      })
-      .finally(() => {
-        setIsUploadingDefects(false);
-      });
+      } finally {
+        pendingDefectActivationRef.current = null;
+        if (!cancelled) {
+          setIsUploadingDefects(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (pendingDefectActivationRef.current === next.localId) {
+        pendingDefectActivationRef.current = null;
+      }
+    };
   }, [pendingDefectUploads, isUploadingDefects, currentPost?.id, currentPost?.item_id, draftUploadId, postType, normalizedNalichieId]);
 
   const onDeleteMainPhoto = async (localId: string) => {
