@@ -1,6 +1,7 @@
 export type DefectMediaItem = {
   type: "image" | "video";
   url: string;
+  posterUrl?: string;
 };
 
 export type Product = {

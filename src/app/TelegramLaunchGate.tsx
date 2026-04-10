@@ -9,6 +9,9 @@ type RuntimeProbe = {
   hasTelegramUser: boolean;
 };
 
+const TELEGRAM_GATE_CHECK_WINDOW_MS = 1800;
+const TELEGRAM_GATE_POLL_INTERVAL_MS = 90;
+
 function probeTelegramRuntime(): RuntimeProbe {
   try {
     const webApp = window.Telegram?.WebApp;
@@ -44,15 +47,8 @@ function hasStrongTelegramSignal(runtime: RuntimeProbe): boolean {
 }
 
 function resolveInitialState(): GateState {
-  try {
-    const runtime = probeTelegramRuntime();
-    if (!runtime.hasRuntime) return "outside_telegram";
-    if (hasStrongTelegramSignal(runtime)) return "telegram_allowed";
-    return "checking";
-  } catch (error) {
-    console.error("[tg-launch-gate] resolve initial state failed", error);
-    return window.Telegram?.WebApp ? "telegram_allowed" : "outside_telegram";
-  }
+  // Always start in checking mode to avoid false negatives while Telegram runtime initializes.
+  return "checking";
 }
 
 function TelegramOutsideStub() {
@@ -77,24 +73,24 @@ export function TelegramLaunchGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (state !== "checking") return;
 
-    const webApp = window.Telegram?.WebApp;
-    if (!webApp) {
-      setState("outside_telegram");
-      return;
-    }
-
     let cancelled = false;
     const startedAt = Date.now();
-    const checkWindowMs = 1800;
+    let lastRuntimeRef: { onEvent?: (eventType: string, eventHandler: () => void) => void; offEvent?: (eventType: string, eventHandler: () => void) => void } | null = null;
 
     const runCheck = () => {
       if (cancelled) return;
       try {
         const runtime = probeTelegramRuntime();
+        const currentRuntime = window.Telegram?.WebApp ?? null;
 
-        if (!runtime.hasRuntime) {
-          setState("outside_telegram");
-          return;
+        if (currentRuntime && lastRuntimeRef !== currentRuntime) {
+          if (lastRuntimeRef) {
+            lastRuntimeRef.offEvent?.("viewport_changed", runCheck);
+            lastRuntimeRef.offEvent?.("theme_changed", runCheck);
+          }
+          currentRuntime.onEvent?.("viewport_changed", runCheck);
+          currentRuntime.onEvent?.("theme_changed", runCheck);
+          lastRuntimeRef = currentRuntime;
         }
 
         if (hasStrongTelegramSignal(runtime)) {
@@ -102,31 +98,27 @@ export function TelegramLaunchGate({ children }: { children: ReactNode }) {
           return;
         }
 
-        if (Date.now() - startedAt >= checkWindowMs) {
-          // If runtime exists but strong signal is unavailable, allow app instead of endless checking.
-          setState("telegram_allowed");
+        if (Date.now() - startedAt >= TELEGRAM_GATE_CHECK_WINDOW_MS) {
+          // Timeout reached: without initData/user signal we treat runtime as outside Telegram.
+          setState("outside_telegram");
           return;
         }
 
-        window.setTimeout(runCheck, 90);
+        window.setTimeout(runCheck, TELEGRAM_GATE_POLL_INTERVAL_MS);
       } catch (error) {
         console.error("[tg-launch-gate] runCheck failed", error);
-        setState(window.Telegram?.WebApp ? "telegram_allowed" : "outside_telegram");
+        setState("outside_telegram");
       }
     };
 
-    const onRuntimeEvent = () => {
-      if (!cancelled) runCheck();
-    };
-
-    webApp.onEvent?.("viewport_changed", onRuntimeEvent);
-    webApp.onEvent?.("theme_changed", onRuntimeEvent);
     runCheck();
 
     return () => {
       cancelled = true;
-      webApp.offEvent?.("viewport_changed", onRuntimeEvent);
-      webApp.offEvent?.("theme_changed", onRuntimeEvent);
+      if (lastRuntimeRef) {
+        lastRuntimeRef.offEvent?.("viewport_changed", runCheck);
+        lastRuntimeRef.offEvent?.("theme_changed", runCheck);
+      }
     };
   }, [state]);
 

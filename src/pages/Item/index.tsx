@@ -11,6 +11,72 @@ import { FavoriteButton } from "../../shared/ui/FavoriteButton";
 import { Page } from "../../shared/ui/Page";
 import "./styles.css";
 
+function buildVideoPosterFromFirstFrame(url: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const video = document.createElement("video");
+    let finished = false;
+    let timeoutId: number | null = null;
+
+    const finish = (value: string | null) => {
+      if (finished) return;
+      finished = true;
+      if (timeoutId != null) window.clearTimeout(timeoutId);
+      video.onloadeddata = null;
+      video.onseeked = null;
+      video.onerror = null;
+      video.removeAttribute("src");
+      video.load();
+      resolve(value);
+    };
+
+    const capture = () => {
+      try {
+        const width = Number(video.videoWidth);
+        const height = Number(video.videoHeight);
+        if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+          finish(null);
+          return;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          finish(null);
+          return;
+        }
+        ctx.drawImage(video, 0, 0, width, height);
+        finish(canvas.toDataURL("image/jpeg", 0.82));
+      } catch {
+        finish(null);
+      }
+    };
+
+    video.preload = "metadata";
+    video.playsInline = true;
+    video.muted = true;
+    video.crossOrigin = "anonymous";
+    video.onloadeddata = () => {
+      const duration = Number(video.duration);
+      if (!Number.isFinite(duration) || duration <= 0) {
+        capture();
+        return;
+      }
+      try {
+        video.currentTime = Math.min(0.1, Math.max(duration * 0.05, 0.01));
+      } catch {
+        capture();
+      }
+    };
+    video.onseeked = capture;
+    video.onerror = () => finish(null);
+
+    timeoutId = window.setTimeout(() => finish(null), 4500);
+    video.src = url;
+    video.load();
+  });
+}
+
 export function ItemPage() {
   const nav = useNavigate();
   const location = useLocation();
@@ -29,6 +95,7 @@ export function ItemPage() {
   const [photoIndex, setPhotoIndex] = useState(0);
   const [isDescOpen, setIsDescOpen] = useState(true);
   const [isDefectsOpen, setIsDefectsOpen] = useState(false);
+  const [videoPosterByUrl, setVideoPosterByUrl] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!products.length) void load();
@@ -112,6 +179,26 @@ export function ItemPage() {
       document.body.style.overflow = prevOverflow;
     };
   }, [isViewerOpen, viewerTotal]);
+
+  useEffect(() => {
+    const videosWithoutPoster = defectMedia.filter((item) => item.type === "video" && !item.posterUrl);
+    if (!videosWithoutPoster.length) return;
+    let cancelled = false;
+
+    void (async () => {
+      for (const item of videosWithoutPoster) {
+        if (cancelled) return;
+        if (videoPosterByUrl[item.url]) continue;
+        const poster = await buildVideoPosterFromFirstFrame(item.url);
+        if (cancelled || !poster) continue;
+        setVideoPosterByUrl((prev) => (prev[item.url] ? prev : { ...prev, [item.url]: poster }));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [defectMedia, videoPosterByUrl]);
 
   useEffect(() => {
     if (!product) return;
@@ -262,28 +349,36 @@ export function ItemPage() {
             {isDefectsOpen ? (
               <div className="item-accordion__body">
                 {product.defectsText?.trim() ? <div className="item-defects-text">{product.defectsText}</div> : null}
-                {defectImages.length > 0 ? (
+                {defectMedia.length > 0 ? (
                   <div className="item-defect-grid">
-                    {defectImages.map((url, index) => (
-                      <button key={`${product.id}-defect-${index}`} type="button" className="item-defect-grid__btn" onClick={() => openViewer(defectImages, index)}>
-                        <img src={url} alt={`Дефект ${index + 1}`} className="item-defect-grid__img" />
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-                {defectVideos.length > 0 ? (
-                  <div className="item-defect-grid">
-                    {defectVideos.map((url, index) => (
-                      <div key={`${product.id}-defect-video-${index}`} className="item-defect-grid__btn">
-                        <video
-                          src={url}
-                          className="item-defect-grid__img"
-                          controls
-                          preload="metadata"
-                          playsInline
-                        />
-                      </div>
-                    ))}
+                    {defectMedia.map((entry, index) => {
+                      if (entry.type === "image") {
+                        const imageIndex = defectMedia.slice(0, index + 1).filter((item) => item.type === "image").length - 1;
+                        return (
+                          <button
+                            key={`${product.id}-defect-image-${index}`}
+                            type="button"
+                            className="item-defect-grid__btn"
+                            onClick={() => openViewer(defectImages, imageIndex)}
+                          >
+                            <img src={entry.url} alt={`Дефект ${imageIndex + 1}`} className="item-defect-grid__img" />
+                          </button>
+                        );
+                      }
+                      return (
+                        <div key={`${product.id}-defect-video-${index}`} className="item-defect-grid__btn">
+                          <video
+                            src={entry.url}
+                            poster={entry.posterUrl ?? videoPosterByUrl[entry.url]}
+                            className="item-defect-grid__img"
+                            controls
+                            preload="metadata"
+                            playsInline
+                            muted
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : null}
               </div>
