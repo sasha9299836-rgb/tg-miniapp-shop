@@ -91,6 +91,40 @@ export type CreateDraftPostPayload = {
   current_published_at?: string | null;
 };
 
+export type DraftWriteBranch =
+  | "update_by_id"
+  | "select_by_item_id"
+  | "update_existing_by_item_id"
+  | "upsert_fallback"
+  | "insert_new";
+
+export type DraftWritePayloadSnapshot = {
+  postId: string | null;
+  item_id: number | null;
+  nalichie_id: number | null;
+  post_type: TgPostType;
+  status: TgPostStatus;
+  has_defects: boolean;
+  defects_text_length: number;
+};
+
+export type DraftWriteDebugEvent =
+  | { type: "branch_start"; branch: DraftWriteBranch; snapshot: DraftWritePayloadSnapshot }
+  | { type: "branch_success"; branch: DraftWriteBranch; snapshot: DraftWritePayloadSnapshot; savedId: string }
+  | {
+    type: "branch_error";
+    branch: DraftWriteBranch;
+    snapshot: DraftWritePayloadSnapshot;
+    error: {
+      name: string | null;
+      message: string | null;
+      code: string | null;
+      details: string | null;
+      hint: string | null;
+      status: number | null;
+    };
+  };
+
 export type ScheduledPostListItem = {
   post: TgPost;
   photoCount: number;
@@ -128,6 +162,25 @@ function throwDraftStepError(step: string, error: unknown): never {
     `[createOrUpdateDraftPost:${step}] ${snapshot.message ?? "UNKNOWN_ERROR"}`,
     { cause: error instanceof Error ? error : undefined },
   );
+}
+
+function toDraftSnapshot(writePayload: {
+  item_id: number | null;
+  nalichie_id: number | null;
+  post_type: TgPostType;
+  status: TgPostStatus;
+  has_defects: boolean;
+  defects_text: string | null;
+}, postId?: string): DraftWritePayloadSnapshot {
+  return {
+    postId: postId ?? null,
+    item_id: writePayload.item_id,
+    nalichie_id: writePayload.nalichie_id,
+    post_type: writePayload.post_type,
+    status: writePayload.status,
+    has_defects: writePayload.has_defects,
+    defects_text_length: (writePayload.defects_text ?? "").trim().length,
+  };
 }
 
 function syntheticIdFromUuid(uuid: string): number {
@@ -201,7 +254,11 @@ export async function fetchNalichieByIdViaRpc(nalichieId: number): Promise<Nalic
   };
 }
 
-export async function createOrUpdateDraftPost(payload: CreateDraftPostPayload, postId?: string): Promise<TgPost> {
+export async function createOrUpdateDraftPost(
+  payload: CreateDraftPostPayload,
+  postId?: string,
+  onDebugEvent?: (event: DraftWriteDebugEvent) => void,
+): Promise<TgPost> {
   const scheduledAt = payload.scheduled_at;
   const nextStatus: TgPostStatus = payload.current_status === "published"
     ? "published"
@@ -227,6 +284,30 @@ export async function createOrUpdateDraftPost(payload: CreateDraftPostPayload, p
     scheduled_at: scheduledAt,
     published_at: nextPublishedAt,
   };
+  const snapshot = toDraftSnapshot(writePayload, postId);
+  const reportStart = (branch: DraftWriteBranch) => {
+    onDebugEvent?.({ type: "branch_start", branch, snapshot });
+  };
+  const reportSuccess = (branch: DraftWriteBranch, savedId: string) => {
+    onDebugEvent?.({ type: "branch_success", branch, snapshot, savedId });
+  };
+  const reportError = (branch: DraftWriteBranch, error: unknown) => {
+    const raw = debugErrorSnapshot(error);
+    const normalized = {
+      name: (raw as { name?: string | null }).name ?? null,
+      message: (raw as { message?: string | null }).message ?? null,
+      code: (raw as { code?: string | null }).code ?? null,
+      details: (raw as { details?: string | null }).details ?? null,
+      hint: (raw as { hint?: string | null }).hint ?? null,
+      status: (raw as { status?: number | null }).status ?? null,
+    };
+    onDebugEvent?.({
+      type: "branch_error",
+      branch,
+      snapshot,
+      error: normalized,
+    });
+  };
   debugDraftStep("start", {
     postId: postId ?? null,
     branch: postId ? "update_by_id" : payload.item_id != null ? "select_by_item_id_then_write" : "insert",
@@ -235,6 +316,7 @@ export async function createOrUpdateDraftPost(payload: CreateDraftPostPayload, p
 
   if (postId) {
     try {
+      reportStart("update_by_id");
       debugDraftStep("update_by_id start", { postId, payload: writePayload });
       const { data, error } = await supabase
         .from("tg_posts")
@@ -244,8 +326,10 @@ export async function createOrUpdateDraftPost(payload: CreateDraftPostPayload, p
         .single();
       if (error) throw error;
       debugDraftStep("update_by_id success", { postId, savedId: data.id });
+      reportSuccess("update_by_id", data.id);
       return data as TgPost;
     } catch (error) {
+      reportError("update_by_id", error);
       throwDraftStepError("update_by_id", error);
     }
   }
@@ -253,6 +337,7 @@ export async function createOrUpdateDraftPost(payload: CreateDraftPostPayload, p
   // For warehouse flow resolve existing by item_id first.
   if (payload.item_id != null) {
     try {
+      reportStart("select_by_item_id");
       debugDraftStep("select_by_item_id start", { item_id: payload.item_id });
       const { data: existing, error: existingError } = await supabase
         .from("tg_posts")
@@ -261,8 +346,10 @@ export async function createOrUpdateDraftPost(payload: CreateDraftPostPayload, p
         .maybeSingle();
       if (existingError) throw existingError;
       debugDraftStep("select_by_item_id success", { item_id: payload.item_id, existingId: existing?.id ?? null });
+      reportSuccess("select_by_item_id", existing?.id ?? "none");
 
       if (existing?.id) {
+        reportStart("update_existing_by_item_id");
         debugDraftStep("update_existing_by_item_id start", { existingId: existing.id, payload: writePayload });
         const { data, error } = await supabase
           .from("tg_posts")
@@ -272,15 +359,18 @@ export async function createOrUpdateDraftPost(payload: CreateDraftPostPayload, p
           .single();
         if (error) throw error;
         debugDraftStep("update_existing_by_item_id success", { savedId: data.id });
+        reportSuccess("update_existing_by_item_id", data.id);
         return data as TgPost;
       }
     } catch (error) {
+      reportError("select_by_item_id", error);
       // Fallback for mobile/webview transport glitches on initial SELECT path.
       debugDraftStep("select_by_item_id_or_update failed, trying upsert_fallback", {
         item_id: payload.item_id,
         error: debugErrorSnapshot(error),
       });
       try {
+        reportStart("upsert_fallback");
         const { data, error: upsertError } = await supabase
           .from("tg_posts")
           .upsert(writePayload, { onConflict: "item_id" })
@@ -288,14 +378,17 @@ export async function createOrUpdateDraftPost(payload: CreateDraftPostPayload, p
           .single();
         if (upsertError) throw upsertError;
         debugDraftStep("upsert_fallback success", { savedId: data.id });
+        reportSuccess("upsert_fallback", data.id);
         return data as TgPost;
       } catch (fallbackError) {
+        reportError("upsert_fallback", fallbackError);
         throwDraftStepError("upsert_fallback_after_select_failure", fallbackError);
       }
     }
   }
 
   try {
+    reportStart("insert_new");
     debugDraftStep("insert_new start", { payload: writePayload });
     const { data, error } = await supabase
       .from("tg_posts")
@@ -304,8 +397,10 @@ export async function createOrUpdateDraftPost(payload: CreateDraftPostPayload, p
       .single();
     if (error) throw error;
     debugDraftStep("insert_new success", { savedId: data.id });
+    reportSuccess("insert_new", data.id);
     return data as TgPost;
   } catch (error) {
+    reportError("insert_new", error);
     throwDraftStepError("insert_new", error);
   }
 }

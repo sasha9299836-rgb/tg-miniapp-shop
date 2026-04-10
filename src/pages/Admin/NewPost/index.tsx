@@ -820,7 +820,24 @@ export function AdminNewPostPage() {
       scheduled_at: moscowDateTimeLocalToIso(scheduleAtInput),
       current_status: currentPost?.status,
       current_published_at: currentPost?.published_at ?? null,
-    }, currentPost?.id);
+    }, currentPost?.id, (event) => {
+      if (event.type === "branch_start") {
+        logPublishStep(`draft branch start: ${event.branch}`, event.snapshot);
+        return;
+      }
+      if (event.type === "branch_success") {
+        logPublishStep(`draft branch success: ${event.branch}`, {
+          savedId: event.savedId,
+          ...event.snapshot,
+        });
+        return;
+      }
+      logPublishStep(`draft branch error: ${event.branch}`, {
+        ...event.snapshot,
+        failed_branch: event.branch,
+        error: event.error,
+      });
+    });
     logPublishStep("createOrUpdateDraftPost success", { savedId: saved.id, status: saved.status });
 
     await syncUploadedPhotosToPost(saved.id);
