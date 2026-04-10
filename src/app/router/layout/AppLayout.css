@@ -67,3 +67,30 @@
   width: var(--desktop-preview-width);
   transform: translateX(-50%);
 }
+
+.defect-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 220;
+  background: rgba(8, 12, 22, 0.44);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.defect-confirm-dialog {
+  width: min(420px, 100%);
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.defect-confirm-dialog__title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.defect-confirm-dialog__actions {
+  display: grid;
+  gap: 8px;
+}

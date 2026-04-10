@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate, useNavigationType } from "react-router-dom";
 import { getTelegramStartParam } from "../../providers/telegram";
+import { Button } from "../../../shared/ui/Button";
+import { useDefectReviewStore } from "../../../entities/cart/model/useDefectReviewStore";
 import { TabBar } from "../../../widgets/TabBar";
 import "./AppLayout.css";
 
@@ -42,6 +44,10 @@ export const AppLayout = () => {
   const [isDesktopScreen, setIsDesktopScreen] = useState(false);
   const [isLikelyMobileRuntime, setIsLikelyMobileRuntime] = useState(false);
   const [isMobilePreview, setIsMobilePreview] = useState(false);
+  const pendingConfirm = useDefectReviewStore((s) => s.pendingConfirm);
+  const confirmPendingAndAdd = useDefectReviewStore((s) => s.confirmPendingAndAdd);
+  const declinePendingForReview = useDefectReviewStore((s) => s.declinePendingForReview);
+  const [isConfirmSubmitting, setIsConfirmSubmitting] = useState(false);
 
   useEffect(() => {
     if (startupRouteHandledRef.current) return;
@@ -118,6 +124,23 @@ export const AppLayout = () => {
   const showDesktopToggle = isDesktopScreen && !isLikelyMobileRuntime;
   const useMobilePreviewLayout = isDesktopScreen && isMobilePreview;
 
+  const onConfirmDefects = async () => {
+    setIsConfirmSubmitting(true);
+    try {
+      await confirmPendingAndAdd();
+    } finally {
+      setIsConfirmSubmitting(false);
+    }
+  };
+
+  const onDeclineAndReview = () => {
+    const pending = declinePendingForReview();
+    if (!pending) return;
+    navigate(`/item/${encodeURIComponent(pending.itemRef)}`, {
+      state: { openDefectsOnLoad: true, markDefectsReviewedOnLoad: true },
+    });
+  };
+
   return (
     <div className={`app-shell${useMobilePreviewLayout ? " app-shell--mobilePreview" : ""}`}>
       {showDesktopToggle ? (
@@ -137,6 +160,21 @@ export const AppLayout = () => {
         <Outlet />
       </main>
       <TabBar />
+      {pendingConfirm ? (
+        <div className="defect-confirm-overlay">
+          <div className="defect-confirm-dialog glass" onClick={(event) => event.stopPropagation()}>
+            <div className="defect-confirm-dialog__title">Ознакомлены ли вы с дефектами?</div>
+            <div className="defect-confirm-dialog__actions">
+              <Button onClick={() => void onConfirmDefects()} disabled={isConfirmSubmitting}>
+                Да, ознакомлен
+              </Button>
+              <Button variant="secondary" onClick={onDeclineAndReview} disabled={isConfirmSubmitting}>
+                Нет, ознакомиться
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };

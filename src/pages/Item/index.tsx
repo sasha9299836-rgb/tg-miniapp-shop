@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useProductsStore } from "../../entities/product/model/useProductsStore";
 import { useFavoritesStore } from "../../entities/favorites/model/useFavoritesStore";
 import { useCartStore } from "../../entities/cart/model/useCartStore";
+import { useDefectReviewStore } from "../../entities/cart/model/useDefectReviewStore";
 import { getProductDisplayTitle } from "../../shared/lib/productTitle";
 import { buildTelegramMiniAppProductLink } from "../../shared/lib/telegramMiniAppLink";
 import { Button } from "../../shared/ui/Button";
@@ -12,6 +13,7 @@ import "./styles.css";
 
 export function ItemPage() {
   const nav = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
   const productRef = String(id ?? "").trim();
   const numericProductId = Number(productRef);
@@ -19,12 +21,14 @@ export function ItemPage() {
   const { products, load, getById } = useProductsStore();
   const fav = useFavoritesStore();
   const cart = useCartStore();
+  const requestAddWithDefectGuard = useDefectReviewStore((s) => s.requestAddWithDefectGuard);
+  const markReviewed = useDefectReviewStore((s) => s.markReviewed);
 
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [viewerImages, setViewerImages] = useState<string[]>([]);
   const [photoIndex, setPhotoIndex] = useState(0);
   const [isDescOpen, setIsDescOpen] = useState(true);
-  const [isDefectsOpen, setIsDefectsOpen] = useState(true);
+  const [isDefectsOpen, setIsDefectsOpen] = useState(false);
 
   useEffect(() => {
     if (!products.length) void load();
@@ -108,6 +112,17 @@ export function ItemPage() {
       document.body.style.overflow = prevOverflow;
     };
   }, [isViewerOpen, viewerTotal]);
+
+  useEffect(() => {
+    if (!product) return;
+    const state = location.state as { openDefectsOnLoad?: boolean; markDefectsReviewedOnLoad?: boolean } | null;
+    if (!state?.openDefectsOnLoad) return;
+    setIsDefectsOpen(true);
+    if (state.markDefectsReviewedOnLoad) {
+      markReviewed({ id: product.id, postId: product.postId });
+    }
+    nav(location.pathname, { replace: true, state: null });
+  }, [location.pathname, location.state, markReviewed, nav, product]);
 
   const openViewer = (list: string[], index: number) => {
     setViewerImages(list);
@@ -225,10 +240,24 @@ export function ItemPage() {
         <div className="item-meta"><span>Размер</span><span>{product.size || "Не указан"}</span></div>
 
         {hasDefectsSection ? (
-          <div className="item-accordion">
-            <button type="button" className="item-accordion__head" onClick={() => setIsDefectsOpen((v) => !v)}>
+          <div className="item-accordion item-accordion--plain">
+            <button
+              type="button"
+              className="item-accordion__head"
+              onClick={() => setIsDefectsOpen((v) => {
+                const next = !v;
+                if (next) {
+                  markReviewed({ id: product.id, postId: product.postId });
+                }
+                return next;
+              })}
+            >
               <span>Дефекты</span>
-              <span>{isDefectsOpen ? "−" : "+"}</span>
+              <span className={`item-accordion__chevron ${isDefectsOpen ? "is-open" : ""}`}>
+                <svg className="item-accordion__chevronIcon" viewBox="0 0 24 24" aria-hidden>
+                  <path d="M8 5L16 12L8 19" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
             </button>
             {isDefectsOpen ? (
               <div className="item-accordion__body">
@@ -274,7 +303,7 @@ export function ItemPage() {
               <path d="M46 20.038c0-.7-.3-1.5-.8-2.1l-16-17c-1.1-1-3.2-1.4-4.4-.3-1.2 1.1-1.2 3.3 0 4.4l11.3 11.9H3c-1.7 0-3 1.3-3 3s1.3 3 3 3h33.1l-11.3 11.9c-1 1-1.2 3.3 0 4.4 1.2 1.1 3.3.8 4.4-.3l16-17c.5-.5.8-1.1.8-1.9z" />
             </svg>
           </button>
-          <Button variant="primary" className="item-action-main" onClick={() => void cart.add({ id: product.id, postId: product.postId })}>
+          <Button variant="primary" className="item-action-main" onClick={() => void requestAddWithDefectGuard(product)}>
             {isInCart
               ? "\u0412 \u043A\u043E\u0440\u0437\u0438\u043D\u0435"
               : "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0432 \u043A\u043E\u0440\u0437\u0438\u043D\u0443"}

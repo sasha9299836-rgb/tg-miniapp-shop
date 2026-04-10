@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useProductsStore } from "../../entities/product/model/useProductsStore";
 import { useFavoritesStore } from "../../entities/favorites/model/useFavoritesStore";
 import { useCartStore } from "../../entities/cart/model/useCartStore";
+import { useDefectReviewStore } from "../../entities/cart/model/useDefectReviewStore";
 import { getCatalogProductsByPostIds } from "../../shared/api/adminPostsApi";
 import { useUserSessionReadiness } from "../../shared/auth/useUserSessionReadiness";
 import type { Product } from "../../shared/types/product";
@@ -17,6 +18,7 @@ export function FavoritesPage() {
   const { products, load } = useProductsStore();
   const fav = useFavoritesStore();
   const cart = useCartStore();
+  const requestAddWithDefectGuard = useDefectReviewStore((s) => s.requestAddWithDefectGuard);
   const { isReady, isChecking, errorText: readinessErrorText } = useUserSessionReadiness();
   const [itemsByFavorites, setItemsByFavorites] = useState<Product[]>([]);
 
@@ -143,7 +145,7 @@ export function FavoritesPage() {
               <div className="favorites-item__actions">
                 <Button variant="secondary" onClick={() => void fav.remove({ id: product.id, postId: product.postId })}>Удалить</Button>
                 <Button
-                  onClick={() => void cart.add({ id: product.id, postId: product.postId })}
+                  onClick={() => void requestAddWithDefectGuard(product)}
                   disabled={product.saleStatus !== "available"}
                 >
                   {product.saleStatus === "available" ? "В корзину" : "Недоступно"}

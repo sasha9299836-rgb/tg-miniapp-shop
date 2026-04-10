@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useProductsStore } from "../../entities/product/model/useProductsStore";
 import { useFavoritesStore } from "../../entities/favorites/model/useFavoritesStore";
 import { useCartStore } from "../../entities/cart/model/useCartStore";
+import { useDefectReviewStore } from "../../entities/cart/model/useDefectReviewStore";
 import { ProductCard } from "../../widgets/ProductCard";
 import { Input } from "../../shared/ui/Input";
 import { Button } from "../../shared/ui/Button";
@@ -24,6 +25,7 @@ export function CatalogPage() {
   const { products, load } = useProductsStore();
   const fav = useFavoritesStore();
   const cart = useCartStore();
+  const requestAddWithDefectGuard = useDefectReviewStore((s) => s.requestAddWithDefectGuard);
 
   const [q, setQ] = useState("");
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
@@ -104,7 +106,7 @@ export function CatalogPage() {
               key={p.id}
               product={p}
               onOpen={() => nav(`/item/${p.id}`)}
-              onAddToCart={() => void cart.add({ id: p.id, postId: p.postId })}
+              onAddToCart={() => void requestAddWithDefectGuard(p)}
               onToggleFav={() => void fav.toggle({ id: p.id, postId: p.postId })}
               isFav={fav.has({ id: p.id, postId: p.postId })}
               isInCart={cart.has({ id: p.id, postId: p.postId })}
