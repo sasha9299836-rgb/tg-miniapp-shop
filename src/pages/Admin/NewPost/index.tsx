@@ -788,6 +788,10 @@ export function AdminNewPostPage() {
       if (!itemData || !ALLOWED_NALICHIE_STATUSES.has(itemStatus)) {
         throw new Error("Выбранный товар недоступен для публикации. Разрешены только in_stock и in_transit.");
       }
+      const targetItemId = currentPost?.item_id ?? normalizedNalichieId;
+      if (!Number.isInteger(targetItemId) || Number(targetItemId) <= 0) {
+        throw new Error("Не удалось определить item_id/nalichie_id для складского поста.");
+      }
     }
 
     logPublishStep("createOrUpdateDraftPost start", {

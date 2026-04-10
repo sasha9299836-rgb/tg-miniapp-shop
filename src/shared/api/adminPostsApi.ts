@@ -176,28 +176,29 @@ export async function createOrUpdateDraftPost(payload: CreateDraftPostPayload, p
     ? "scheduled"
     : "draft";
   const nextPublishedAt = nextStatus === "published" ? (payload.current_published_at ?? new Date().toISOString()) : null;
+  const writePayload = {
+    item_id: payload.item_id,
+    nalichie_id: payload.nalichie_id,
+    post_type: payload.post_type,
+    origin_profile: payload.origin_profile,
+    packaging_preset: payload.packaging_preset,
+    title: payload.title,
+    brand: payload.brand,
+    size: payload.size,
+    price: payload.price,
+    description: payload.description,
+    condition: payload.condition,
+    has_defects: payload.has_defects,
+    defects_text: payload.has_defects ? payload.defects_text : null,
+    status: nextStatus,
+    scheduled_at: scheduledAt,
+    published_at: nextPublishedAt,
+  };
 
   if (postId) {
     const { data, error } = await supabase
       .from("tg_posts")
-      .update({
-        item_id: payload.item_id,
-        nalichie_id: payload.nalichie_id,
-        post_type: payload.post_type,
-        origin_profile: payload.origin_profile,
-        packaging_preset: payload.packaging_preset,
-        title: payload.title,
-        brand: payload.brand,
-        size: payload.size,
-        price: payload.price,
-        description: payload.description,
-        condition: payload.condition,
-        has_defects: payload.has_defects,
-        defects_text: payload.has_defects ? payload.defects_text : null,
-        status: nextStatus,
-        scheduled_at: scheduledAt,
-        published_at: nextPublishedAt,
-      })
+      .update(writePayload)
       .eq("id", postId)
       .select("*")
       .single();
@@ -206,26 +207,31 @@ export async function createOrUpdateDraftPost(payload: CreateDraftPostPayload, p
     return data as TgPost;
   }
 
+  // Avoid relying on onConflict upsert path in mobile WebView runtime.
+  // For warehouse flow we deterministically resolve existing draft by item_id and then update/insert.
+  if (payload.item_id != null) {
+    const { data: existing, error: existingError } = await supabase
+      .from("tg_posts")
+      .select("id")
+      .eq("item_id", payload.item_id)
+      .maybeSingle();
+    if (existingError) throw existingError;
+
+    if (existing?.id) {
+      const { data, error } = await supabase
+        .from("tg_posts")
+        .update(writePayload)
+        .eq("id", existing.id)
+        .select("*")
+        .single();
+      if (error) throw error;
+      return data as TgPost;
+    }
+  }
+
   const { data, error } = await supabase
     .from("tg_posts")
-    .upsert({
-      item_id: payload.item_id,
-      nalichie_id: payload.nalichie_id,
-      post_type: payload.post_type,
-      origin_profile: payload.origin_profile,
-      packaging_preset: payload.packaging_preset,
-      title: payload.title,
-      brand: payload.brand,
-      size: payload.size,
-      price: payload.price,
-      description: payload.description,
-      condition: payload.condition,
-      has_defects: payload.has_defects,
-      defects_text: payload.has_defects ? payload.defects_text : null,
-      status: nextStatus,
-      scheduled_at: scheduledAt,
-      published_at: nextPublishedAt,
-    }, { onConflict: "item_id" })
+    .insert(writePayload)
     .select("*")
     .single();
 
