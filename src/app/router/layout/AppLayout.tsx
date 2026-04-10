@@ -84,6 +84,14 @@ export const AppLayout = () => {
   useEffect(() => {
     const previousPathname = previousPathnameRef.current;
     const currentPathname = location.pathname;
+    const isSamePathReplace = previousPathname === currentPathname && navigationType === "REPLACE";
+
+    // Ignore state-only replaces on the same route (used by one-shot UI state cleanup),
+    // otherwise we overwrite page-level targeted scroll (e.g. defects auto-scroll on Item page).
+    if (isSamePathReplace) {
+      previousPathnameRef.current = currentPathname;
+      return;
+    }
 
     if (previousPathname !== currentPathname && isCatalogRoute(previousPathname)) {
       const currentScrollY = Math.max(0, window.scrollY || window.pageYOffset || 0);
