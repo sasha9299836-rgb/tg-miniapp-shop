@@ -273,6 +273,14 @@ function logUploadStep(localId: string, message: string, extra?: unknown) {
   console.debug(`[admin-media][${localId}] ${message}`, extra);
 }
 
+function logPublishStep(message: string, extra?: unknown) {
+  if (extra === undefined) {
+    console.debug(`[admin-publish] ${message}`);
+    return;
+  }
+  console.debug(`[admin-publish] ${message}`, extra);
+}
+
 function normalizeConditionValue(value: string | null | undefined) {
   const raw = String(value ?? "").trim();
   if (!raw) return CONDITION_OPTIONS[0];
@@ -698,8 +706,14 @@ export function AdminNewPostPage() {
   const syncUploadedPhotosToPost = async (postId: string) => {
     const unsyncedMain = mainPhotos.filter((photo) => !photo.dbId);
     const unsyncedDefect = defectPhotos.filter((photo) => !photo.dbId);
+    logPublishStep("syncUploadedPhotosToPost start", {
+      postId,
+      unsyncedMain: unsyncedMain.map((photo) => ({ localId: photo.localId, photoNo: photo.photoNo, key: photo.key })),
+      unsyncedDefect: unsyncedDefect.map((photo) => ({ localId: photo.localId, photoNo: photo.photoNo, key: photo.key, mediaType: photo.mediaType })),
+    });
 
     for (const photo of unsyncedMain) {
+      logPublishStep("createPostPhoto start", { postId, localId: photo.localId, photoNo: photo.photoNo, key: photo.key });
       const created = await createPostPhoto({
         post_id: postId,
         item_id: postType === "warehouse" ? normalizedNalichieId : null,
@@ -709,12 +723,20 @@ export function AdminNewPostPage() {
         sort_order: photo.photoNo - 1,
         kind: "main",
       });
+      logPublishStep("createPostPhoto success", { postId, localId: photo.localId, dbId: created.id });
       setMainPhotos((prev) => prev.map((entry) => (
         entry.localId === photo.localId ? { ...entry, dbId: created.id } : entry
       )));
     }
 
     for (const photo of unsyncedDefect) {
+      logPublishStep("createPostDefectPhoto start", {
+        postId,
+        localId: photo.localId,
+        photoNo: photo.photoNo,
+        key: photo.key,
+        mediaType: photo.mediaType,
+      });
       const created = await createPostDefectPhoto({
         post_id: postId,
         photo_no: photo.photoNo,
@@ -722,10 +744,12 @@ export function AdminNewPostPage() {
         public_url: photo.url,
         media_type: photo.mediaType,
       });
+      logPublishStep("createPostDefectPhoto success", { postId, localId: photo.localId, dbId: created.id });
       setDefectPhotos((prev) => prev.map((entry) => (
         entry.localId === photo.localId ? { ...entry, dbId: created.id } : entry
       )));
     }
+    logPublishStep("syncUploadedPhotosToPost finish", { postId });
   };
 
   const persistDraft = async (): Promise<TgPost> => {
@@ -737,6 +761,15 @@ export function AdminNewPostPage() {
         throw new Error("Выбранный товар недоступен для публикации. Разрешены только in_stock и in_transit.");
       }
     }
+
+    logPublishStep("createOrUpdateDraftPost start", {
+      currentPostId: currentPost?.id ?? null,
+      postType,
+      normalizedNalichieId,
+      hasDefects,
+      mainPhotos: mainPhotos.map((photo) => ({ localId: photo.localId, dbId: photo.dbId ?? null, photoNo: photo.photoNo })),
+      defectPhotos: defectPhotos.map((photo) => ({ localId: photo.localId, dbId: photo.dbId ?? null, photoNo: photo.photoNo, mediaType: photo.mediaType })),
+    });
 
     const saved = await createOrUpdateDraftPost({
       item_id: postType === "warehouse" ? (currentPost?.item_id ?? normalizedNalichieId) : null,
@@ -756,8 +789,10 @@ export function AdminNewPostPage() {
       current_status: currentPost?.status,
       current_published_at: currentPost?.published_at ?? null,
     }, currentPost?.id);
+    logPublishStep("createOrUpdateDraftPost success", { savedId: saved.id, status: saved.status });
 
     await syncUploadedPhotosToPost(saved.id);
+    logPublishStep("persistDraft hydrateFromPost", { savedId: saved.id });
     hydrateFromPost(saved);
     return saved;
   };
@@ -1033,12 +1068,16 @@ export function AdminNewPostPage() {
 
     setIsScheduling(true);
     try {
-      const targetPost = currentPost ?? await persistDraft();
+      logPublishStep("schedule flow start", { currentPostId: currentPost?.id ?? null });
+      const targetPost = await persistDraft();
+      logPublishStep("schedulePost start", { postId: targetPost.id, iso });
       await schedulePost(targetPost.id, iso);
+      logPublishStep("schedulePost success", { postId: targetPost.id });
       resetFormToEmpty();
       if (isEditMode) nav("/admin/posts/new", { replace: true });
       setSuccessText(currentPost?.status === "scheduled" ? "Время публикации изменено." : "Пост запланирован.");
     } catch (error) {
+      logPublishStep("schedule flow failed", error);
       setErrorText(`Ошибка планирования: ${(error as Error).message}`);
     } finally {
       setIsScheduling(false);
@@ -1055,12 +1094,16 @@ export function AdminNewPostPage() {
 
     setIsPublishingNow(true);
     try {
-      const targetPost = currentPost ?? await persistDraft();
+      logPublishStep("publish flow start", { currentPostId: currentPost?.id ?? null });
+      const targetPost = await persistDraft();
+      logPublishStep("publishPostNow start", { postId: targetPost.id });
       await publishPostNow(targetPost.id);
+      logPublishStep("publishPostNow success", { postId: targetPost.id });
       resetFormToEmpty();
       if (isEditMode) nav("/admin/posts/new", { replace: true });
       setSuccessText("Пост опубликован.");
     } catch (error) {
+      logPublishStep("publish flow failed", error);
       setErrorText(`Ошибка публикации: ${(error as Error).message}`);
     } finally {
       setIsPublishingNow(false);
