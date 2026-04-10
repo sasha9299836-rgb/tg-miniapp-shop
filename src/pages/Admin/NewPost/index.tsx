@@ -265,6 +265,14 @@ function readVideoDurationSeconds(previewUrl: string): Promise<number> {
   });
 }
 
+function logUploadStep(localId: string, message: string, extra?: unknown) {
+  if (extra === undefined) {
+    console.debug(`[admin-media][${localId}] ${message}`);
+    return;
+  }
+  console.debug(`[admin-media][${localId}] ${message}`, extra);
+}
+
 function normalizeConditionValue(value: string | null | undefined) {
   const raw = String(value ?? "").trim();
   if (!raw) return CONDITION_OPTIONS[0];
@@ -802,6 +810,11 @@ export function AdminNewPostPage() {
         previewUrl,
         status: mediaType === "video" ? "validating" : "pending",
       });
+      logUploadStep(staged[staged.length - 1].localId, `selected ${kind}`, {
+        fileName: file.name,
+        mediaType,
+        status: staged[staged.length - 1].status,
+      });
       nextPhotoNo += 1;
     }
 
@@ -818,24 +831,30 @@ export function AdminNewPostPage() {
 
     void (async () => {
       try {
+        logUploadStep(next.localId, "video validation wait start", { fileName: next.file.name });
         await waitForAppToBeInteractive();
         if (cancelled) return;
+        logUploadStep(next.localId, "video validation metadata read start");
         const durationSeconds = await readVideoDurationSeconds(next.previewUrl);
         if (cancelled) return;
+        logUploadStep(next.localId, "video validation metadata read finish", { durationSeconds });
         if (durationSeconds > MAX_DEFECT_VIDEO_DURATION_SECONDS) {
           URL.revokeObjectURL(next.previewUrl);
           setPendingDefectUploads((prev) => prev.filter((entry) => entry.localId !== next.localId));
           setErrorText("Видео дефекта должно быть не длиннее 2 минут.");
+          logUploadStep(next.localId, "video validation rejected by duration");
           return;
         }
         setPendingDefectUploads((prev) => prev.map((entry) => (
           entry.localId === next.localId ? { ...entry, status: "pending" } : entry
         )));
+        logUploadStep(next.localId, "video validation passed -> pending");
       } catch (error) {
         if (cancelled) return;
         URL.revokeObjectURL(next.previewUrl);
         setPendingDefectUploads((prev) => prev.filter((entry) => entry.localId !== next.localId));
         setErrorText((error as Error).message || "Не удалось проверить длительность видео.");
+        logUploadStep(next.localId, "video validation failed", error);
       }
     })();
 
@@ -847,13 +866,24 @@ export function AdminNewPostPage() {
   const uploadPendingItem = async (item: PendingUpload, kind: "main" | "defect") => {
     const postIdForUpload = currentPost?.id ?? draftUploadId;
     const itemIdForStorage = postType === "warehouse" ? (currentPost?.item_id ?? normalizedNalichieId) : null;
+    logUploadStep(item.localId, "presign start", {
+      kind,
+      fileName: item.file.name,
+      mimeType: item.file.type,
+      photoNo: item.photoNo,
+      postIdForUpload,
+      itemIdForStorage,
+    });
     const { url, publicUrl, key } = await getYcPresignedPut(postIdForUpload, itemIdForStorage, item.file, item.photoNo, kind);
+    logUploadStep(item.localId, "presign success", { key, publicUrl });
 
+    logUploadStep(item.localId, "put upload start");
     const uploadRes = await fetch(url, {
       method: "PUT",
       headers: { "Content-Type": item.file.type || "application/octet-stream" },
       body: item.file,
     });
+    logUploadStep(item.localId, "put upload finish", { status: uploadRes.status });
 
     if (!(uploadRes.status === 200 || uploadRes.status === 204)) {
       throw new Error(`Ошибка загрузки файла ${item.file.name}: ${uploadRes.status}`);
@@ -868,6 +898,7 @@ export function AdminNewPostPage() {
     };
     if (kind === "main") setMainPhotos((prev) => [...prev, payload]);
     if (kind === "defect") setDefectPhotos((prev) => [...prev, payload]);
+    logUploadStep(item.localId, "local state updated -> uploaded");
     setSuccessText(kind === "main" ? "Основные фотографии загружены." : "Медиа дефектов загружены.");
   };
 
@@ -876,21 +907,21 @@ export function AdminNewPostPage() {
     const next = pendingMainUploads.find((entry) => entry.status === "pending");
     if (!next) return;
     pendingMainActivationRef.current = next.localId;
-    let cancelled = false;
     void (async () => {
       try {
+        logUploadStep(next.localId, "main upload wait start");
         await waitForAppToBeInteractive();
-        if (cancelled) return;
+        logUploadStep(next.localId, "main upload wait finish");
         setPendingMainUploads((prev) => prev.map((entry) => (
           entry.localId === next.localId ? { ...entry, status: "uploading" } : entry
         )));
         setIsUploadingPhotos(true);
         await uploadPendingItem(next, "main");
-        if (cancelled) return;
         URL.revokeObjectURL(next.previewUrl);
         setPendingMainUploads((prev) => prev.filter((entry) => entry.localId !== next.localId));
+        logUploadStep(next.localId, "main upload completed");
       } catch (error) {
-        if (cancelled) return;
+        logUploadStep(next.localId, "main upload failed", error);
         const message = (error as Error).message ?? "";
         if (message.includes("ALREADY_EXISTS") || message.includes("409")) {
           setErrorText("Медиа с таким номером уже загружено.");
@@ -902,18 +933,9 @@ export function AdminNewPostPage() {
         )));
       } finally {
         pendingMainActivationRef.current = null;
-        if (!cancelled) {
-          setIsUploadingPhotos(false);
-        }
+        setIsUploadingPhotos(false);
       }
     })();
-
-    return () => {
-      cancelled = true;
-      if (pendingMainActivationRef.current === next.localId) {
-        pendingMainActivationRef.current = null;
-      }
-    };
   }, [pendingMainUploads, isUploadingPhotos, currentPost?.id, currentPost?.item_id, draftUploadId, postType, normalizedNalichieId]);
 
   useEffect(() => {
@@ -921,21 +943,21 @@ export function AdminNewPostPage() {
     const next = pendingDefectUploads.find((entry) => entry.status === "pending");
     if (!next) return;
     pendingDefectActivationRef.current = next.localId;
-    let cancelled = false;
     void (async () => {
       try {
+        logUploadStep(next.localId, "defect upload wait start");
         await waitForAppToBeInteractive();
-        if (cancelled) return;
+        logUploadStep(next.localId, "defect upload wait finish");
         setPendingDefectUploads((prev) => prev.map((entry) => (
           entry.localId === next.localId ? { ...entry, status: "uploading" } : entry
         )));
         setIsUploadingDefects(true);
         await uploadPendingItem(next, "defect");
-        if (cancelled) return;
         URL.revokeObjectURL(next.previewUrl);
         setPendingDefectUploads((prev) => prev.filter((entry) => entry.localId !== next.localId));
+        logUploadStep(next.localId, "defect upload completed");
       } catch (error) {
-        if (cancelled) return;
+        logUploadStep(next.localId, "defect upload failed", error);
         const message = (error as Error).message ?? "";
         if (message.includes("ALREADY_EXISTS") || message.includes("409")) {
           setErrorText("Медиа с таким номером уже загружено.");
@@ -947,18 +969,9 @@ export function AdminNewPostPage() {
         )));
       } finally {
         pendingDefectActivationRef.current = null;
-        if (!cancelled) {
-          setIsUploadingDefects(false);
-        }
+        setIsUploadingDefects(false);
       }
     })();
-
-    return () => {
-      cancelled = true;
-      if (pendingDefectActivationRef.current === next.localId) {
-        pendingDefectActivationRef.current = null;
-      }
-    };
   }, [pendingDefectUploads, isUploadingDefects, currentPost?.id, currentPost?.item_id, draftUploadId, postType, normalizedNalichieId]);
 
   const onDeleteMainPhoto = async (localId: string) => {
