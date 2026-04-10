@@ -97,6 +97,39 @@ export type ScheduledPostListItem = {
   previewUrls: string[];
 };
 
+function debugDraftStep(step: string, payload?: unknown) {
+  if (payload === undefined) {
+    console.debug(`[createOrUpdateDraftPost] ${step}`);
+    return;
+  }
+  console.debug(`[createOrUpdateDraftPost] ${step}`, payload);
+}
+
+function debugErrorSnapshot(error: unknown) {
+  if (error instanceof Error) {
+    const anyError = error as Error & { code?: string; details?: string; hint?: string; status?: number };
+    return {
+      name: anyError.name,
+      message: anyError.message,
+      stack: anyError.stack ?? null,
+      code: anyError.code ?? null,
+      details: anyError.details ?? null,
+      hint: anyError.hint ?? null,
+      status: anyError.status ?? null,
+    };
+  }
+  return { value: String(error) };
+}
+
+function throwDraftStepError(step: string, error: unknown): never {
+  const snapshot = debugErrorSnapshot(error);
+  debugDraftStep(`${step} error`, snapshot);
+  throw new Error(
+    `[createOrUpdateDraftPost:${step}] ${snapshot.message ?? "UNKNOWN_ERROR"}`,
+    { cause: error instanceof Error ? error : undefined },
+  );
+}
+
 function syntheticIdFromUuid(uuid: string): number {
   let hash = 0;
   for (let i = 0; i < uuid.length; i += 1) {
@@ -194,49 +227,87 @@ export async function createOrUpdateDraftPost(payload: CreateDraftPostPayload, p
     scheduled_at: scheduledAt,
     published_at: nextPublishedAt,
   };
+  debugDraftStep("start", {
+    postId: postId ?? null,
+    branch: postId ? "update_by_id" : payload.item_id != null ? "select_by_item_id_then_write" : "insert",
+    payload: writePayload,
+  });
 
   if (postId) {
-    const { data, error } = await supabase
-      .from("tg_posts")
-      .update(writePayload)
-      .eq("id", postId)
-      .select("*")
-      .single();
-
-    if (error) throw error;
-    return data as TgPost;
-  }
-
-  // Avoid relying on onConflict upsert path in mobile WebView runtime.
-  // For warehouse flow we deterministically resolve existing draft by item_id and then update/insert.
-  if (payload.item_id != null) {
-    const { data: existing, error: existingError } = await supabase
-      .from("tg_posts")
-      .select("id")
-      .eq("item_id", payload.item_id)
-      .maybeSingle();
-    if (existingError) throw existingError;
-
-    if (existing?.id) {
+    try {
+      debugDraftStep("update_by_id start", { postId, payload: writePayload });
       const { data, error } = await supabase
         .from("tg_posts")
         .update(writePayload)
-        .eq("id", existing.id)
+        .eq("id", postId)
         .select("*")
         .single();
       if (error) throw error;
+      debugDraftStep("update_by_id success", { postId, savedId: data.id });
       return data as TgPost;
+    } catch (error) {
+      throwDraftStepError("update_by_id", error);
     }
   }
 
-  const { data, error } = await supabase
-    .from("tg_posts")
-    .insert(writePayload)
-    .select("*")
-    .single();
+  // For warehouse flow resolve existing by item_id first.
+  if (payload.item_id != null) {
+    try {
+      debugDraftStep("select_by_item_id start", { item_id: payload.item_id });
+      const { data: existing, error: existingError } = await supabase
+        .from("tg_posts")
+        .select("id")
+        .eq("item_id", payload.item_id)
+        .maybeSingle();
+      if (existingError) throw existingError;
+      debugDraftStep("select_by_item_id success", { item_id: payload.item_id, existingId: existing?.id ?? null });
 
-  if (error) throw error;
-  return data as TgPost;
+      if (existing?.id) {
+        debugDraftStep("update_existing_by_item_id start", { existingId: existing.id, payload: writePayload });
+        const { data, error } = await supabase
+          .from("tg_posts")
+          .update(writePayload)
+          .eq("id", existing.id)
+          .select("*")
+          .single();
+        if (error) throw error;
+        debugDraftStep("update_existing_by_item_id success", { savedId: data.id });
+        return data as TgPost;
+      }
+    } catch (error) {
+      // Fallback for mobile/webview transport glitches on initial SELECT path.
+      debugDraftStep("select_by_item_id_or_update failed, trying upsert_fallback", {
+        item_id: payload.item_id,
+        error: debugErrorSnapshot(error),
+      });
+      try {
+        const { data, error: upsertError } = await supabase
+          .from("tg_posts")
+          .upsert(writePayload, { onConflict: "item_id" })
+          .select("*")
+          .single();
+        if (upsertError) throw upsertError;
+        debugDraftStep("upsert_fallback success", { savedId: data.id });
+        return data as TgPost;
+      } catch (fallbackError) {
+        throwDraftStepError("upsert_fallback_after_select_failure", fallbackError);
+      }
+    }
+  }
+
+  try {
+    debugDraftStep("insert_new start", { payload: writePayload });
+    const { data, error } = await supabase
+      .from("tg_posts")
+      .insert(writePayload)
+      .select("*")
+      .single();
+    if (error) throw error;
+    debugDraftStep("insert_new success", { savedId: data.id });
+    return data as TgPost;
+  } catch (error) {
+    throwDraftStepError("insert_new", error);
+  }
 }
 
 export async function getPostByItemId(itemId: number): Promise<TgPost | null> {
