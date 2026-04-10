@@ -33,6 +33,23 @@ function buildAdminSessionHeaders(): Record<string, string> | undefined {
   return { "x-admin-token": token };
 }
 
+function inferExtensionFromFileName(fileName: string): string | null {
+  const ext = fileName.toLowerCase().match(/\.([a-z0-9]{2,8})$/u)?.[1]?.trim() ?? "";
+  if (!ext) return null;
+  if (ext === "jpeg") return "jpg";
+  return ext;
+}
+
+function normalizeUploadContentType(file: File, extFromName: string | null): string {
+  const rawType = String(file.type ?? "").trim().toLowerCase();
+  if (extFromName === "mov") return "video/quicktime";
+  if (extFromName === "mp4") return "video/mp4";
+  if (extFromName === "jpg") return "image/jpeg";
+  if (extFromName === "png") return "image/png";
+  if (extFromName === "webp") return "image/webp";
+  return rawType || "application/octet-stream";
+}
+
 export async function ycPresignPut(payload: YcPresignPutPayload): Promise<YcPresignResponse> {
   const { data, error } = await supabase.functions.invoke<YcPresignResponse>("yc_presign_put", {
     body: payload,
@@ -41,7 +58,7 @@ export async function ycPresignPut(payload: YcPresignPutPayload): Promise<YcPres
 
   if (error) throw error;
   if (!data?.url || !data?.key || !data?.publicUrl) {
-    throw new Error("yc_presign_put вернул некорректный ответ");
+    throw new Error("yc_presign_put returned an invalid response");
   }
 
   return data;
@@ -54,13 +71,26 @@ export async function getYcPresignedPut(
   photo_no: number,
   kind: "main" | "defect" = "main",
 ): Promise<YcPresignResponse> {
-  const extFromName = file.name.toLowerCase().match(/\.([a-z0-9]{2,8})$/u)?.[1];
+  const extFromName = inferExtensionFromFileName(file.name);
+  const normalizedContentType = normalizeUploadContentType(file, extFromName);
+  console.debug("[ycApi] presign payload", {
+    post_id,
+    item_id,
+    photo_no,
+    kind,
+    fileName: file.name,
+    fileType: file.type,
+    fileSize: file.size,
+    extFromName,
+    normalizedContentType,
+  });
+
   return ycPresignPut({
     post_id,
     item_id,
     photo_no,
-    content_type: file.type || "application/octet-stream",
-    ext: extFromName,
+    content_type: normalizedContentType,
+    ext: extFromName ?? undefined,
     kind,
   });
 }
@@ -68,8 +98,10 @@ export async function getYcPresignedPut(
 export async function deleteYcObject(storageKey: string): Promise<void> {
   const key = String(storageKey ?? "").trim();
   if (!key) {
-    throw new Error("Пустой storage key для удаления файла.");
+    throw new Error("Empty storage key for delete");
   }
+
+  console.debug("[ycApi] delete payload", { key });
 
   const { data, error } = await supabase.functions.invoke<YcDeleteObjectResponse>("yc_delete_object", {
     body: { key },
@@ -78,6 +110,6 @@ export async function deleteYcObject(storageKey: string): Promise<void> {
 
   if (error) throw error;
   if (!data?.ok) {
-    throw new Error("Не удалось удалить файл из хранилища.");
+    throw new Error("Failed to delete object from storage");
   }
 }

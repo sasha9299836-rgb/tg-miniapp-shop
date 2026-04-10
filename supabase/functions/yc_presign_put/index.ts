@@ -57,7 +57,12 @@ function extFromContentType(contentType: string): string | null {
   if (value.includes("image/png")) return "png";
   if (value.includes("image/webp")) return "webp";
   if (value.includes("video/mp4")) return "mp4";
-  if (value.includes("video/quicktime")) return "mov";
+  if (
+    value.includes("video/quicktime")
+    || value.includes("video/x-quicktime")
+    || value.includes("video/mov")
+    || value.includes("quicktime")
+  ) return "mov";
   return null;
 }
 
