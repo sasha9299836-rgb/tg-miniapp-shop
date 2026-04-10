@@ -137,7 +137,7 @@ export const AppLayout = () => {
     const pending = declinePendingForReview();
     if (!pending) return;
     navigate(`/item/${encodeURIComponent(pending.itemRef)}`, {
-      state: { openDefectsOnLoad: true, markDefectsReviewedOnLoad: true },
+      state: { openDefectsOnLoad: true, markDefectsReviewedOnLoad: true, scrollDefectsOnLoad: true },
     });
   };
 

@@ -186,6 +186,10 @@
   margin-bottom: 8px;
 }
 
+.item-defects-section {
+  scroll-margin-top: calc(var(--safe-top, 0px) + 72px);
+}
+
 .item-defect-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

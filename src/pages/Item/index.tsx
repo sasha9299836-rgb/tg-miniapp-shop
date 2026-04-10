@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useProductsStore } from "../../entities/product/model/useProductsStore";
 import { useFavoritesStore } from "../../entities/favorites/model/useFavoritesStore";
@@ -96,6 +96,7 @@ export function ItemPage() {
   const [isDescOpen, setIsDescOpen] = useState(true);
   const [isDefectsOpen, setIsDefectsOpen] = useState(false);
   const [videoPosterByUrl, setVideoPosterByUrl] = useState<Record<string, string>>({});
+  const defectsSectionRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!products.length) void load();
@@ -202,11 +203,27 @@ export function ItemPage() {
 
   useEffect(() => {
     if (!product) return;
-    const state = location.state as { openDefectsOnLoad?: boolean; markDefectsReviewedOnLoad?: boolean } | null;
+    const state = location.state as {
+      openDefectsOnLoad?: boolean;
+      markDefectsReviewedOnLoad?: boolean;
+      scrollDefectsOnLoad?: boolean;
+    } | null;
     if (!state?.openDefectsOnLoad) return;
     setIsDefectsOpen(true);
     if (state.markDefectsReviewedOnLoad) {
       markReviewed({ id: product.id, postId: product.postId });
+    }
+    if (state.scrollDefectsOnLoad) {
+      // Wait for route-level scroll reset + accordion open render, then smooth-scroll to defects.
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          defectsSectionRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+            inline: "nearest",
+          });
+        });
+      });
     }
     nav(location.pathname, { replace: true, state: null });
   }, [location.pathname, location.state, markReviewed, nav, product]);
@@ -327,7 +344,7 @@ export function ItemPage() {
         <div className="item-meta"><span>Размер</span><span>{product.size || "Не указан"}</span></div>
 
         {hasDefectsSection ? (
-          <div className="item-accordion item-accordion--plain">
+          <div ref={defectsSectionRef} className="item-accordion item-accordion--plain item-defects-section">
             <button
               type="button"
               className="item-accordion__head"
