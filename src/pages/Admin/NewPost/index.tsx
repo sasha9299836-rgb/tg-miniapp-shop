@@ -150,6 +150,7 @@ const BRAND_SUGGESTIONS = [
 ] as const;
 
 const ALLOWED_NALICHIE_STATUSES = new Set(["in_stock", "in_transit"]);
+const ENABLE_PUBLISH_DEBUG_OVERLAY = true;
 
 function getOriginProfileByPostType(postType: TgPostType): TgPostOriginProfile {
   return postType === "consignment" ? "YAN" : "ODN";
@@ -273,12 +274,23 @@ function logUploadStep(localId: string, message: string, extra?: unknown) {
   console.debug(`[admin-media][${localId}] ${message}`, extra);
 }
 
-function logPublishStep(message: string, extra?: unknown) {
+function logPublishStepConsole(message: string, extra?: unknown) {
   if (extra === undefined) {
     console.debug(`[admin-publish] ${message}`);
     return;
   }
   console.debug(`[admin-publish] ${message}`, extra);
+}
+
+function stringifyDebugExtra(extra: unknown): string {
+  if (extra == null) return "";
+  if (typeof extra === "string") return extra;
+  if (extra instanceof Error) return extra.stack || extra.message;
+  try {
+    return JSON.stringify(extra);
+  } catch {
+    return String(extra);
+  }
 }
 
 function normalizeConditionValue(value: string | null | undefined) {
@@ -350,6 +362,8 @@ export function AdminNewPostPage() {
   const [isUnscheduling, setIsUnscheduling] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [successText, setSuccessText] = useState<string | null>(null);
+  const [publishDebugLog, setPublishDebugLog] = useState<string[]>([]);
+  const [publishDebugError, setPublishDebugError] = useState<string | null>(null);
   const [manualPackagingOverrideTypeKey, setManualPackagingOverrideTypeKey] = useState<string | null>(null);
   const [isTypeSuggestionsOpen, setIsTypeSuggestionsOpen] = useState(false);
   const [isBrandSuggestionsOpen, setIsBrandSuggestionsOpen] = useState(false);
@@ -360,6 +374,7 @@ export function AdminNewPostPage() {
   const pendingDefectUploadsRef = useRef<PendingUpload[]>([]);
   const pendingMainActivationRef = useRef<string | null>(null);
   const pendingDefectActivationRef = useRef<string | null>(null);
+  const publishDebugSeqRef = useRef(0);
   const parsedNalichieId = useMemo(() => Number(nalichieIdInput), [nalichieIdInput]);
   const normalizedNalichieId = Number.isInteger(parsedNalichieId) && parsedNalichieId > 0 ? parsedNalichieId : null;
   const costPrice = useMemo(() => {
@@ -395,6 +410,19 @@ export function AdminNewPostPage() {
     return BRAND_SUGGESTIONS.filter((value) => value.toLowerCase().startsWith(query)).slice(0, 8);
   }, [brand]);
   const hasPendingUploads = pendingMainUploads.length > 0 || pendingDefectUploads.length > 0;
+
+  const logPublishStep = (message: string, extra?: unknown) => {
+    logPublishStepConsole(message, extra);
+    if (!ENABLE_PUBLISH_DEBUG_OVERLAY) return;
+    const nextSeq = publishDebugSeqRef.current + 1;
+    publishDebugSeqRef.current = nextSeq;
+    const timestamp = new Date().toLocaleTimeString("ru-RU", { hour12: false });
+    const details = stringifyDebugExtra(extra);
+    const line = details
+      ? `${nextSeq}. [${timestamp}] ${message} | ${details}`
+      : `${nextSeq}. [${timestamp}] ${message}`;
+    setPublishDebugLog((prev) => [...prev.slice(-39), line]);
+  };
 
   const mainPreview: PhotoPreviewItem[] = useMemo(
     () => [
@@ -1087,6 +1115,11 @@ export function AdminNewPostPage() {
   const onPublishNow = async () => {
     setErrorText(null);
     setSuccessText(null);
+    if (ENABLE_PUBLISH_DEBUG_OVERLAY) {
+      publishDebugSeqRef.current = 0;
+      setPublishDebugLog([]);
+      setPublishDebugError(null);
+    }
     if (mainPhotos.length < 1) {
       setErrorText("Для публикации нужно минимум 1 фото.");
       return;
@@ -1104,6 +1137,9 @@ export function AdminNewPostPage() {
       setSuccessText("Пост опубликован.");
     } catch (error) {
       logPublishStep("publish flow failed", error);
+      if (ENABLE_PUBLISH_DEBUG_OVERLAY) {
+        setPublishDebugError(stringifyDebugExtra(error));
+      }
       setErrorText(`Ошибка публикации: ${(error as Error).message}`);
     } finally {
       setIsPublishingNow(false);
@@ -1424,6 +1460,24 @@ export function AdminNewPostPage() {
         </div>
         {errorText ? <div style={{ color: "#b42318" }}>{errorText}</div> : null}
         {successText ? <div style={{ color: "#067647" }}>{successText}</div> : null}
+        {ENABLE_PUBLISH_DEBUG_OVERLAY && publishDebugError ? (
+          <div className="glass" style={{ padding: 12, display: "grid", gap: 8, border: "1px solid rgba(180,35,24,0.35)" }}>
+            <div style={{ fontWeight: 700, color: "#b42318" }}>{"Publish Debug (temporary)"}</div>
+            <div style={{ fontSize: 13, color: "#b42318", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+              {publishDebugError}
+            </div>
+            <div style={{ fontSize: 12, color: "var(--muted)" }}>{"Последние шаги:"}</div>
+            <div style={{ display: "grid", gap: 4, maxHeight: 220, overflowY: "auto" }}>
+              {publishDebugLog.length ? publishDebugLog.map((line) => (
+                <div key={line} style={{ fontSize: 12, fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                  {line}
+                </div>
+              )) : (
+                <div style={{ fontSize: 12, color: "var(--muted)" }}>{"Логи publish пока не собраны."}</div>
+              )}
+            </div>
+          </div>
+        ) : null}
       </div>
     </Page>
   );
