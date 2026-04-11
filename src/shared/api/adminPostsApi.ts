@@ -1,5 +1,6 @@
 import { supabase } from "./supabaseClient";
 import type { DefectMediaItem, Product } from "../types/product";
+import { ensureAdminRuntimeReady } from "../auth/adminRuntimeReadiness";
 
 export type NalichieItem = {
   id: number;
@@ -366,6 +367,7 @@ export async function createOrUpdateDraftPost(
   postId?: string,
   onDebugEvent?: (event: DraftWriteDebugEvent) => void,
 ): Promise<TgPost> {
+  await ensureAdminRuntimeReady();
   const scheduledAt = payload.scheduled_at;
   const nextStatus: TgPostStatus = payload.current_status === "published"
     ? "published"

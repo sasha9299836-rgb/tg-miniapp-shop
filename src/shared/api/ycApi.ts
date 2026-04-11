@@ -1,4 +1,5 @@
 import { supabase } from "./supabaseClient";
+import { ensureAdminRuntimeReady } from "../auth/adminRuntimeReadiness";
 
 export type YcPresignPutPayload = {
   post_id: string;
@@ -51,6 +52,7 @@ function normalizeUploadContentType(file: File, extFromName: string | null): str
 }
 
 export async function ycPresignPut(payload: YcPresignPutPayload): Promise<YcPresignResponse> {
+  await ensureAdminRuntimeReady();
   const { data, error } = await supabase.functions.invoke<YcPresignResponse>("yc_presign_put", {
     body: payload,
     headers: buildAdminSessionHeaders(),
@@ -102,6 +104,7 @@ export async function deleteYcObject(storageKey: string): Promise<void> {
   }
 
   console.debug("[ycApi] delete payload", { key });
+  await ensureAdminRuntimeReady();
 
   const { data, error } = await supabase.functions.invoke<YcDeleteObjectResponse>("yc_delete_object", {
     body: { key },

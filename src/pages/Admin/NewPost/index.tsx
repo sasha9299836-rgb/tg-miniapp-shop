@@ -29,6 +29,7 @@ import {
   type TgPostType,
 } from "../../../shared/api/adminPostsApi";
 import { deleteYcObject, getYcPresignedPut } from "../../../shared/api/ycApi";
+import { ensureAdminRuntimeReady } from "../../../shared/auth/adminRuntimeReadiness";
 
 const CONDITION_OPTIONS = [
   "10/10 Новая вещь",
@@ -367,6 +368,8 @@ export function AdminNewPostPage() {
   const [publishDebugLog, setPublishDebugLog] = useState<string[]>([]);
   const [publishDebugError, setPublishDebugError] = useState<string | null>(null);
   const [publishDebugRawError, setPublishDebugRawError] = useState<string | null>(null);
+  const [isPreparingAdminRuntime, setIsPreparingAdminRuntime] = useState(true);
+  const [isAdminRuntimeReady, setIsAdminRuntimeReady] = useState(false);
   const [manualPackagingOverrideTypeKey, setManualPackagingOverrideTypeKey] = useState<string | null>(null);
   const [isTypeSuggestionsOpen, setIsTypeSuggestionsOpen] = useState(false);
   const [isBrandSuggestionsOpen, setIsBrandSuggestionsOpen] = useState(false);
@@ -482,6 +485,28 @@ export function AdminNewPostPage() {
   const hydrateAllPhotosFromDb = async (postId: string) => {
     await Promise.all([hydrateMainPhotosFromDb(postId), hydrateDefectPhotosFromDb(postId)]);
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      setIsPreparingAdminRuntime(true);
+      try {
+        await ensureAdminRuntimeReady();
+        if (cancelled) return;
+        setIsAdminRuntimeReady(true);
+      } catch (error) {
+        if (cancelled) return;
+        setIsAdminRuntimeReady(false);
+        setErrorText(`Ошибка инициализации админ-сессии: ${(error as Error).message}`);
+      } finally {
+        if (!cancelled) setIsPreparingAdminRuntime(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     pendingUnsyncedUploadsRef.current = [...mainPhotos, ...defectPhotos].filter((photo) => !photo.dbId);
@@ -900,6 +925,10 @@ export function AdminNewPostPage() {
   const stageSelectedFiles = (files: File[], kind: "main" | "defect") => {
     setErrorText(null);
     setSuccessText(null);
+    if (!isAdminRuntimeReady) {
+      setErrorText("Подождите: идет подготовка админ-сессии.");
+      return;
+    }
     if (!files.length) {
       setErrorText("Выберите хотя бы один файл.");
       return;
@@ -1171,6 +1200,10 @@ export function AdminNewPostPage() {
   const onPublishNow = async () => {
     setErrorText(null);
     setSuccessText(null);
+    if (!isAdminRuntimeReady) {
+      setErrorText("Подождите: идет подготовка админ-сессии.");
+      return;
+    }
     if (ENABLE_PUBLISH_DEBUG_OVERLAY) {
       publishDebugSeqRef.current = 0;
       setPublishDebugLog([]);
@@ -1298,8 +1331,16 @@ export function AdminNewPostPage() {
           inputId="post-main-files"
           selectLabel={"Выбрать файлы"}
           items={mainPreview}
-          loadingText={isUploadingPhotos ? "Загрузка фотографий..." : pendingMainUploads.length ? "Файлы добавлены в очередь." : null}
-          isBusy={isUploadingPhotos || isSaving || isPublishingNow || isScheduling}
+          loadingText={
+            isPreparingAdminRuntime
+              ? "Подготовка..."
+              : isUploadingPhotos
+              ? "Загрузка фотографий..."
+              : pendingMainUploads.length
+              ? "Файлы добавлены в очередь."
+              : null
+          }
+          isBusy={!isAdminRuntimeReady || isPreparingAdminRuntime || isUploadingPhotos || isSaving || isPublishingNow || isScheduling}
           onSelect={(files) => stageSelectedFiles(files, "main")}
           onRemove={(id) => void onDeleteMainPhoto(id)}
         />
@@ -1466,9 +1507,17 @@ export function AdminNewPostPage() {
                   inputId="post-defect-files"
                   selectLabel={"Выбрать фото/видео дефектов"}
                   items={defectPreview}
-                  loadingText={isUploadingDefects ? "Загрузка медиа дефектов..." : pendingDefectUploads.length ? "Файлы добавлены в очередь." : null}
+                  loadingText={
+                    isPreparingAdminRuntime
+                      ? "Подготовка..."
+                      : isUploadingDefects
+                      ? "Загрузка медиа дефектов..."
+                      : pendingDefectUploads.length
+                      ? "Файлы добавлены в очередь."
+                      : null
+                  }
                   accept="image/*,video/mp4,video/quicktime,.mov"
-                  isBusy={isUploadingDefects || isSaving || isPublishingNow || isScheduling}
+                  isBusy={!isAdminRuntimeReady || isPreparingAdminRuntime || isUploadingDefects || isSaving || isPublishingNow || isScheduling}
                   onSelect={(files) => stageSelectedFiles(files, "defect")}
                   onRemove={(id) => void onDeleteDefectPhoto(id)}
                 />
@@ -1512,13 +1561,20 @@ export function AdminNewPostPage() {
         </div>
 
         <div style={{ display: "grid", gap: 8 }}>
+          {isPreparingAdminRuntime ? (
+            <div style={{ color: "var(--muted)", fontSize: 13 }}>{"Подготовка админ-сессии..."}</div>
+          ) : null}
           <Button onClick={() => void saveAsDraft()} disabled={isSaving || isUploadingPhotos || isUploadingDefects || hasPendingUploads || isPublishingNow || isScheduling || isUnscheduling}>
             {isSaving ? "Сохраняем..." : "Сохранить черновик"}
           </Button>
           <Button variant="secondary" onClick={() => void onSchedule()} disabled={isScheduling || isSaving || isUploadingPhotos || isUploadingDefects || hasPendingUploads || isUnscheduling}>
             {isScheduling ? "Планируем..." : scheduleButtonLabel}
           </Button>
-          <Button variant="secondary" onClick={() => void onPublishNow()} disabled={isPublishingNow || isSaving || isUploadingPhotos || isUploadingDefects || hasPendingUploads || isUnscheduling}>
+          <Button
+            variant="secondary"
+            onClick={() => void onPublishNow()}
+            disabled={!isAdminRuntimeReady || isPreparingAdminRuntime || isPublishingNow || isSaving || isUploadingPhotos || isUploadingDefects || hasPendingUploads || isUnscheduling}
+          >
             {isPublishingNow ? "Публикуем..." : "Опубликовать пост"}
           </Button>
           {currentPost?.status === "scheduled" ? (
