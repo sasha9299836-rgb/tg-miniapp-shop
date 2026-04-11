@@ -895,6 +895,17 @@ export function AdminNewPostPage() {
         });
         return;
       }
+      if (event.type === "invoke_context") {
+        logPublishStep("draft invoke context", {
+          branch: event.branch,
+          at: event.at,
+          function_name: event.function_name,
+          token_present: event.token_present,
+          token_length: event.token_length,
+          token_preview: event.token_preview,
+        });
+        return;
+      }
       logPublishStep(`draft branch error: ${event.branch}`, {
         ...event.snapshot,
         failed_branch: event.branch,

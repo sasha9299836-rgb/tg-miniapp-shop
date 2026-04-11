@@ -196,6 +196,16 @@ export type DraftWriteDebugEvent =
     probe_since: string;
     rows: Array<{ id: string; created_at: string; status: string; post_type: string; item_id: number | null }>;
     probe_error: string | null;
+  }
+  | {
+    type: "invoke_context";
+    branch: DraftWriteBranch;
+    snapshot: DraftWritePayloadSnapshot;
+    at: string;
+    function_name: "tg_admin_draft_post_write";
+    token_present: boolean;
+    token_length: number;
+    token_preview: string | null;
   };
 
 export type ScheduledPostListItem = {
@@ -239,6 +249,13 @@ function readAdminToken(): string {
   } catch {
     return "";
   }
+}
+
+function maskTokenPreview(token: string): string | null {
+  const normalized = token.trim();
+  if (!normalized) return null;
+  if (normalized.length <= 10) return `${normalized.slice(0, 2)}...${normalized.slice(-2)}`;
+  return `${normalized.slice(0, 6)}...${normalized.slice(-4)}`;
 }
 
 function debugErrorSnapshot(error: unknown): DraftWriteErrorSnapshot {
@@ -498,6 +515,16 @@ export async function createOrUpdateDraftPost(
       payload: writePayload,
     });
     const adminToken = readAdminToken();
+    onDebugEvent?.({
+      type: "invoke_context",
+      branch: predictedBranch,
+      snapshot,
+      at: new Date().toISOString(),
+      function_name: "tg_admin_draft_post_write",
+      token_present: Boolean(adminToken),
+      token_length: adminToken.length,
+      token_preview: maskTokenPreview(adminToken),
+    });
     const { data, error } = await supabase.functions.invoke<DraftWriteServerResponse>("tg_admin_draft_post_write", {
       body: {
         post_id: postId ?? null,
