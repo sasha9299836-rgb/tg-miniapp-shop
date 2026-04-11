@@ -160,6 +160,9 @@ type DraftWriteServerResponse = {
   } | null;
 };
 
+const supabaseFunctionsBaseUrl = String((import.meta as any).env?.VITE_SUPABASE_URL ?? "").trim().replace(/\/+$/, "");
+const supabaseAnonKey = String((import.meta as any).env?.VITE_SUPABASE_ANON_KEY ?? "").trim();
+
 export type DraftWriteDebugEvent =
   | { type: "branch_start"; branch: DraftWriteBranch; snapshot: DraftWritePayloadSnapshot; at: string; started_at_ms: number }
   | {
@@ -307,6 +310,56 @@ function normalizeServerBranch(value: string | null | undefined, fallback: Draft
     return value;
   }
   return fallback;
+}
+
+async function invokeDraftWriteWithFetch(input: {
+  post_id: string | null;
+  payload: DraftWritePayload;
+  adminToken: string;
+}): Promise<DraftWriteServerResponse> {
+  if (!supabaseFunctionsBaseUrl) {
+    throw new Error("[tg_admin_draft_post_write] VITE_SUPABASE_URL is missing");
+  }
+
+  const url = `${supabaseFunctionsBaseUrl}/functions/v1/tg_admin_draft_post_write`;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "x-admin-token": input.adminToken,
+  };
+  if (supabaseAnonKey) {
+    headers.apikey = supabaseAnonKey;
+    headers.authorization = `Bearer ${supabaseAnonKey}`;
+  }
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      post_id: input.post_id,
+      payload: input.payload,
+    }),
+  });
+
+  const rawText = await response.text();
+  let parsed: DraftWriteServerResponse | null = null;
+  if (rawText) {
+    try {
+      parsed = JSON.parse(rawText) as DraftWriteServerResponse;
+    } catch {
+      parsed = null;
+    }
+  }
+
+  if (!response.ok) {
+    const details = parsed?.details ?? parsed?.db?.details ?? rawText;
+    const message = parsed?.error ?? parsed?.db?.message ?? `HTTP_${response.status}`;
+    throw new Error(`[tg_admin_draft_post_write] ${message}${details ? ` | ${details}` : ""}`);
+  }
+
+  if (!parsed) {
+    throw new Error("[tg_admin_draft_post_write] EMPTY_OR_INVALID_RESPONSE");
+  }
+  return parsed;
 }
 
 function throwDraftStepError(step: string, error: unknown): never {
@@ -525,14 +578,11 @@ export async function createOrUpdateDraftPost(
       token_length: adminToken.length,
       token_preview: maskTokenPreview(adminToken),
     });
-    const { data, error } = await supabase.functions.invoke<DraftWriteServerResponse>("tg_admin_draft_post_write", {
-      body: {
-        post_id: postId ?? null,
-        payload: writePayload,
-      },
-      headers: adminToken ? { "x-admin-token": adminToken } : undefined,
+    const data = await invokeDraftWriteWithFetch({
+      post_id: postId ?? null,
+      payload: writePayload,
+      adminToken,
     });
-    if (error) throw error;
     if (!data?.ok || !data?.post) {
       throw new Error(
         `[tg_admin_draft_post_write] ${data?.error ?? "UNKNOWN_ERROR"} ${data?.details ?? data?.db?.message ?? ""}`.trim(),
