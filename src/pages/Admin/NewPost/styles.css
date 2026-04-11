@@ -1,0 +1,9 @@
+.admin-post-form-control {
+  color: var(--text);
+  -webkit-text-fill-color: var(--text);
+}
+
+.admin-post-form-control::placeholder {
+  color: #9ca3af;
+  opacity: 1;
+}

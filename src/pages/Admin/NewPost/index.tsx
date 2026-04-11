@@ -4,6 +4,8 @@ import { Page } from "../../../shared/ui/Page";
 import { Button } from "../../../shared/ui/Button";
 import { PhotoUploader, type PhotoPreviewItem } from "../../../shared/ui/PhotoUploader";
 import { Field } from "../../../shared/ui/form/Field";
+import "./styles.css";
+import "../datetime-controls.css";
 import {
   createOrUpdateDraftPost,
   createPostDefectPhoto,
@@ -1216,6 +1218,7 @@ export function AdminNewPostPage() {
                 inputMode="numeric"
                 pattern="[0-9]*"
                 value={nalichieIdInput}
+                className="admin-post-form-control"
                 disabled={isEditMode}
                 onChange={(e) => onNalichieIdChange(e.target.value)}
                 onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
@@ -1270,6 +1273,7 @@ export function AdminNewPostPage() {
               <div style={{ position: "relative" }}>
                 <input
                   value={title}
+                  className="admin-post-form-control"
                   onChange={(e) => {
                     setTitle(e.target.value);
                     setIsTypeSuggestionsOpen(true);
@@ -1325,6 +1329,7 @@ export function AdminNewPostPage() {
               <div style={{ position: "relative" }}>
                 <input
                   value={brand}
+                  className="admin-post-form-control"
                   onChange={(e) => {
                     setBrand(e.target.value);
                     setIsBrandSuggestionsOpen(true);
@@ -1377,7 +1382,7 @@ export function AdminNewPostPage() {
               </div>
             </Field>
             <Field label={"Описание"}>
-              <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder={"Легкая, приятный хлопок"} rows={4} style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }} />
+              <textarea value={description} className="admin-post-form-control" onChange={(e) => setDescription(e.target.value)} placeholder={"Введите описание"} rows={4} style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }} />
             </Field>
             <Field label={"Состояние"}>
               <select value={condition} onChange={(e) => setCondition(e.target.value)} style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }}>
@@ -1389,7 +1394,7 @@ export function AdminNewPostPage() {
               </select>
             </Field>
             <Field label={"Размер"}>
-              <input value={size} onChange={(e) => setSize(e.target.value)} placeholder={"XL"} style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }} />
+              <input value={size} className="admin-post-form-control" onChange={(e) => setSize(e.target.value)} placeholder={"XL"} style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }} />
             </Field>
             <Field label={"Цена"}>
               <input
@@ -1397,6 +1402,7 @@ export function AdminNewPostPage() {
                 inputMode="numeric"
                 pattern="[0-9]*"
                 value={price}
+                className="admin-post-form-control"
                 onChange={(e) => onPriceChange(e.target.value)}
                 onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
                 placeholder={"Цена"}
@@ -1410,7 +1416,7 @@ export function AdminNewPostPage() {
             {hasDefects ? (
               <>
                 <Field label={"Описание дефектов"}>
-                  <textarea value={defectsText} onChange={(e) => setDefectsText(e.target.value)} placeholder={"Описание дефектов"} rows={3} style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }} />
+                  <textarea value={defectsText} className="admin-post-form-control" onChange={(e) => setDefectsText(e.target.value)} placeholder={"Введите описание"} rows={3} style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }} />
                 </Field>
                 <PhotoUploader
                   title={"Медиа дефектов"}
@@ -1457,8 +1463,8 @@ export function AdminNewPostPage() {
           <input
             type="datetime-local"
             value={scheduleAtInput}
+            className="admin-datetime-control"
             onChange={(e) => setScheduleAtInput(e.target.value)}
-            style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }}
           />
         </div>
 

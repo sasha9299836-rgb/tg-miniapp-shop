@@ -1,0 +1,21 @@
+.admin-datetime-control {
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.25;
+  -webkit-appearance: auto;
+  appearance: auto;
+}
+
+.admin-datetime-control::-webkit-datetime-edit {
+  padding: 0;
+}
+
+.admin-datetime-control::-webkit-date-and-time-value {
+  text-align: left;
+}

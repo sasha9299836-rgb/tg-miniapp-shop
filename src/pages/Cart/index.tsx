@@ -212,7 +212,9 @@ export function CartPage() {
           {lines.map((line) => (
             <Card key={line.productId} className="ui-card--padded cart-item">
               <div className="cart-item__row">
-                <img src={line.product.images?.[0]} alt={line.product.title} className="cart-item__image" />
+                <div className="cart-item__imageWrap">
+                  <img src={line.product.images?.[0]} alt={line.product.title} className="cart-item__image" />
+                </div>
                 <div>
                   <div className="cart-item__title">{getProductDisplayTitle(line.product)}</div>
                   {line.product.description ? (

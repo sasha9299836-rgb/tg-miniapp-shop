@@ -10,6 +10,7 @@ import {
   unschedulePost,
   type ScheduledPostListItem,
 } from "../../../shared/api/adminPostsApi";
+import "../datetime-controls.css";
 
 type Tab = "draft" | "scheduled";
 
@@ -219,8 +220,8 @@ export function AdminScheduledPostsPage() {
               <input
                 type="datetime-local"
                 value={startDateTime}
+                className="admin-datetime-control"
                 onChange={(e) => setStartDateTime(e.target.value)}
-                style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }}
               />
             </label>
             <label>
