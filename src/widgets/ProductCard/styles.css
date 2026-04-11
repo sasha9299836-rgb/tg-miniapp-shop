@@ -1,4 +1,4 @@
-﻿.pcard {
+.pcard {
   border-radius: 20px;
   overflow: hidden;
   background: var(--surface);
@@ -15,35 +15,12 @@
   cursor: grab;
 }
 
-.pcard__imgWrap::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), transparent 40%);
-  opacity: 0.5;
-  pointer-events: none;
+.pcard__thumb {
+  border-radius: 0;
 }
 
 .pcard__img {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  height: 180px;
-  object-fit: cover;
-  object-position: center;
-  display: block;
-  transition: opacity 0.25s ease;
   image-rendering: auto;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-}
-
-.pcard__imgWrap::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.08), transparent 55%, rgba(0, 0, 0, 0.12));
-  z-index: 2;
 }
 
 .pcard__count {
@@ -226,28 +203,11 @@
   outline-offset: 2px;
 }
 
-.pcard__cartWide.is-animate {
-  animation: cart-heartbeat 0.36s ease-out;
-  color: color-mix(in srgb, var(--accent-strong) 78%, var(--text) 22%);
-  background: color-mix(in srgb, var(--accent) 12%, var(--surface) 88%);
-  border-color: color-mix(in srgb, var(--accent) 42%, var(--border) 58%);
-}
-
 .pcard__cartWide.is-on,
 .pcard__iconButton.is-on {
   border-color: color-mix(in srgb, var(--accent) 42%, var(--border) 58%);
   background: color-mix(in srgb, var(--accent) 12%, var(--surface) 88%);
   color: color-mix(in srgb, var(--accent-strong) 78%, var(--text) 22%);
-}
-
-.pcard__cartWide.is-animate::after {
-  content: "";
-  position: absolute;
-  inset: 6px;
-  border-radius: 12px;
-  border: 1px solid color-mix(in srgb, var(--accent-strong) 38%, transparent);
-  opacity: 0;
-  animation: cart-ripple 0.36s ease-out;
 }
 
 .pcard__cartIcon {
@@ -257,28 +217,19 @@
   opacity: 0.92;
 }
 
-@keyframes fav-burst {
-  0% { transform: scale(0.7); opacity: 0; }
-  35% { opacity: 0.6; }
-  100% { transform: scale(1.25); opacity: 0; }
+.pcard__cartIcon.is-animate {
+  animation: icon-heartbeat 0.36s ease-out;
 }
 
-@keyframes cart-heartbeat {
+@keyframes icon-heartbeat {
   0% { transform: scale(1); }
   28% { transform: scale(1.16); }
   52% { transform: scale(0.94); }
   100% { transform: scale(1); }
 }
 
-@keyframes cart-ripple {
-  0% { transform: scale(0.68); opacity: 0; }
-  34% { opacity: 0.5; }
-  100% { transform: scale(1.26); opacity: 0; }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .pcard__cartWide.is-animate,
-  .pcard__cartWide.is-animate::after {
+  .pcard__cartIcon.is-animate {
     animation: none;
   }
 }

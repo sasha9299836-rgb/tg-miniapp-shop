@@ -11,6 +11,7 @@ import { EmptyState } from "../../shared/ui/EmptyState";
 import { Button } from "../../shared/ui/Button";
 import { Card } from "../../shared/ui/Card";
 import { Page } from "../../shared/ui/Page";
+import { ProductThumb } from "../../shared/ui/ProductThumb";
 import "./styles.css";
 
 export function FavoritesPage() {
@@ -70,7 +71,7 @@ export function FavoritesPage() {
     return (
       <Page>
         <div className="favorites-page">
-          <div style={{ color: "var(--muted)" }}>Р—Р°РіСЂСѓР·РєР°...</div>
+          <div style={{ color: "var(--muted)" }}>Загрузка...</div>
         </div>
       </Page>
     );
@@ -82,7 +83,7 @@ export function FavoritesPage() {
         <div className="favorites-page">
           <div style={{ color: "#b42318" }}>{readinessErrorText}</div>
           <div className="favorites-actions">
-            <Button onClick={() => nav("/catalog")}>Р’ РєР°С‚Р°Р»РѕРі</Button>
+            <Button onClick={() => nav("/catalog")}>В каталог</Button>
           </div>
         </div>
       </Page>
@@ -94,14 +95,14 @@ export function FavoritesPage() {
       <Page>
         <div className="favorites-page">
           <div className="favorites-header">
-            <h1 className="favorites-title">РР·Р±СЂР°РЅРЅРѕРµ</h1>
+            <h1 className="favorites-title">Избранное</h1>
           </div>
           <EmptyState
-            title="РџРѕРєР° РїСѓСЃС‚Рѕ"
-            text="Р”РѕР±Р°РІСЊС‚Рµ С‚РѕРІР°СЂС‹ РІ РёР·Р±СЂР°РЅРЅРѕРµ, С‡С‚РѕР±С‹ Р±С‹СЃС‚СЂРѕ РІРѕР·РІСЂР°С‰Р°С‚СЊСЃСЏ Рє РЅРёРј РїРѕР·Р¶Рµ."
+            title="Пока пусто"
+            text="Добавьте товары в избранное, чтобы быстро возвращаться к ним позже."
           />
           <div className="favorites-actions">
-            <Button onClick={() => nav("/catalog")}>Р’ РєР°С‚Р°Р»РѕРі</Button>
+            <Button onClick={() => nav("/catalog")}>В каталог</Button>
           </div>
         </div>
       </Page>
@@ -112,9 +113,9 @@ export function FavoritesPage() {
     <Page>
       <div className="favorites-page">
         <div className="favorites-header">
-          <h1 className="favorites-title">РР·Р±СЂР°РЅРЅРѕРµ</h1>
+          <h1 className="favorites-title">Избранное</h1>
           <Button variant="secondary" className="favorites-clear" onClick={() => void fav.clear()}>
-            РЈРґР°Р»РёС‚СЊ РІСЃРµ
+            Удалить все
           </Button>
         </div>
 
@@ -127,28 +128,28 @@ export function FavoritesPage() {
                 role="button"
                 tabIndex={0}
               >
-                <img src={product.images?.[0]} alt={product.title} className="favorites-item__image" />
+                <ProductThumb src={product.images?.[0]} alt={product.title} variant="square" className="favorites-item__thumb" />
                 <div>
                   <div className="favorites-item__title">{product.title}</div>
                   {product.description ? (
                     <div className="favorites-item__desc">{product.description}</div>
                   ) : null}
                   <div className="favorites-item__price">
-                    {product.price.toLocaleString("ru-RU")} в‚Ѕ
+                    {product.price.toLocaleString("ru-RU")} ?
                   </div>
                   {product.saleStatus !== "available" ? (
-                    <div className="favorites-item__desc">РџСЂРѕРґР°РЅРѕ / РЅРµРґРѕСЃС‚СѓРїРЅРѕ</div>
+                    <div className="favorites-item__desc">Продано / недоступно</div>
                   ) : null}
                 </div>
               </div>
 
               <div className="favorites-item__actions">
-                <Button variant="secondary" onClick={() => void fav.remove({ id: product.id, postId: product.postId })}>РЈРґР°Р»РёС‚СЊ</Button>
+                <Button variant="secondary" onClick={() => void fav.remove({ id: product.id, postId: product.postId })}>Удалить</Button>
                 <Button
                   onClick={() => void requestAddWithDefectGuard(product)}
                   disabled={product.saleStatus !== "available"}
                 >
-                  {product.saleStatus === "available" ? "Р’ РєРѕСЂР·РёРЅСѓ" : "РќРµРґРѕСЃС‚СѓРїРЅРѕ"}
+                  {product.saleStatus === "available" ? "В корзину" : "Недоступно"}
                 </Button>
               </div>
             </Card>

@@ -17,6 +17,7 @@ import { getPackagingFeeRub } from "../../shared/config/packaging";
 import { Button } from "../../shared/ui/Button";
 import { Card, CardText, CardTitle } from "../../shared/ui/Card";
 import { Page } from "../../shared/ui/Page";
+import { ProductThumb } from "../../shared/ui/ProductThumb";
 import "./styles.css";
 
 function rub(value: number): string {
@@ -414,7 +415,7 @@ export function PaymentPage() {
               onChange={(event) => setFile(event.target.files?.[0] ?? null)}
             />
             {file ? <div className="payment-upload__file">Файл: {file.name}</div> : null}
-            {previewUrl ? <img className="payment-upload__preview" src={previewUrl} alt="preview" /> : null}
+            {previewUrl ? <ProductThumb className="payment-upload__preview" src={previewUrl} alt="preview" /> : null}
           </div>
         </Card>
 

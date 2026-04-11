@@ -37,10 +37,7 @@
   cursor: pointer;
 }
 
-.favorites-item__image {
-  width: 80px;
-  height: 80px;
-  object-fit: cover;
+.favorites-item__thumb {
   border-radius: 12px;
 }
 

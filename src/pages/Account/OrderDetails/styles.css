@@ -152,6 +152,9 @@
   width: 56px;
   height: 56px;
   border-radius: 10px;
+}
+
+.order-details-product-image .product-thumb__media {
   object-fit: cover;
 }
 

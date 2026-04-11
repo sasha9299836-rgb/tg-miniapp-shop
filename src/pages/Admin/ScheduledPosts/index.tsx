@@ -2,6 +2,7 @@
 import { useNavigate } from "react-router-dom";
 import { Page } from "../../../shared/ui/Page";
 import { Button } from "../../../shared/ui/Button";
+import { ProductThumb } from "../../../shared/ui/ProductThumb";
 import {
   deleteDraftOrScheduledPost,
   listPostsByStatus,
@@ -11,6 +12,7 @@ import {
   type ScheduledPostListItem,
 } from "../../../shared/api/adminPostsApi";
 import "../datetime-controls.css";
+import "./styles.css";
 
 type Tab = "draft" | "scheduled";
 
@@ -295,10 +297,10 @@ export function AdminScheduledPostsPage() {
                   ) : (
                     entry.previewUrls.map((url, index) => (
                       <div key={`${entry.post.id}-preview-${index}`} style={{ position: "relative" }}>
-                        <img
+                        <ProductThumb
                           src={url}
                           alt={`Фото ${index + 1}`}
-                          style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 8 }}
+                          className="scheduled-posts__preview-thumb"
                         />
                         {index === entry.previewUrls.length - 1 && remaining > 0 ? (
                           <div

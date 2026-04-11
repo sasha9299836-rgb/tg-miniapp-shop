@@ -18,17 +18,6 @@
   animation: favorite-heartbeat 0.36s ease-out;
 }
 
-.favorite-button.is-animate::after {
-  content: "";
-  position: absolute;
-  inset: 6px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--accent-strong) 38%, transparent);
-  opacity: 0;
-  pointer-events: none;
-  animation: favorite-ripple 0.36s ease-out;
-}
-
 @keyframes favorite-heartbeat {
   0% { transform: scale(1); }
   28% { transform: scale(1.18); }
@@ -36,15 +25,8 @@
   100% { transform: scale(1); }
 }
 
-@keyframes favorite-ripple {
-  0% { transform: scale(0.68); opacity: 0; }
-  34% { opacity: 0.5; }
-  100% { transform: scale(1.26); opacity: 0; }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .favorite-button.is-animate .favorite-button__icon,
-  .favorite-button.is-animate::after {
+  .favorite-button.is-animate .favorite-button__icon {
     animation: none;
   }
 }

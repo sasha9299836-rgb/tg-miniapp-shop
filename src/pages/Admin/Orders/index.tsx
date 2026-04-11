@@ -29,6 +29,7 @@ import {
   isLikelyStaleShipmentLock,
 } from "../../../shared/lib/shipmentStatus";
 import { getAdminActionErrorMessage, getBatchShipmentSyncErrorMessage } from "../../../shared/lib/adminErrors";
+import { ProductThumb } from "../../../shared/ui/ProductThumb";
 import "./styles.css";
 
 type Tab = "proof" | "expired" | "confirmed" | "rejected";
@@ -387,7 +388,7 @@ function AdminOrderCard(props: OrderCardProps) {
             {productLines.map((line) => (
               <div key={line.key} className="admin-order-card__item-row">
                 {line.previewUrl ? (
-                  <img src={line.previewUrl} alt="Товар" className="admin-order-card__preview" />
+                  <ProductThumb src={line.previewUrl} alt="Товар" className="admin-order-card__preview" />
                 ) : (
                   <div className="admin-order-card__preview admin-order-card__preview--empty" />
                 )}

@@ -135,6 +135,10 @@
   border: 1px solid var(--border);
 }
 
+.payment-upload__preview .product-thumb__media {
+  object-fit: contain;
+}
+
 .payment-upload__hint {
   font-size: 12px;
   color: var(--muted);

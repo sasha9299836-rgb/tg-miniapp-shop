@@ -31,6 +31,7 @@ import {
 import { Button } from "../../../shared/ui/Button";
 import { Card, CardText, CardTitle } from "../../../shared/ui/Card";
 import { Page } from "../../../shared/ui/Page";
+import { ProductThumb } from "../../../shared/ui/ProductThumb";
 import "./styles.css";
 
 type DeliveryStepState = "completed" | "current" | "pending";
@@ -464,7 +465,7 @@ export function OrderDetailsPage() {
                 const postCover = postCoverById[postId] ?? null;
                 return post ? (
                   <div key={postId} className="order-details-product">
-                    {postCover ? <img src={postCover} alt={post.title} className="order-details-product-image" /> : null}
+                    {postCover ? <ProductThumb src={postCover} alt={post.title} className="order-details-product-image" /> : null}
                     <div>
                       <div className="order-details-product-title">{post.title}</div>
                       <div className="order-details-product-meta">{post.brand || "Без бренда"}</div>

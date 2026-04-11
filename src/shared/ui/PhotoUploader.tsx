@@ -1,5 +1,7 @@
-import { type ChangeEvent } from "react";
+﻿import { type ChangeEvent } from "react";
 import { Button } from "./Button";
+import { ProductThumb } from "./ProductThumb";
+import "./photo-uploader.css";
 
 export type PhotoPreviewItem = {
   id: string;
@@ -40,7 +42,7 @@ export function PhotoUploader({
   };
 
   return (
-    <div className="glass" style={{ padding: 12, display: "grid", gap: 8 }}>
+    <div className="glass photo-uploader">
       <div className="payment-upload__title">{title}</div>
       <label className="payment-upload__label" htmlFor={inputId}>
         <svg className="payment-upload__icon" viewBox="0 0 24 24" aria-hidden>
@@ -60,17 +62,17 @@ export function PhotoUploader({
       />
       {loadingText ? <div className="payment-upload__file">{loadingText}</div> : null}
       {items.length > 0 ? (
-        <div style={{ display: "grid", gap: 8 }}>
+        <div className="photo-uploader__list">
           {items
             .slice()
             .sort((a, b) => a.photoNo - b.photoNo)
             .map((photo) => (
-              <div key={photo.id} style={{ display: "grid", gap: 6 }}>
-                <div style={{ fontSize: 13, color: "var(--muted)" }}>
-                  {photo.mediaType === "video" ? "Видео" : "Фото"} {photo.photoNo}
+              <div key={photo.id} className="photo-uploader__item">
+                <div className="photo-uploader__meta">
+                  {(photo.mediaType === "video" ? "Видео" : "Фото")} {photo.photoNo}
                 </div>
                 {photo.status && photo.status !== "uploaded" ? (
-                  <div style={{ fontSize: 12, color: photo.status === "failed" ? "#b42318" : "var(--muted)" }}>
+                  <div className={`photo-uploader__status ${photo.status === "failed" ? "is-failed" : ""}`}>
                     {photo.status === "validating"
                       ? "Проверяем длительность..."
                       : photo.status === "pending"
@@ -80,17 +82,16 @@ export function PhotoUploader({
                       : "Ошибка загрузки"}
                   </div>
                 ) : null}
-                {photo.mediaType === "video" ? (
-                  <video
-                    src={photo.url}
-                    controls
-                    preload="metadata"
-                    playsInline
-                    style={{ width: 160, maxWidth: "100%", borderRadius: 8, background: "#000" }}
-                  />
-                ) : (
-                  <img src={photo.url} alt="Фотография" style={{ width: 120, height: 120, objectFit: "cover", borderRadius: 8 }} />
-                )}
+                <ProductThumb
+                  src={photo.url}
+                  alt={photo.mediaType === "video" ? "Видео" : "Фото"}
+                  mediaType={photo.mediaType === "video" ? "video" : "image"}
+                  className={`photo-uploader__thumb ${photo.mediaType === "video" ? "photo-uploader__thumb--video" : "photo-uploader__thumb--image"}`}
+                  mediaClassName="photo-uploader__media"
+                  controls={photo.mediaType === "video"}
+                  preload="metadata"
+                  playsInline
+                />
                 <Button variant="secondary" onClick={() => onRemove(photo.id)}>Удалить</Button>
               </div>
             ))}

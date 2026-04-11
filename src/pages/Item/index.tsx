@@ -9,6 +9,7 @@ import { buildTelegramMiniAppProductLink } from "../../shared/lib/telegramMiniAp
 import { Button } from "../../shared/ui/Button";
 import { FavoriteButton } from "../../shared/ui/FavoriteButton";
 import { Page } from "../../shared/ui/Page";
+import { ProductThumb } from "../../shared/ui/ProductThumb";
 import "./styles.css";
 
 function buildVideoPosterFromFirstFrame(url: string): Promise<string | null> {
@@ -305,7 +306,12 @@ export function ItemPage() {
         <button type="button" className="item-back-top" onClick={goBack}>Назад</button>
 
         <div className="item-photo" role="button" tabIndex={0} onClick={() => openViewer(images, safeIndex)}>
-          {currentImage ? <img className="item-photo__img" src={currentImage} alt={product.title} loading="lazy" /> : null}
+          <ProductThumb
+            src={currentImage}
+            alt={product.title}
+            className="item-photo__thumb"
+            mediaClassName="item-photo__img"
+          />
           {total > 1 ? (
             <>
               <div className="item-photo__count">{safeIndex + 1} / {total}</div>
@@ -378,16 +384,23 @@ export function ItemPage() {
                             className="item-defect-grid__btn"
                             onClick={() => openViewer(defectImages, imageIndex)}
                           >
-                            <img src={entry.url} alt={`Дефект ${imageIndex + 1}`} className="item-defect-grid__img" />
+                            <ProductThumb
+                              src={entry.url}
+                              alt={`Дефект ${imageIndex + 1}`}
+                              className="item-defect-grid__thumb"
+                              mediaClassName="item-defect-grid__img"
+                            />
                           </button>
                         );
                       }
                       return (
                         <div key={`${product.id}-defect-video-${index}`} className="item-defect-grid__btn">
-                          <video
+                          <ProductThumb
                             src={entry.url}
+                            mediaType="video"
+                            className="item-defect-grid__thumb"
+                            mediaClassName="item-defect-grid__img"
                             poster={entry.posterUrl ?? videoPosterByUrl[entry.url]}
-                            className="item-defect-grid__img"
                             controls
                             preload="metadata"
                             playsInline
@@ -451,7 +464,12 @@ export function ItemPage() {
               </svg>
             </button>
             {viewerTotal > 1 ? <div className="item-viewer__count">{viewerIndex + 1} / {viewerTotal}</div> : null}
-            {viewerImage ? <img className="item-viewer__img" src={viewerImage} alt={product.title} /> : null}
+            <ProductThumb
+              src={viewerImage}
+              alt={product.title}
+              className="item-viewer__thumb"
+              mediaClassName="item-viewer__img"
+            />
             {viewerTotal > 1 ? (
               <>
                 <button type="button" className="item-viewer__nav item-viewer__nav--prev" onClick={handlePrev} aria-label="Предыдущее фото">{"<"}</button>

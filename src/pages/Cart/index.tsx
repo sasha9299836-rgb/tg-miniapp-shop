@@ -18,6 +18,7 @@ import { EmptyState } from "../../shared/ui/EmptyState";
 import { Button } from "../../shared/ui/Button";
 import { Card } from "../../shared/ui/Card";
 import { Page } from "../../shared/ui/Page";
+import { ProductThumb } from "../../shared/ui/ProductThumb";
 import "./styles.css";
 
 export function CartPage() {
@@ -212,9 +213,12 @@ export function CartPage() {
           {lines.map((line) => (
             <Card key={line.productId} className="ui-card--padded cart-item">
               <div className="cart-item__row">
-                <div className="cart-item__imageWrap">
-                  <img src={line.product.images?.[0]} alt={line.product.title} className="cart-item__image" />
-                </div>
+                <ProductThumb
+                  src={line.product.images?.[0]}
+                  alt={line.product.title}
+                  variant="square"
+                  className="cart-item__thumb"
+                />
                 <div>
                   <div className="cart-item__title">{getProductDisplayTitle(line.product)}</div>
                   {line.product.description ? (

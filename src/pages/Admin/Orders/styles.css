@@ -82,9 +82,13 @@
   width: 56px;
   height: 56px;
   border-radius: 10px;
-  object-fit: cover;
+  overflow: hidden;
   flex-shrink: 0;
   border: 1px solid var(--border);
+}
+
+.admin-order-card__preview .product-thumb__media {
+  object-fit: cover;
 }
 
 .admin-order-card__preview--empty {

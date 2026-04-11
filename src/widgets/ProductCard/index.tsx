@@ -1,11 +1,12 @@
-﻿import { useMemo, useRef, useState } from "react";
+﻿import { memo, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import type { Product } from "../../shared/types/product";
 import { FavoriteButton } from "../../shared/ui/FavoriteButton";
+import { ProductThumb } from "../../shared/ui/ProductThumb";
 import { getProductDisplayTitle } from "../../shared/lib/productTitle";
 import "./styles.css";
 
-export function ProductCard({
+function ProductCardInner({
   product,
   onOpen,
   onAddToCart,
@@ -107,17 +108,15 @@ export function ProductCard({
         role="button"
         tabIndex={0}
       >
-        {current ? (
-          <img
-            className="pcard__img"
-            src={current}
-            alt={product.title}
-            width={720}
-            height={360}
-            loading="lazy"
-            decoding="async"
-          />
-        ) : null}
+        <ProductThumb
+          className="pcard__thumb"
+          mediaClassName="pcard__img"
+          src={current}
+          alt={product.title}
+          variant="card"
+          loading="lazy"
+          decoding="async"
+        />
 
         {total > 0 ? (
           <>
@@ -146,9 +145,9 @@ export function ProductCard({
       <div className="pcard__body" onClick={handleOpen} role="button" tabIndex={0}>
         <div className="pcard__title">{cardTitle}</div>
         <div className="pcard__priceRow">
-          <div className="pcard__price">{product.price.toLocaleString("ru-RU")}₽</div>
+          <div className="pcard__price">{product.price.toLocaleString("ru-RU")}?</div>
           {showOldPrice ? (
-            <div className="pcard__priceOld">{product.oldPrice?.toLocaleString("ru-RU")}₽</div>
+            <div className="pcard__priceOld">{product.oldPrice?.toLocaleString("ru-RU")}?</div>
           ) : null}
         </div>
       </div>
@@ -156,11 +155,11 @@ export function ProductCard({
       <div className="pcard__actions">
         <button
           type="button"
-          className={`pcard__cartWide ${isInCart ? "is-on" : ""} ${cartPulse ? "is-animate" : ""}`}
+          className={`pcard__cartWide ${isInCart ? "is-on" : ""}`}
           onClick={handleCartClick}
           aria-label="Добавить в корзину"
         >
-          <svg className="pcard__cartIcon" viewBox="0 0 24 24" aria-hidden>
+          <svg className={`pcard__cartIcon ${cartPulse ? "is-animate" : ""}`} viewBox="0 0 24 24" aria-hidden>
             <path d="M7 6h13l-1.6 8.5a2 2 0 0 1-2 1.6H9a2 2 0 0 1-2-1.6L5.5 4H3" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             <circle cx="10" cy="19" r="1.5" fill="currentColor" />
             <circle cx="17" cy="19" r="1.5" fill="currentColor" />
@@ -171,12 +170,21 @@ export function ProductCard({
           isActive={isFav}
           onToggle={onToggleFav}
           className="pcard__iconButton pcard__fav"
-          ariaLabel={"\u0418\u0437\u0431\u0440\u0430\u043D\u043D\u043E\u0435"}
-          title={"\u0418\u0437\u0431\u0440\u0430\u043D\u043D\u043E\u0435"}
+          ariaLabel={"Избранное"}
+          title={"Избранное"}
         />
       </div>
     </div>
   );
 }
 
+export const ProductCard = memo(
+  ProductCardInner,
+  (prev, next) =>
+    prev.product === next.product &&
+    prev.isFav === next.isFav &&
+    prev.isInCart === next.isInCart,
+);
+
 export default ProductCard;
+

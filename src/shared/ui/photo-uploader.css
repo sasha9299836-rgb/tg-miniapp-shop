@@ -1,0 +1,49 @@
+﻿.photo-uploader {
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.photo-uploader__list {
+  display: grid;
+  gap: 8px;
+}
+
+.photo-uploader__item {
+  display: grid;
+  gap: 6px;
+}
+
+.photo-uploader__meta {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.photo-uploader__status {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.photo-uploader__status.is-failed {
+  color: #b42318;
+}
+
+.photo-uploader__thumb {
+  border-radius: 8px;
+}
+
+.photo-uploader__thumb--image {
+  width: 120px;
+  height: 120px;
+}
+
+.photo-uploader__thumb--video {
+  width: 160px;
+  max-width: 100%;
+  min-height: 120px;
+  background: #000;
+}
+
+.photo-uploader__media {
+  border-radius: 8px;
+}
