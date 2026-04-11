@@ -23,8 +23,15 @@ type FilterValue = typeof FILTER_OPTIONS[number]["value"];
 export function CatalogPage() {
   const nav = useNavigate();
   const { products, load } = useProductsStore();
-  const fav = useFavoritesStore();
-  const cart = useCartStore();
+  const favoritePostIds = useFavoritesStore((s) => s.postIds);
+  const loadFavorites = useFavoritesStore((s) => s.load);
+  const registerFavoriteCatalogItems = useFavoritesStore((s) => s.registerCatalogItems);
+  const toggleFavorite = useFavoritesStore((s) => s.toggle);
+  const hasFavorite = useFavoritesStore((s) => s.has);
+  const cartItems = useCartStore((s) => s.items);
+  const loadCart = useCartStore((s) => s.load);
+  const registerCartCatalogItems = useCartStore((s) => s.registerCatalogItems);
+  const hasInCart = useCartStore((s) => s.has);
   const requestAddWithDefectGuard = useDefectReviewStore((s) => s.requestAddWithDefectGuard);
 
   const [q, setQ] = useState("");
@@ -36,15 +43,15 @@ export function CatalogPage() {
   }, [load]);
 
   useEffect(() => {
-    void fav.load();
-    void cart.load();
-  }, []);
+    void loadFavorites();
+    void loadCart();
+  }, [loadFavorites, loadCart]);
 
   useEffect(() => {
     const mapped = products.map((product) => ({ id: product.id, postId: product.postId }));
-    fav.registerCatalogItems(mapped);
-    cart.registerCatalogItems(mapped);
-  }, [products]);
+    registerFavoriteCatalogItems(mapped);
+    registerCartCatalogItems(mapped);
+  }, [products, registerFavoriteCatalogItems, registerCartCatalogItems]);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -70,6 +77,11 @@ export function CatalogPage() {
 
     return sorted;
   }, [products, q, filter]);
+  const favoritePostIdsSet = useMemo(() => new Set(favoritePostIds), [favoritePostIds]);
+  const cartPostIdsSet = useMemo(
+    () => new Set(cartItems.map((item) => String(item.postId ?? "").trim()).filter(Boolean)),
+    [cartItems],
+  );
 
   return (
     <Page title="Каталог">
@@ -103,13 +115,13 @@ export function CatalogPage() {
         <div className="catalog-grid">
           {filtered.map((p) => (
             <ProductCard
-              key={p.id}
+              key={p.postId ?? `id:${p.id}`}
               product={p}
               onOpen={() => nav(`/item/${p.id}`)}
               onAddToCart={() => void requestAddWithDefectGuard(p)}
-              onToggleFav={() => void fav.toggle({ id: p.id, postId: p.postId })}
-              isFav={fav.has({ id: p.id, postId: p.postId })}
-              isInCart={cart.has({ id: p.id, postId: p.postId })}
+              onToggleFav={() => void toggleFavorite({ id: p.id, postId: p.postId })}
+              isFav={p.postId ? favoritePostIdsSet.has(p.postId) : hasFavorite({ id: p.id, postId: p.postId })}
+              isInCart={p.postId ? cartPostIdsSet.has(p.postId) : hasInCart({ id: p.id, postId: p.postId })}
             />
           ))}
         </div>

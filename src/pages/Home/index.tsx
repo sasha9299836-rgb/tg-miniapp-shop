@@ -11,8 +11,15 @@ import "./styles.css";
 export function HomePage() {
   const nav = useNavigate();
   const { products, load } = useProductsStore();
-  const fav = useFavoritesStore();
-  const cart = useCartStore();
+  const favoritePostIds = useFavoritesStore((s) => s.postIds);
+  const loadFavorites = useFavoritesStore((s) => s.load);
+  const registerFavoriteCatalogItems = useFavoritesStore((s) => s.registerCatalogItems);
+  const toggleFavorite = useFavoritesStore((s) => s.toggle);
+  const hasFavorite = useFavoritesStore((s) => s.has);
+  const cartItems = useCartStore((s) => s.items);
+  const loadCart = useCartStore((s) => s.load);
+  const registerCartCatalogItems = useCartStore((s) => s.registerCatalogItems);
+  const hasInCart = useCartStore((s) => s.has);
   const requestAddWithDefectGuard = useDefectReviewStore((s) => s.requestAddWithDefectGuard);
 
   useEffect(() => {
@@ -20,22 +27,25 @@ export function HomePage() {
   }, [products.length, load]);
 
   useEffect(() => {
-    void fav.load();
-    void cart.load();
-  }, []);
+    void loadFavorites();
+    void loadCart();
+  }, [loadFavorites, loadCart]);
 
   useEffect(() => {
     const mapped = products.map((product) => ({ id: product.id, postId: product.postId }));
-    fav.registerCatalogItems(mapped);
-    cart.registerCatalogItems(mapped);
-  }, [products]);
+    registerFavoriteCatalogItems(mapped);
+    registerCartCatalogItems(mapped);
+  }, [products, registerFavoriteCatalogItems, registerCartCatalogItems]);
 
   const catalogItems = useMemo(() => {
     if (!products.length) return [];
-    return [...products]
-      .slice(0, 8)
-      .sort(() => Math.random() - 0.5);
+    return products.slice(0, 8);
   }, [products]);
+  const favoritePostIdsSet = useMemo(() => new Set(favoritePostIds), [favoritePostIds]);
+  const cartPostIdsSet = useMemo(
+    () => new Set(cartItems.map((item) => String(item.postId ?? "").trim()).filter(Boolean)),
+    [cartItems],
+  );
 
   const showPlaceholders = !products.length;
 
@@ -78,15 +88,15 @@ export function HomePage() {
             ? Array.from({ length: 8 }).map((_, idx) => (
                 <div key={`grid-placeholder-${idx}`} className="home-skeleton" />
               ))
-            : catalogItems.map((p, idx) => (
+            : catalogItems.map((p) => (
                 <ProductCard
-                  key={`${p.id}-${idx}`}
+                  key={p.postId ?? `id:${p.id}`}
                   product={p}
                   onOpen={() => nav(`/item/${p.id}`)}
                   onAddToCart={() => void requestAddWithDefectGuard(p)}
-                  onToggleFav={() => void fav.toggle({ id: p.id, postId: p.postId })}
-                  isFav={fav.has({ id: p.id, postId: p.postId })}
-                  isInCart={cart.has({ id: p.id, postId: p.postId })}
+                  onToggleFav={() => void toggleFavorite({ id: p.id, postId: p.postId })}
+                  isFav={p.postId ? favoritePostIdsSet.has(p.postId) : hasFavorite({ id: p.id, postId: p.postId })}
+                  isInCart={p.postId ? cartPostIdsSet.has(p.postId) : hasInCart({ id: p.id, postId: p.postId })}
                 />
               ))}
         </div>
