@@ -186,6 +186,7 @@ type PendingUpload = {
 
 const MAX_DEFECT_VIDEO_DURATION_SECONDS = 120;
 const UPLOAD_QUEUE_STEP_DELAY_MS = 30;
+const CONSIGNMENT_PUBLISH_COOLDOWN_MS = 600;
 
 function inferMediaTypeFromUrl(url: string): "image" | "video" {
   return /\.(mp4|mov)(?:$|\?)/i.test(url) ? "video" : "image";
@@ -310,6 +311,10 @@ function moscowDateTimeLocalToIso(value: string): string | null {
   const [, y, m, d, hh, mm] = match;
   const utcMs = Date.UTC(Number(y), Number(m) - 1, Number(d), Number(hh) - 3, Number(mm), 0);
   return new Date(utcMs).toISOString();
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function toMoscowInputValue(iso: string | null) {
@@ -1231,6 +1236,11 @@ export function AdminNewPostPage() {
     const attempt = publishAttemptRef.current + 1;
     publishAttemptRef.current = attempt;
     try {
+      if (postType === "consignment") {
+        logPublishStep("consignment publish cooldown start", { delay_ms: CONSIGNMENT_PUBLISH_COOLDOWN_MS });
+        await delay(CONSIGNMENT_PUBLISH_COOLDOWN_MS);
+        logPublishStep("consignment publish cooldown finish", { delay_ms: CONSIGNMENT_PUBLISH_COOLDOWN_MS });
+      }
       logPublishStep("publish flow start", {
         publish_attempt: attempt,
         currentPostId: currentPost?.id ?? null,
