@@ -64,7 +64,7 @@ const paymentRequisitesByOrigin: Record<ShippingOriginProfile, PaymentRequisites
         value: "2204320932362561",
       },
     ],
-    note: "перевод без комментария❗️",
+    note: "перевод без комментария!",
   },
 };
 
@@ -383,7 +383,11 @@ export function PaymentPage() {
                   <div className="payment-requisites__line">{account.bank}</div>
                   <div className="payment-requisites__number">{account.value}</div>
                 </div>
-                <Button variant="secondary" onClick={() => void copyRequisiteValue(account.value)}>
+                <Button
+                  variant="secondary"
+                  className="payment-requisites__copy-btn"
+                  onClick={() => void copyRequisiteValue(account.value)}
+                >
                   {copiedRequisite === account.value ? "Скопировано" : "Скопировать"}
                 </Button>
               </div>
