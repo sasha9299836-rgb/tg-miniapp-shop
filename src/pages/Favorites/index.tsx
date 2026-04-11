@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+п»їimport { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useProductsStore } from "../../entities/product/model/useProductsStore";
 import { useFavoritesStore } from "../../entities/favorites/model/useFavoritesStore";
@@ -71,7 +71,7 @@ export function FavoritesPage() {
     return (
       <Page>
         <div className="favorites-page">
-          <div style={{ color: "var(--muted)" }}>Загрузка...</div>
+          <div style={{ color: "var(--muted)" }}>{"\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430..."}</div>
         </div>
       </Page>
     );
@@ -83,7 +83,7 @@ export function FavoritesPage() {
         <div className="favorites-page">
           <div style={{ color: "#b42318" }}>{readinessErrorText}</div>
           <div className="favorites-actions">
-            <Button onClick={() => nav("/catalog")}>В каталог</Button>
+            <Button onClick={() => nav("/catalog")}>{"\u0412 \u043a\u0430\u0442\u0430\u043b\u043e\u0433"}</Button>
           </div>
         </div>
       </Page>
@@ -95,14 +95,14 @@ export function FavoritesPage() {
       <Page>
         <div className="favorites-page">
           <div className="favorites-header">
-            <h1 className="favorites-title">Избранное</h1>
+            <h1 className="favorites-title">{"\u0418\u0437\u0431\u0440\u0430\u043d\u043d\u043e\u0435"}</h1>
           </div>
           <EmptyState
-            title="Пока пусто"
-            text="Добавьте товары в избранное, чтобы быстро возвращаться к ним позже."
+            title={"\u041f\u043e\u043a\u0430 \u043f\u0443\u0441\u0442\u043e"}
+            text={"\u0414\u043e\u0431\u0430\u0432\u044c\u0442\u0435 \u0442\u043e\u0432\u0430\u0440\u044b \u0432 \u0438\u0437\u0431\u0440\u0430\u043d\u043d\u043e\u0435, \u0447\u0442\u043e\u0431\u044b \u0431\u044b\u0441\u0442\u0440\u043e \u0432\u043e\u0437\u0432\u0440\u0430\u0449\u0430\u0442\u044c\u0441\u044f \u043a \u043d\u0438\u043c \u043f\u043e\u0437\u0436\u0435."}
           />
           <div className="favorites-actions">
-            <Button onClick={() => nav("/catalog")}>В каталог</Button>
+            <Button onClick={() => nav("/catalog")}>{"\u0412 \u043a\u0430\u0442\u0430\u043b\u043e\u0433"}</Button>
           </div>
         </div>
       </Page>
@@ -113,9 +113,9 @@ export function FavoritesPage() {
     <Page>
       <div className="favorites-page">
         <div className="favorites-header">
-          <h1 className="favorites-title">Избранное</h1>
+          <h1 className="favorites-title">{"\u0418\u0437\u0431\u0440\u0430\u043d\u043d\u043e\u0435"}</h1>
           <Button variant="secondary" className="favorites-clear" onClick={() => void fav.clear()}>
-            Удалить все
+            {"\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u0432\u0441\u0435"}
           </Button>
         </div>
 
@@ -135,21 +135,23 @@ export function FavoritesPage() {
                     <div className="favorites-item__desc">{product.description}</div>
                   ) : null}
                   <div className="favorites-item__price">
-                    {product.price.toLocaleString("ru-RU")} ?
+                    {product.price.toLocaleString("ru-RU")} {"\u20BD"}
                   </div>
                   {product.saleStatus !== "available" ? (
-                    <div className="favorites-item__desc">Продано / недоступно</div>
+                    <div className="favorites-item__desc">{"\u041f\u0440\u043e\u0434\u0430\u043d\u043e / \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u043e"}</div>
                   ) : null}
                 </div>
               </div>
 
               <div className="favorites-item__actions">
-                <Button variant="secondary" onClick={() => void fav.remove({ id: product.id, postId: product.postId })}>Удалить</Button>
+                <Button variant="secondary" onClick={() => void fav.remove({ id: product.id, postId: product.postId })}>{"\u0423\u0434\u0430\u043b\u0438\u0442\u044c"}</Button>
                 <Button
                   onClick={() => void requestAddWithDefectGuard(product)}
                   disabled={product.saleStatus !== "available"}
                 >
-                  {product.saleStatus === "available" ? "В корзину" : "Недоступно"}
+                  {product.saleStatus === "available"
+                    ? "\u0412 \u043a\u043e\u0440\u0437\u0438\u043d\u0443"
+                    : "\u041d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u043e"}
                 </Button>
               </div>
             </Card>

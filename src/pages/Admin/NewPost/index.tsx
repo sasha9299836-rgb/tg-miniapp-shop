@@ -366,6 +366,7 @@ export function AdminNewPostPage() {
   const [successText, setSuccessText] = useState<string | null>(null);
   const [publishDebugLog, setPublishDebugLog] = useState<string[]>([]);
   const [publishDebugError, setPublishDebugError] = useState<string | null>(null);
+  const [publishDebugRawError, setPublishDebugRawError] = useState<string | null>(null);
   const [manualPackagingOverrideTypeKey, setManualPackagingOverrideTypeKey] = useState<string | null>(null);
   const [isTypeSuggestionsOpen, setIsTypeSuggestionsOpen] = useState(false);
   const [isBrandSuggestionsOpen, setIsBrandSuggestionsOpen] = useState(false);
@@ -377,6 +378,7 @@ export function AdminNewPostPage() {
   const pendingMainActivationRef = useRef<string | null>(null);
   const pendingDefectActivationRef = useRef<string | null>(null);
   const publishDebugSeqRef = useRef(0);
+  const publishAttemptRef = useRef(0);
   const parsedNalichieId = useMemo(() => Number(nalichieIdInput), [nalichieIdInput]);
   const normalizedNalichieId = Number.isInteger(parsedNalichieId) && parsedNalichieId > 0 ? parsedNalichieId : null;
   const costPrice = useMemo(() => {
@@ -824,21 +826,52 @@ export function AdminNewPostPage() {
       current_published_at: currentPost?.published_at ?? null,
     }, currentPost?.id, (event) => {
       if (event.type === "branch_start") {
-        logPublishStep(`draft branch start: ${event.branch}`, event.snapshot);
+        logPublishStep(`draft branch start: ${event.branch}`, {
+          ...event.snapshot,
+          at: event.at,
+          started_at_ms: event.started_at_ms,
+        });
         return;
       }
       if (event.type === "branch_success") {
         logPublishStep(`draft branch success: ${event.branch}`, {
           savedId: event.savedId,
           ...event.snapshot,
+          at: event.at,
+          finished_at_ms: event.finished_at_ms,
+          duration_ms: event.duration_ms,
+        });
+        return;
+      }
+      if (event.type === "insert_payload") {
+        logPublishStep("insert_payload", {
+          branch: event.branch,
+          at: event.at,
+          started_at_ms: event.started_at_ms,
+          snapshot: event.snapshot,
+          payload: event.payload,
+        });
+        return;
+      }
+      if (event.type === "ghost_insert_probe") {
+        logPublishStep("ghost_insert_probe", {
+          branch: event.branch,
+          at: event.at,
+          probe_since: event.probe_since,
+          rows: event.rows,
+          probe_error: event.probe_error,
         });
         return;
       }
       logPublishStep(`draft branch error: ${event.branch}`, {
         ...event.snapshot,
         failed_branch: event.branch,
+        at: event.at,
+        failed_at_ms: event.failed_at_ms,
+        duration_ms: event.duration_ms,
         error: event.error,
       });
+      setPublishDebugRawError(event.error.raw_json ?? event.error.raw_value ?? null);
     });
     logPublishStep("createOrUpdateDraftPost success", { savedId: saved.id, status: saved.status });
 
@@ -1142,6 +1175,7 @@ export function AdminNewPostPage() {
       publishDebugSeqRef.current = 0;
       setPublishDebugLog([]);
       setPublishDebugError(null);
+      setPublishDebugRawError(null);
     }
     if (mainPhotos.length < 1) {
       setErrorText("Для публикации нужно минимум 1 фото.");
@@ -1149,8 +1183,13 @@ export function AdminNewPostPage() {
     }
 
     setIsPublishingNow(true);
+    const attempt = publishAttemptRef.current + 1;
+    publishAttemptRef.current = attempt;
     try {
-      logPublishStep("publish flow start", { currentPostId: currentPost?.id ?? null });
+      logPublishStep("publish flow start", {
+        publish_attempt: attempt,
+        currentPostId: currentPost?.id ?? null,
+      });
       const targetPost = await persistDraft();
       logPublishStep("publishPostNow start", { postId: targetPost.id });
       await publishPostNow(targetPost.id);
@@ -1159,9 +1198,13 @@ export function AdminNewPostPage() {
       if (isEditMode) nav("/admin/posts/new", { replace: true });
       setSuccessText("Пост опубликован.");
     } catch (error) {
-      logPublishStep("publish flow failed", error);
+      logPublishStep("publish flow failed", {
+        publish_attempt: attempt,
+        error,
+      });
       if (ENABLE_PUBLISH_DEBUG_OVERLAY) {
         setPublishDebugError(stringifyDebugExtra(error));
+        setPublishDebugRawError((prev) => prev ?? stringifyDebugExtra(error));
       }
       setErrorText(`Ошибка публикации: ${(error as Error).message}`);
     } finally {
@@ -1493,6 +1536,14 @@ export function AdminNewPostPage() {
             <div style={{ fontSize: 13, color: "#b42318", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
               {publishDebugError}
             </div>
+            {publishDebugRawError ? (
+              <>
+                <div style={{ fontSize: 12, color: "var(--muted)" }}>{"raw_error_snapshot:"}</div>
+                <div style={{ fontSize: 12, fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-word", color: "#b42318" }}>
+                  {publishDebugRawError}
+                </div>
+              </>
+            ) : null}
             <div style={{ fontSize: 12, color: "var(--muted)" }}>{"Последние шаги:"}</div>
             <div style={{ display: "grid", gap: 4, maxHeight: 220, overflowY: "auto" }}>
               {publishDebugLog.length ? publishDebugLog.map((line) => (

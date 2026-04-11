@@ -108,21 +108,78 @@ export type DraftWritePayloadSnapshot = {
   defects_text_length: number;
 };
 
+export type DraftWritePayload = {
+  item_id: number | null;
+  nalichie_id: number | null;
+  post_type: TgPostType;
+  origin_profile: TgPostOriginProfile;
+  packaging_preset: TgPostPackagingPreset;
+  title: string;
+  brand: string | null;
+  size: string | null;
+  price: number;
+  description: string;
+  condition: string;
+  has_defects: boolean;
+  defects_text: string | null;
+  status: TgPostStatus;
+  scheduled_at: string | null;
+  published_at: string | null;
+};
+
+export type DraftWriteErrorSnapshot = {
+  type_of: string;
+  is_error_instance: boolean;
+  name: string | null;
+  message: string | null;
+  code: string | null;
+  details: string | null;
+  hint: string | null;
+  status: number | null;
+  statusText: string | null;
+  cause: string | null;
+  stack: string | null;
+  raw_keys: string[] | null;
+  raw_json: string | null;
+  raw_value: string | null;
+};
+
 export type DraftWriteDebugEvent =
-  | { type: "branch_start"; branch: DraftWriteBranch; snapshot: DraftWritePayloadSnapshot }
-  | { type: "branch_success"; branch: DraftWriteBranch; snapshot: DraftWritePayloadSnapshot; savedId: string }
+  | { type: "branch_start"; branch: DraftWriteBranch; snapshot: DraftWritePayloadSnapshot; at: string; started_at_ms: number }
+  | {
+    type: "branch_success";
+    branch: DraftWriteBranch;
+    snapshot: DraftWritePayloadSnapshot;
+    savedId: string;
+    at: string;
+    finished_at_ms: number;
+    duration_ms: number | null;
+  }
   | {
     type: "branch_error";
     branch: DraftWriteBranch;
     snapshot: DraftWritePayloadSnapshot;
-    error: {
-      name: string | null;
-      message: string | null;
-      code: string | null;
-      details: string | null;
-      hint: string | null;
-      status: number | null;
-    };
+    error: DraftWriteErrorSnapshot;
+    at: string;
+    failed_at_ms: number;
+    duration_ms: number | null;
+  }
+  | {
+    type: "insert_payload";
+    branch: "insert_new";
+    snapshot: DraftWritePayloadSnapshot;
+    payload: DraftWritePayload;
+    at: string;
+    started_at_ms: number;
+  }
+  | {
+    type: "ghost_insert_probe";
+    branch: "insert_new";
+    snapshot: DraftWritePayloadSnapshot;
+    at: string;
+    probe_since: string;
+    rows: Array<{ id: string; created_at: string; status: string; post_type: string; item_id: number | null }>;
+    probe_error: string | null;
   };
 
 export type ScheduledPostListItem = {
@@ -139,27 +196,77 @@ function debugDraftStep(step: string, payload?: unknown) {
   console.debug(`[createOrUpdateDraftPost] ${step}`, payload);
 }
 
-function debugErrorSnapshot(error: unknown) {
-  if (error instanceof Error) {
-    const anyError = error as Error & { code?: string; details?: string; hint?: string; status?: number };
-    return {
-      name: anyError.name,
-      message: anyError.message,
-      stack: anyError.stack ?? null,
-      code: anyError.code ?? null,
-      details: anyError.details ?? null,
-      hint: anyError.hint ?? null,
-      status: anyError.status ?? null,
-    };
+function safeJsonStringify(value: unknown): string | null {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return null;
   }
-  return { value: String(error) };
+}
+
+function toDebugText(value: unknown): string | null {
+  if (value == null) return null;
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") return String(value);
+  const json = safeJsonStringify(value);
+  if (json) return json;
+  try {
+    return String(value);
+  } catch {
+    return null;
+  }
+}
+
+function debugErrorSnapshot(error: unknown): DraftWriteErrorSnapshot {
+  const asAny = (error as Record<string, unknown>) ?? {};
+  const isObjectLike = typeof error === "object" && error !== null;
+  const rawKeys = isObjectLike ? Object.keys(asAny) : null;
+  const rawJson = safeJsonStringify(error);
+  const maybeName = isObjectLike && "name" in asAny ? toDebugText(asAny.name) : null;
+  const maybeMessage = isObjectLike && "message" in asAny ? toDebugText(asAny.message) : null;
+  const maybeCode = isObjectLike && "code" in asAny ? toDebugText(asAny.code) : null;
+  const maybeDetails = isObjectLike && "details" in asAny ? toDebugText(asAny.details) : null;
+  const maybeHint = isObjectLike && "hint" in asAny ? toDebugText(asAny.hint) : null;
+  const maybeStatus = isObjectLike && "status" in asAny && typeof asAny.status === "number"
+    ? asAny.status
+    : null;
+  const maybeStatusText = isObjectLike && "statusText" in asAny ? toDebugText(asAny.statusText) : null;
+  const maybeCause = isObjectLike && "cause" in asAny ? toDebugText(asAny.cause) : null;
+  const maybeStack = isObjectLike && "stack" in asAny ? toDebugText(asAny.stack) : null;
+  const message = maybeMessage ?? (error instanceof Error ? error.message : null);
+  const name = maybeName ?? (error instanceof Error ? error.name : null);
+  const stack = maybeStack ?? (error instanceof Error ? error.stack ?? null : null);
+
+  return {
+    type_of: typeof error,
+    is_error_instance: error instanceof Error,
+    name,
+    message,
+    code: maybeCode,
+    details: maybeDetails,
+    hint: maybeHint,
+    status: maybeStatus,
+    statusText: maybeStatusText,
+    cause: maybeCause,
+    stack,
+    raw_keys: rawKeys,
+    raw_json: rawJson,
+    raw_value: toDebugText(error),
+  };
 }
 
 function throwDraftStepError(step: string, error: unknown): never {
   const snapshot = debugErrorSnapshot(error);
   debugDraftStep(`${step} error`, snapshot);
+  const bestMessage =
+    snapshot.message ??
+    snapshot.details ??
+    snapshot.code ??
+    snapshot.raw_json ??
+    snapshot.raw_value ??
+    "UNKNOWN_ERROR";
   throw new Error(
-    `[createOrUpdateDraftPost:${step}] ${snapshot.message ?? "UNKNOWN_ERROR"}`,
+    `[createOrUpdateDraftPost:${step}] ${bestMessage}`,
     { cause: error instanceof Error ? error : undefined },
   );
 }
@@ -266,7 +373,7 @@ export async function createOrUpdateDraftPost(
     ? "scheduled"
     : "draft";
   const nextPublishedAt = nextStatus === "published" ? (payload.current_published_at ?? new Date().toISOString()) : null;
-  const writePayload = {
+  const writePayload: DraftWritePayload = {
     item_id: payload.item_id,
     nalichie_id: payload.nalichie_id,
     post_type: payload.post_type,
@@ -285,27 +392,43 @@ export async function createOrUpdateDraftPost(
     published_at: nextPublishedAt,
   };
   const snapshot = toDraftSnapshot(writePayload, postId);
+  const branchStartAtMs: Partial<Record<DraftWriteBranch, number>> = {};
   const reportStart = (branch: DraftWriteBranch) => {
-    onDebugEvent?.({ type: "branch_start", branch, snapshot });
+    const now = Date.now();
+    branchStartAtMs[branch] = now;
+    onDebugEvent?.({
+      type: "branch_start",
+      branch,
+      snapshot,
+      at: new Date(now).toISOString(),
+      started_at_ms: now,
+    });
   };
   const reportSuccess = (branch: DraftWriteBranch, savedId: string) => {
-    onDebugEvent?.({ type: "branch_success", branch, snapshot, savedId });
+    const finishedAt = Date.now();
+    const startedAt = branchStartAtMs[branch];
+    onDebugEvent?.({
+      type: "branch_success",
+      branch,
+      snapshot,
+      savedId,
+      at: new Date(finishedAt).toISOString(),
+      finished_at_ms: finishedAt,
+      duration_ms: typeof startedAt === "number" ? finishedAt - startedAt : null,
+    });
   };
   const reportError = (branch: DraftWriteBranch, error: unknown) => {
     const raw = debugErrorSnapshot(error);
-    const normalized = {
-      name: (raw as { name?: string | null }).name ?? null,
-      message: (raw as { message?: string | null }).message ?? null,
-      code: (raw as { code?: string | null }).code ?? null,
-      details: (raw as { details?: string | null }).details ?? null,
-      hint: (raw as { hint?: string | null }).hint ?? null,
-      status: (raw as { status?: number | null }).status ?? null,
-    };
+    const failedAt = Date.now();
+    const startedAt = branchStartAtMs[branch];
     onDebugEvent?.({
       type: "branch_error",
       branch,
       snapshot,
-      error: normalized,
+      error: raw,
+      at: new Date(failedAt).toISOString(),
+      failed_at_ms: failedAt,
+      duration_ms: typeof startedAt === "number" ? failedAt - startedAt : null,
     });
   };
   debugDraftStep("start", {
@@ -389,6 +512,15 @@ export async function createOrUpdateDraftPost(
 
   try {
     reportStart("insert_new");
+    const insertStartedAtMs = Date.now();
+    onDebugEvent?.({
+      type: "insert_payload",
+      branch: "insert_new",
+      snapshot,
+      payload: writePayload,
+      at: new Date(insertStartedAtMs).toISOString(),
+      started_at_ms: insertStartedAtMs,
+    });
     debugDraftStep("insert_new start", { payload: writePayload });
     const { data, error } = await supabase
       .from("tg_posts")
@@ -401,6 +533,37 @@ export async function createOrUpdateDraftPost(
     return data as TgPost;
   } catch (error) {
     reportError("insert_new", error);
+    const probeSince = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+    let probeRows: Array<{ id: string; created_at: string; status: string; post_type: string; item_id: number | null }> = [];
+    let probeError: string | null = null;
+    try {
+      const { data: maybeRows, error: maybeRowsError } = await supabase
+        .from("tg_posts")
+        .select("id, created_at, status, post_type, item_id")
+        .eq("post_type", writePayload.post_type)
+        .eq("title", writePayload.title)
+        .eq("price", writePayload.price)
+        .eq("description", writePayload.description)
+        .gte("created_at", probeSince)
+        .order("created_at", { ascending: false })
+        .limit(3);
+      if (maybeRowsError) {
+        probeError = maybeRowsError.message;
+      } else {
+        probeRows = (maybeRows ?? []) as Array<{ id: string; created_at: string; status: string; post_type: string; item_id: number | null }>;
+      }
+    } catch (probeRuntimeError) {
+      probeError = toDebugText(probeRuntimeError) ?? "ghost probe runtime failure";
+    }
+    onDebugEvent?.({
+      type: "ghost_insert_probe",
+      branch: "insert_new",
+      snapshot,
+      at: new Date().toISOString(),
+      probe_since: probeSince,
+      rows: probeRows,
+      probe_error: probeError,
+    });
     throwDraftStepError("insert_new", error);
   }
 }
