@@ -185,6 +185,7 @@ type PendingUpload = {
 };
 
 const MAX_DEFECT_VIDEO_DURATION_SECONDS = 120;
+const UPLOAD_QUEUE_STEP_DELAY_MS = 30;
 
 function inferMediaTypeFromUrl(url: string): "image" | "video" {
   return /\.(mp4|mov)(?:$|\?)/i.test(url) ? "video" : "image";
@@ -380,6 +381,7 @@ export function AdminNewPostPage() {
   const pendingDefectUploadsRef = useRef<PendingUpload[]>([]);
   const pendingMainActivationRef = useRef<string | null>(null);
   const pendingDefectActivationRef = useRef<string | null>(null);
+  const uploadWorkerLockRef = useRef(false);
   const publishDebugSeqRef = useRef(0);
   const publishAttemptRef = useRef(0);
   const parsedNalichieId = useMemo(() => Number(nalichieIdInput), [nalichieIdInput]);
@@ -1051,9 +1053,10 @@ export function AdminNewPostPage() {
   };
 
   useEffect(() => {
-    if (isUploadingPhotos || pendingMainActivationRef.current) return;
+    if (isUploadingPhotos || pendingMainActivationRef.current || uploadWorkerLockRef.current) return;
     const next = pendingMainUploads.find((entry) => entry.status === "pending");
     if (!next) return;
+    uploadWorkerLockRef.current = true;
     pendingMainActivationRef.current = next.localId;
     void (async () => {
       try {
@@ -1080,6 +1083,10 @@ export function AdminNewPostPage() {
           entry.localId === next.localId ? { ...entry, status: "failed" } : entry
         )));
       } finally {
+        if (pendingMainUploadsRef.current.length > 0 || pendingDefectUploadsRef.current.length > 0) {
+          await new Promise((resolve) => window.setTimeout(resolve, UPLOAD_QUEUE_STEP_DELAY_MS));
+        }
+        uploadWorkerLockRef.current = false;
         pendingMainActivationRef.current = null;
         setIsUploadingPhotos(false);
       }
@@ -1087,9 +1094,10 @@ export function AdminNewPostPage() {
   }, [pendingMainUploads, isUploadingPhotos, currentPost?.id, currentPost?.item_id, draftUploadId, postType, normalizedNalichieId]);
 
   useEffect(() => {
-    if (isUploadingDefects || pendingDefectActivationRef.current) return;
+    if (isUploadingDefects || pendingDefectActivationRef.current || uploadWorkerLockRef.current) return;
     const next = pendingDefectUploads.find((entry) => entry.status === "pending");
     if (!next) return;
+    uploadWorkerLockRef.current = true;
     pendingDefectActivationRef.current = next.localId;
     void (async () => {
       try {
@@ -1116,6 +1124,10 @@ export function AdminNewPostPage() {
           entry.localId === next.localId ? { ...entry, status: "failed" } : entry
         )));
       } finally {
+        if (pendingMainUploadsRef.current.length > 0 || pendingDefectUploadsRef.current.length > 0) {
+          await new Promise((resolve) => window.setTimeout(resolve, UPLOAD_QUEUE_STEP_DELAY_MS));
+        }
+        uploadWorkerLockRef.current = false;
         pendingDefectActivationRef.current = null;
         setIsUploadingDefects(false);
       }
