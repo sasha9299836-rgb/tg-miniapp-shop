@@ -40,20 +40,32 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   padding: 4px 0;
 }
 
 .payment-requisites__account-main {
-  display: grid;
-  gap: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.payment-requisites__bank {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .payment-requisites__number {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--text);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+  flex: 0 0 auto;
 }
 
 .payment-requisites__note {
@@ -64,12 +76,13 @@
 }
 
 .payment-requisites__copy-btn {
-  min-height: 34px;
-  padding: 6px 10px;
-  font-size: 12px;
+  min-height: 28px;
+  padding: 3px 8px;
+  font-size: 11px;
   line-height: 1.1;
-  border-radius: 999px;
+  border-radius: 10px;
   white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .payment-upload {

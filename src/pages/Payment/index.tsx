@@ -380,7 +380,7 @@ export function PaymentPage() {
             {requisites.accounts.map((account) => (
               <div key={`${account.bank}:${account.value}`} className="payment-requisites__account">
                 <div className="payment-requisites__account-main">
-                  <div className="payment-requisites__line">{account.bank}</div>
+                  <div className="payment-requisites__bank">{account.bank}</div>
                   <div className="payment-requisites__number">{account.value}</div>
                 </div>
                 <Button
