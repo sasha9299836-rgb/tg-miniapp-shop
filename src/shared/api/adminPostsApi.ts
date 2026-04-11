@@ -145,6 +145,21 @@ export type DraftWriteErrorSnapshot = {
   raw_value: string | null;
 };
 
+type DraftWriteServerResponse = {
+  ok?: boolean;
+  branch?: string;
+  post?: TgPost;
+  error?: string;
+  details?: string;
+  db?: {
+    message?: string | null;
+    code?: string | null;
+    details?: string | null;
+    hint?: string | null;
+    status?: number | null;
+  } | null;
+};
+
 export type DraftWriteDebugEvent =
   | { type: "branch_start"; branch: DraftWriteBranch; snapshot: DraftWritePayloadSnapshot; at: string; started_at_ms: number }
   | {
@@ -218,8 +233,12 @@ function toDebugText(value: unknown): string | null {
   }
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
+function readAdminToken(): string {
+  try {
+    return (window.localStorage.getItem("tg_admin_session_token") ?? "").trim();
+  } catch {
+    return "";
+  }
 }
 
 function debugErrorSnapshot(error: unknown): DraftWriteErrorSnapshot {
@@ -260,13 +279,17 @@ function debugErrorSnapshot(error: unknown): DraftWriteErrorSnapshot {
   };
 }
 
-function isLikelyTransportError(error: unknown): boolean {
-  const snapshot = debugErrorSnapshot(error);
-  const message = String(snapshot.message ?? snapshot.raw_value ?? "").toLowerCase();
-  if (message.includes("load failed") || message.includes("failed to fetch") || message.includes("networkerror")) {
-    return true;
+function normalizeServerBranch(value: string | null | undefined, fallback: DraftWriteBranch): DraftWriteBranch {
+  if (
+    value === "update_by_id"
+    || value === "select_by_item_id"
+    || value === "update_existing_by_item_id"
+    || value === "upsert_fallback"
+    || value === "insert_new"
+  ) {
+    return value;
   }
-  return !snapshot.code && snapshot.status == null;
+  return fallback;
 }
 
 function throwDraftStepError(step: string, error: unknown): never {
@@ -446,161 +469,59 @@ export async function createOrUpdateDraftPost(
       duration_ms: typeof startedAt === "number" ? failedAt - startedAt : null,
     });
   };
-  const emitGhostInsertProbe = async () => {
-    const probeSince = new Date(Date.now() - 2 * 60 * 1000).toISOString();
-    let probeRows: Array<{ id: string; created_at: string; status: string; post_type: string; item_id: number | null }> = [];
-    let probeError: string | null = null;
-    try {
-      const { data: maybeRows, error: maybeRowsError } = await supabase
-        .from("tg_posts")
-        .select("id, created_at, status, post_type, item_id")
-        .eq("post_type", writePayload.post_type)
-        .eq("title", writePayload.title)
-        .eq("price", writePayload.price)
-        .eq("description", writePayload.description)
-        .gte("created_at", probeSince)
-        .order("created_at", { ascending: false })
-        .limit(3);
-      if (maybeRowsError) {
-        probeError = maybeRowsError.message;
-      } else {
-        probeRows = (maybeRows ?? []) as Array<{ id: string; created_at: string; status: string; post_type: string; item_id: number | null }>;
-      }
-    } catch (probeRuntimeError) {
-      probeError = toDebugText(probeRuntimeError) ?? "ghost probe runtime failure";
-    }
-    onDebugEvent?.({
-      type: "ghost_insert_probe",
-      branch: "insert_new",
-      snapshot,
-      at: new Date().toISOString(),
-      probe_since: probeSince,
-      rows: probeRows,
-      probe_error: probeError,
-    });
-  };
   debugDraftStep("start", {
     postId: postId ?? null,
-    branch: postId ? "update_by_id" : payload.item_id != null ? "select_by_item_id_then_write" : "insert",
+    branch: postId ? "update_by_id" : payload.item_id != null ? "select_by_item_id_then_write" : "insert_new",
     payload: writePayload,
   });
-
-  if (postId) {
-    try {
-      reportStart("update_by_id");
-      debugDraftStep("update_by_id start", { postId, payload: writePayload });
-      const { data, error } = await supabase
-        .from("tg_posts")
-        .update(writePayload)
-        .eq("id", postId)
-        .select("*")
-        .single();
-      if (error) throw error;
-      debugDraftStep("update_by_id success", { postId, savedId: data.id });
-      reportSuccess("update_by_id", data.id);
-      return data as TgPost;
-    } catch (error) {
-      reportError("update_by_id", error);
-      throwDraftStepError("update_by_id", error);
-    }
-  }
-
-  // For warehouse flow resolve existing by item_id first.
-  if (payload.item_id != null) {
-    try {
-      reportStart("select_by_item_id");
-      debugDraftStep("select_by_item_id start", { item_id: payload.item_id });
-      const { data: existing, error: existingError } = await supabase
-        .from("tg_posts")
-        .select("id")
-        .eq("item_id", payload.item_id)
-        .maybeSingle();
-      if (existingError) throw existingError;
-      debugDraftStep("select_by_item_id success", { item_id: payload.item_id, existingId: existing?.id ?? null });
-      reportSuccess("select_by_item_id", existing?.id ?? "none");
-
-      if (existing?.id) {
-        reportStart("update_existing_by_item_id");
-        debugDraftStep("update_existing_by_item_id start", { existingId: existing.id, payload: writePayload });
-        const { data, error } = await supabase
-          .from("tg_posts")
-          .update(writePayload)
-          .eq("id", existing.id)
-          .select("*")
-          .single();
-        if (error) throw error;
-        debugDraftStep("update_existing_by_item_id success", { savedId: data.id });
-        reportSuccess("update_existing_by_item_id", data.id);
-        return data as TgPost;
-      }
-    } catch (error) {
-      reportError("select_by_item_id", error);
-      // Fallback for mobile/webview transport glitches on initial SELECT path.
-      debugDraftStep("select_by_item_id_or_update failed, trying upsert_fallback", {
-        item_id: payload.item_id,
-        error: debugErrorSnapshot(error),
-      });
-      try {
-        reportStart("upsert_fallback");
-        const { data, error: upsertError } = await supabase
-          .from("tg_posts")
-          .upsert(writePayload, { onConflict: "item_id" })
-          .select("*")
-          .single();
-        if (upsertError) throw upsertError;
-        debugDraftStep("upsert_fallback success", { savedId: data.id });
-        reportSuccess("upsert_fallback", data.id);
-        return data as TgPost;
-      } catch (fallbackError) {
-        reportError("upsert_fallback", fallbackError);
-        throwDraftStepError("upsert_fallback_after_select_failure", fallbackError);
-      }
-    }
-  }
-
-  const runInsertAttempt = async () => {
-    reportStart("insert_new");
-    const insertStartedAtMs = Date.now();
-    onDebugEvent?.({
-      type: "insert_payload",
-      branch: "insert_new",
-      snapshot,
-      payload: writePayload,
-      at: new Date(insertStartedAtMs).toISOString(),
-      started_at_ms: insertStartedAtMs,
-    });
-    debugDraftStep("insert_new start", { payload: writePayload });
-    const { data, error } = await supabase
-      .from("tg_posts")
-      .insert(writePayload)
-      .select("*")
-      .single();
-    if (error) throw error;
-    debugDraftStep("insert_new success", { savedId: data.id });
-    reportSuccess("insert_new", data.id);
-    return data as TgPost;
-  };
-
+  const predictedBranch: DraftWriteBranch = postId
+    ? "update_by_id"
+    : payload.item_id != null
+    ? "select_by_item_id"
+    : "insert_new";
   try {
-    return await runInsertAttempt();
-  } catch (firstError) {
-    if (isLikelyTransportError(firstError)) {
-      debugDraftStep("insert_new transport retry", {
-        retryDelayMs: 200,
-        firstError: debugErrorSnapshot(firstError),
+    reportStart(predictedBranch);
+    if (predictedBranch === "insert_new") {
+      onDebugEvent?.({
+        type: "insert_payload",
+        branch: "insert_new",
+        snapshot,
+        payload: writePayload,
+        at: new Date().toISOString(),
+        started_at_ms: Date.now(),
       });
-      await delay(200);
-      try {
-        return await runInsertAttempt();
-      } catch (retryError) {
-        reportError("insert_new", retryError);
-        await emitGhostInsertProbe();
-        throwDraftStepError("insert_new", retryError);
-      }
     }
-    reportError("insert_new", firstError);
-    await emitGhostInsertProbe();
-    throwDraftStepError("insert_new", firstError);
+    debugDraftStep("server_wrapper start", {
+      function: "tg_admin_draft_post_write",
+      predictedBranch,
+      postId: postId ?? null,
+      payload: writePayload,
+    });
+    const adminToken = readAdminToken();
+    const { data, error } = await supabase.functions.invoke<DraftWriteServerResponse>("tg_admin_draft_post_write", {
+      body: {
+        post_id: postId ?? null,
+        payload: writePayload,
+      },
+      headers: adminToken ? { "x-admin-token": adminToken } : undefined,
+    });
+    if (error) throw error;
+    if (!data?.ok || !data?.post) {
+      throw new Error(
+        `[tg_admin_draft_post_write] ${data?.error ?? "UNKNOWN_ERROR"} ${data?.details ?? data?.db?.message ?? ""}`.trim(),
+      );
+    }
+    const actualBranch = normalizeServerBranch(data.branch, predictedBranch);
+    debugDraftStep("server_wrapper success", {
+      function: "tg_admin_draft_post_write",
+      actualBranch,
+      savedId: data.post.id,
+    });
+    reportSuccess(actualBranch, data.post.id);
+    return data.post;
+  } catch (error) {
+    reportError(predictedBranch, error);
+    throwDraftStepError(predictedBranch, error);
   }
 }
 
