@@ -6,12 +6,14 @@ import { getPaymentProofPutPresign } from "../../shared/api/paymentProofApi";
 import {
   cancelPendingOrder,
   clearLastOrderId,
-  getOrder,
+  getOrderPaymentContext,
   readLastOrderId,
   submitPaymentProof,
   type TgOrder,
+  type TgOrderOriginItem,
+  type ShippingOriginProfile,
 } from "../../shared/api/ordersApi";
-import { formatPackagingLabel, getPackagingFeeRub } from "../../shared/config/packaging";
+import { getPackagingFeeRub } from "../../shared/config/packaging";
 import { Button } from "../../shared/ui/Button";
 import { Card, CardText, CardTitle } from "../../shared/ui/Card";
 import { Page } from "../../shared/ui/Page";
@@ -28,6 +30,66 @@ function formatTimeLeft(seconds: number): string {
   return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
 }
 
+type PaymentRequisiteAccount = {
+  bank: string;
+  value: string;
+};
+
+type PaymentRequisites = {
+  recipient: string;
+  accounts: PaymentRequisiteAccount[];
+  note: string;
+};
+
+const paymentRequisitesByOrigin: Record<ShippingOriginProfile, PaymentRequisites> = {
+  YAN: {
+    recipient: "Артемий Максимович Г.",
+    accounts: [
+      {
+        bank: "Т-Банк",
+        value: "2200 7010 7242 8243",
+      },
+    ],
+    note: "перевод без комментария!",
+  },
+  ODN: {
+    recipient: "Арсений Л.",
+    accounts: [
+      {
+        bank: "Т-Банк",
+        value: "2200702035727275",
+      },
+      {
+        bank: "Озон Банк (Ozon)",
+        value: "2204320932362561",
+      },
+    ],
+    note: "перевод без комментария❗️",
+  },
+};
+
+function resolveDominantOrigin(
+  orderItems: TgOrderOriginItem[],
+  fallbackOrigin?: ShippingOriginProfile | null,
+): ShippingOriginProfile {
+  if (orderItems.length > 0) {
+    const sums = orderItems.reduce(
+      (acc, item) => {
+        const amount = Number(item.price_rub ?? 0);
+        const origin = item.origin_profile === "ODN" ? "ODN" : "YAN";
+        acc[origin] += amount;
+        return acc;
+      },
+      { YAN: 0, ODN: 0 } as Record<ShippingOriginProfile, number>,
+    );
+    if (sums.YAN >= sums.ODN) return "YAN";
+    return "ODN";
+  }
+
+  if (fallbackOrigin === "ODN") return "ODN";
+  return "YAN";
+}
+
 export function PaymentPage() {
   const nav = useNavigate();
   const location = useLocation();
@@ -37,6 +99,7 @@ export function PaymentPage() {
   const orderId = queryOrderId || fallbackOrderId;
 
   const [order, setOrder] = useState<TgOrder | null>(null);
+  const [orderItems, setOrderItems] = useState<TgOrderOriginItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [remainingSec, setRemainingSec] = useState(0);
   const [file, setFile] = useState<File | null>(null);
@@ -45,6 +108,7 @@ export function PaymentPage() {
   const [isCancellingOrder, setIsCancellingOrder] = useState(false);
   const [isProofSubmitted, setIsProofSubmitted] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [copiedRequisite, setCopiedRequisite] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isReady) return;
@@ -53,13 +117,15 @@ export function PaymentPage() {
     const load = async () => {
       setIsLoading(true);
       setErrorText(null);
+      setOrderItems([]);
       try {
-        const loaded = await getOrder(orderId);
-        if (!loaded) {
+        const loaded = await getOrderPaymentContext(orderId);
+        if (!loaded.order) {
           setErrorText("Не найден заказ.");
           return;
         }
-        setOrder(loaded);
+        setOrder(loaded.order);
+        setOrderItems(loaded.orderItems);
       } catch (error) {
         console.error("payment getOrder failed", error);
         setErrorText("Не удалось загрузить заказ.");
@@ -70,6 +136,12 @@ export function PaymentPage() {
 
     void load();
   }, [isReady, orderId]);
+
+  useEffect(() => {
+    if (!copiedRequisite) return;
+    const timer = window.setTimeout(() => setCopiedRequisite(null), 1500);
+    return () => window.clearTimeout(timer);
+  }, [copiedRequisite]);
 
   useEffect(() => {
     if (!file || !file.type.startsWith("image/")) {
@@ -102,6 +174,9 @@ export function PaymentPage() {
   const deliveryFee = Number(order?.delivery_total_fee_rub ?? (deliveryBaseFee + deliveryMarkupFee));
   const packagingFee = Number(order?.packaging_fee_rub ?? getPackagingFeeRub(order?.packaging_type));
   const total = priceRub + deliveryFee + packagingFee;
+  const displayedDeliveryFee = Math.max(0, total - priceRub);
+  const dominantOrigin = resolveDominantOrigin(orderItems, order?.origin_profile ?? null);
+  const requisites = paymentRequisitesByOrigin[dominantOrigin];
   const reservationExpired = Boolean(order?.reserved_until) && remainingSec <= 0;
   const canSubmit = Boolean(orderId && order && !reservationExpired && order.reserved_until);
 
@@ -113,6 +188,28 @@ export function PaymentPage() {
   );
 
   const navigationBlocker = useBlocker(hasPendingPaymentOrder);
+
+  const copyRequisiteValue = async (value: string) => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = value;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+      setCopiedRequisite(value);
+    } catch (error) {
+      console.error("copy requisite failed", error);
+      setErrorText("Не удалось скопировать реквизит.");
+    }
+  };
 
   if (isChecking) {
     return (
@@ -266,16 +363,11 @@ export function PaymentPage() {
 
         <Card className="ui-card--padded">
           <div className="payment-total">
-            <div className="payment-total__label">Сумма товара</div>
-            <div className="payment-total__value">{rub(priceRub)}</div>
+            <div className="payment-total__label">Сумма заказа</div>
+            <div className="payment-total__value">{rub(total)}</div>
           </div>
-          <div className="payment-total__note">Базовая доставка: {rub(deliveryBaseFee)}</div>
-          <div className="payment-total__note">Наценка магазина: {rub(deliveryMarkupFee)}</div>
-          <div className="payment-total__note">Доставка: {rub(deliveryFee)}</div>
-          <div className="payment-total__note">
-            {formatPackagingLabel(order?.packaging_type)}: {rub(packagingFee)}
-          </div>
-          <div className="payment-total__note">Итого: {rub(total)}</div>
+          <div className="payment-total__note">Сумма товара: {rub(priceRub)}</div>
+          <div className="payment-total__note">Доставка: {rub(displayedDeliveryFee)}</div>
           <div className="payment-total__note">
             {order?.reserved_until ? `Оплатите в течение ${formatTimeLeft(remainingSec)}` : "—"}
           </div>
@@ -284,10 +376,19 @@ export function PaymentPage() {
         <Card className="ui-card--padded">
           <div className="payment-requisites">
             <div className="payment-requisites__title">Реквизиты для оплаты</div>
-            <div className="payment-requisites__line">Получатель: Miniapp Shop</div>
-            <div className="payment-requisites__line">Банк: Тинькофф</div>
-            <div className="payment-requisites__line">Карта: 0000 0000 0000 0000</div>
-            <div className="payment-requisites__line">Назначение: Оплата заказа</div>
+            <div className="payment-requisites__line">Получатель: {requisites.recipient}</div>
+            {requisites.accounts.map((account) => (
+              <div key={`${account.bank}:${account.value}`} className="payment-requisites__account">
+                <div className="payment-requisites__account-main">
+                  <div className="payment-requisites__line">{account.bank}</div>
+                  <div className="payment-requisites__number">{account.value}</div>
+                </div>
+                <Button variant="secondary" onClick={() => void copyRequisiteValue(account.value)}>
+                  {copiedRequisite === account.value ? "Скопировано" : "Скопировать"}
+                </Button>
+              </div>
+            ))}
+            <div className="payment-requisites__note">{requisites.note}</div>
           </div>
         </Card>
 

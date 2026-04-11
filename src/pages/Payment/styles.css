@@ -36,6 +36,35 @@
   color: var(--muted);
 }
 
+.payment-requisites__account {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.payment-requisites__account-main {
+  display: grid;
+  gap: 4px;
+}
+
+.payment-requisites__number {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.payment-requisites__note {
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
 .payment-upload {
   display: grid;
   gap: 10px;

@@ -152,6 +152,18 @@ export type TgOrderShipment = {
   updated_at: string;
 };
 
+export type TgOrderOriginItem = {
+  post_id: string;
+  price_rub: number;
+  origin_profile: ShippingOriginProfile;
+  position_index?: number | null;
+};
+
+export type TgOrderPaymentContext = {
+  order: TgOrder | null;
+  orderItems: TgOrderOriginItem[];
+};
+
 export type DeliveryQuoteResult = {
   ok: true;
   post_ids: string[];
@@ -411,6 +423,38 @@ export async function getOrder(orderId: string): Promise<TgOrder | null> {
   if (error) throw error;
   if (!data?.ok) throw new Error("ORDER_LOAD_FAILED");
   return data.order ?? null;
+}
+
+export async function getOrderPaymentContext(orderId: string): Promise<TgOrderPaymentContext> {
+  const userSessionToken = await readTelegramUserSessionToken();
+  const { data, error } = await supabase.functions.invoke<{
+    ok: boolean;
+    mode: "user_one";
+    order: TgOrder | null;
+    order_items?: TgOrderOriginItem[];
+  }>("tg_orders_read", {
+    body: {
+      mode: "user_one",
+      order_id: orderId,
+    },
+    headers: buildTelegramUserSessionHeaders(userSessionToken),
+  });
+
+  if (error) throw error;
+  if (!data?.ok) throw new Error("ORDER_LOAD_FAILED");
+
+  const orderItems = Array.isArray(data.order_items)
+    ? data.order_items
+        .map((row) => ({
+          post_id: String(row.post_id ?? "").trim(),
+          price_rub: Number(row.price_rub ?? 0),
+          origin_profile: (row.origin_profile === "YAN" ? "YAN" : "ODN") as ShippingOriginProfile,
+          position_index: row.position_index ?? null,
+        }))
+        .filter((row) => row.post_id)
+    : [];
+
+  return { order: data.order ?? null, orderItems };
 }
 
 export async function getOrderById(orderId: string): Promise<TgOrder | null> {

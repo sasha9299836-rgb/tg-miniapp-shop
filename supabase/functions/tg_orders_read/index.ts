@@ -14,6 +14,15 @@ type TgOrderReadBody = {
   statuses?: string[];
 };
 
+type UserOrderItemRead = {
+  post_id: string;
+  price_rub: number;
+  position_index: number | null;
+  tg_posts: {
+    origin_profile: string | null;
+  } | null;
+};
+
 function normalizeStatuses(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -61,7 +70,24 @@ Deno.serve(async (req) => {
         .eq("tg_user_id", tgUserId)
         .maybeSingle();
       if (error) return json({ error: "ORDER_LOAD_FAILED", details: error.message }, 500);
-      return json({ ok: true, mode, order: data ?? null });
+      if (!data) return json({ ok: true, mode, order: null, order_items: [] });
+
+      const { data: itemRows, error: itemsError } = await supabase
+        .from("tg_order_items")
+        .select("post_id,price_rub,position_index,tg_posts(origin_profile)")
+        .eq("order_id", orderId)
+        .order("position_index", { ascending: true, nullsFirst: false })
+        .order("created_at", { ascending: true });
+      if (itemsError) return json({ error: "ORDER_ITEMS_LOAD_FAILED", details: itemsError.message }, 500);
+
+      const orderItems = ((itemRows ?? []) as UserOrderItemRead[]).map((row) => ({
+        post_id: String(row.post_id ?? ""),
+        price_rub: Number(row.price_rub ?? 0),
+        origin_profile: row.tg_posts?.origin_profile === "YAN" ? "YAN" : "ODN",
+        position_index: row.position_index ?? null,
+      }));
+
+      return json({ ok: true, mode, order: data, order_items: orderItems });
     }
 
     if (mode === "user_list") {
