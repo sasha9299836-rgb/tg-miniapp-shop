@@ -218,6 +218,10 @@ function toDebugText(value: unknown): string | null {
   }
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
 function debugErrorSnapshot(error: unknown): DraftWriteErrorSnapshot {
   const asAny = (error as Record<string, unknown>) ?? {};
   const isObjectLike = typeof error === "object" && error !== null;
@@ -254,6 +258,15 @@ function debugErrorSnapshot(error: unknown): DraftWriteErrorSnapshot {
     raw_json: rawJson,
     raw_value: toDebugText(error),
   };
+}
+
+function isLikelyTransportError(error: unknown): boolean {
+  const snapshot = debugErrorSnapshot(error);
+  const message = String(snapshot.message ?? snapshot.raw_value ?? "").toLowerCase();
+  if (message.includes("load failed") || message.includes("failed to fetch") || message.includes("networkerror")) {
+    return true;
+  }
+  return !snapshot.code && snapshot.status == null;
 }
 
 function throwDraftStepError(step: string, error: unknown): never {
@@ -433,6 +446,39 @@ export async function createOrUpdateDraftPost(
       duration_ms: typeof startedAt === "number" ? failedAt - startedAt : null,
     });
   };
+  const emitGhostInsertProbe = async () => {
+    const probeSince = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+    let probeRows: Array<{ id: string; created_at: string; status: string; post_type: string; item_id: number | null }> = [];
+    let probeError: string | null = null;
+    try {
+      const { data: maybeRows, error: maybeRowsError } = await supabase
+        .from("tg_posts")
+        .select("id, created_at, status, post_type, item_id")
+        .eq("post_type", writePayload.post_type)
+        .eq("title", writePayload.title)
+        .eq("price", writePayload.price)
+        .eq("description", writePayload.description)
+        .gte("created_at", probeSince)
+        .order("created_at", { ascending: false })
+        .limit(3);
+      if (maybeRowsError) {
+        probeError = maybeRowsError.message;
+      } else {
+        probeRows = (maybeRows ?? []) as Array<{ id: string; created_at: string; status: string; post_type: string; item_id: number | null }>;
+      }
+    } catch (probeRuntimeError) {
+      probeError = toDebugText(probeRuntimeError) ?? "ghost probe runtime failure";
+    }
+    onDebugEvent?.({
+      type: "ghost_insert_probe",
+      branch: "insert_new",
+      snapshot,
+      at: new Date().toISOString(),
+      probe_since: probeSince,
+      rows: probeRows,
+      probe_error: probeError,
+    });
+  };
   debugDraftStep("start", {
     postId: postId ?? null,
     branch: postId ? "update_by_id" : payload.item_id != null ? "select_by_item_id_then_write" : "insert",
@@ -512,7 +558,7 @@ export async function createOrUpdateDraftPost(
     }
   }
 
-  try {
+  const runInsertAttempt = async () => {
     reportStart("insert_new");
     const insertStartedAtMs = Date.now();
     onDebugEvent?.({
@@ -533,40 +579,28 @@ export async function createOrUpdateDraftPost(
     debugDraftStep("insert_new success", { savedId: data.id });
     reportSuccess("insert_new", data.id);
     return data as TgPost;
-  } catch (error) {
-    reportError("insert_new", error);
-    const probeSince = new Date(Date.now() - 2 * 60 * 1000).toISOString();
-    let probeRows: Array<{ id: string; created_at: string; status: string; post_type: string; item_id: number | null }> = [];
-    let probeError: string | null = null;
-    try {
-      const { data: maybeRows, error: maybeRowsError } = await supabase
-        .from("tg_posts")
-        .select("id, created_at, status, post_type, item_id")
-        .eq("post_type", writePayload.post_type)
-        .eq("title", writePayload.title)
-        .eq("price", writePayload.price)
-        .eq("description", writePayload.description)
-        .gte("created_at", probeSince)
-        .order("created_at", { ascending: false })
-        .limit(3);
-      if (maybeRowsError) {
-        probeError = maybeRowsError.message;
-      } else {
-        probeRows = (maybeRows ?? []) as Array<{ id: string; created_at: string; status: string; post_type: string; item_id: number | null }>;
+  };
+
+  try {
+    return await runInsertAttempt();
+  } catch (firstError) {
+    if (isLikelyTransportError(firstError)) {
+      debugDraftStep("insert_new transport retry", {
+        retryDelayMs: 200,
+        firstError: debugErrorSnapshot(firstError),
+      });
+      await delay(200);
+      try {
+        return await runInsertAttempt();
+      } catch (retryError) {
+        reportError("insert_new", retryError);
+        await emitGhostInsertProbe();
+        throwDraftStepError("insert_new", retryError);
       }
-    } catch (probeRuntimeError) {
-      probeError = toDebugText(probeRuntimeError) ?? "ghost probe runtime failure";
     }
-    onDebugEvent?.({
-      type: "ghost_insert_probe",
-      branch: "insert_new",
-      snapshot,
-      at: new Date().toISOString(),
-      probe_since: probeSince,
-      rows: probeRows,
-      probe_error: probeError,
-    });
-    throwDraftStepError("insert_new", error);
+    reportError("insert_new", firstError);
+    await emitGhostInsertProbe();
+    throwDraftStepError("insert_new", firstError);
   }
 }
 
