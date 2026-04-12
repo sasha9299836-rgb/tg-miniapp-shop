@@ -189,6 +189,8 @@ const UPLOAD_QUEUE_STEP_DELAY_MS = 500;
 const UPLOAD_RETRY_DELAY_MS = 700;
 const UPLOAD_MAX_ATTEMPTS = 3;
 const CONSIGNMENT_PUBLISH_COOLDOWN_MS = 600;
+const MAIN_UPLOAD_RETRY_DELAYS_MS = [0, 500, 1000] as const;
+const MAIN_UPLOAD_INTER_FILE_DELAY_MS = 300;
 
 function inferMediaTypeFromUrl(url: string): "image" | "video" {
   return /\.(mp4|mov)(?:$|\?)/i.test(url) ? "video" : "image";
@@ -323,6 +325,12 @@ function isNetworkUploadError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? "");
   const name = error instanceof Error ? error.name : "";
   return message.includes("Load failed") || name === "TypeError";
+}
+
+function shouldRetryMainUpload(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  const name = error instanceof Error ? error.name : "";
+  return name === "Error" || message === "NETWORK_ERROR";
 }
 
 function toMoscowInputValue(iso: string | null) {
@@ -1066,9 +1074,13 @@ export function AdminNewPostPage() {
     };
   }, [pendingDefectUploads]);
 
-  const uploadPendingItem = async (item: PendingUpload, kind: "main" | "defect") => {
-    const postIdForUpload = currentPost?.id ?? draftUploadId;
-    const itemIdForStorage = postType === "warehouse" ? (currentPost?.item_id ?? normalizedNalichieId) : null;
+  const uploadPendingItem = async (
+    item: PendingUpload,
+    kind: "main" | "defect",
+    context?: { post_id: string; item_id: number | null },
+  ) => {
+    const postIdForUpload = context?.post_id ?? (currentPost?.id ?? draftUploadId);
+    const itemIdForStorage = context?.item_id ?? (postType === "warehouse" ? (currentPost?.item_id ?? normalizedNalichieId) : null);
     let publicUrl = "";
     let key = "";
 
@@ -1151,30 +1163,58 @@ export function AdminNewPostPage() {
     }
   };
 
-  useEffect(() => {
-    if (isUploadingPhotos || pendingMainActivationRef.current || uploadWorkerLockRef.current) return;
-    const next = pendingMainUploads.find((entry) => entry.status === "pending");
-    if (!next) return;
-    uploadWorkerLockRef.current = true;
-    pendingMainActivationRef.current = next.localId;
-    void (async () => {
+  const uploadWithRetry = async (
+    file: PendingUpload,
+    context: { post_id: string; item_id: number | null },
+  ) => {
+    for (let attemptIndex = 0; attemptIndex < MAIN_UPLOAD_RETRY_DELAYS_MS.length; attemptIndex += 1) {
+      const attempt = attemptIndex + 1;
+      const retryDelay = MAIN_UPLOAD_RETRY_DELAYS_MS[attemptIndex];
+      if (retryDelay > 0) {
+        await delay(retryDelay);
+      }
+      console.log("UPLOAD_START", {
+        file_name: file.file.name,
+        size: file.file.size,
+        attempt,
+      });
       try {
-        logUploadStep(next.localId, "main upload wait start");
-        await waitForAppToBeInteractive();
-        logUploadStep(next.localId, "main upload wait finish");
-        setPendingMainUploads((prev) => prev.map((entry) => (
-          entry.localId === next.localId ? { ...entry, status: "uploading" } : entry
-        )));
-        setIsUploadingPhotos(true);
-        await uploadQueue(next, "main");
-        URL.revokeObjectURL(next.previewUrl);
-        setPendingMainUploads((prev) => prev.filter((entry) => entry.localId !== next.localId));
-        logUploadStep(next.localId, "main upload completed");
+        await uploadPendingItem(file, "main", context);
+        return;
       } catch (error) {
-        logUploadStep(next.localId, "main upload failed", error);
+        const message = error instanceof Error ? error.message : String(error ?? "");
+        console.error("UPLOAD_FAIL", {
+          file_name: file.file.name,
+          attempt,
+          error_message: message,
+        });
+        if (attemptIndex === MAIN_UPLOAD_RETRY_DELAYS_MS.length - 1 || !shouldRetryMainUpload(error)) {
+          throw error;
+        }
+      }
+    }
+  };
+
+  const uploadPhotosSequentially = async (
+    files: PendingUpload[],
+    context: { post_id: string; item_id: number | null },
+  ) => {
+    for (const pendingFile of files) {
+      await waitForAppToBeInteractive();
+      setPendingMainUploads((prev) => prev.map((entry) => (
+        entry.localId === pendingFile.localId ? { ...entry, status: "uploading" } : entry
+      )));
+
+      try {
+        await uploadWithRetry(pendingFile, context);
+        URL.revokeObjectURL(pendingFile.previewUrl);
+        setPendingMainUploads((prev) => prev.filter((entry) => entry.localId !== pendingFile.localId));
+        logUploadStep(pendingFile.localId, "main upload completed");
+      } catch (error) {
+        logUploadStep(pendingFile.localId, "main upload failed", error);
         const message = (error as Error).message ?? "";
         logMainUploadDebugStep("main_upload failed", {
-          localId: next.localId,
+          localId: pendingFile.localId,
           message: (error as Error).message ?? String(error),
           name: error instanceof Error ? error.name : null,
           stack: error instanceof Error ? error.stack ?? null : null,
@@ -1189,8 +1229,28 @@ export function AdminNewPostPage() {
           setErrorText(`Ошибка загрузки медиа: ${message || "неизвестная ошибка"}`);
         }
         setPendingMainUploads((prev) => prev.map((entry) => (
-          entry.localId === next.localId ? { ...entry, status: "failed" } : entry
+          entry.localId === pendingFile.localId ? { ...entry, status: "failed" } : entry
         )));
+      }
+
+      await delay(MAIN_UPLOAD_INTER_FILE_DELAY_MS);
+    }
+  };
+
+  useEffect(() => {
+    if (isUploadingPhotos || pendingMainActivationRef.current || uploadWorkerLockRef.current) return;
+    const queue = pendingMainUploads.filter((entry) => entry.status === "pending");
+    if (!queue.length) return;
+    uploadWorkerLockRef.current = true;
+    pendingMainActivationRef.current = queue[0].localId;
+    const mainUploadContext = {
+      post_id: currentPost?.id ?? draftUploadId,
+      item_id: postType === "warehouse" ? (currentPost?.item_id ?? normalizedNalichieId) : null,
+    };
+    void (async () => {
+      try {
+        setIsUploadingPhotos(true);
+        await uploadPhotosSequentially(queue, mainUploadContext);
       } finally {
         if (pendingMainUploadsRef.current.length > 0 || pendingDefectUploadsRef.current.length > 0) {
           await new Promise((resolve) => window.setTimeout(resolve, UPLOAD_QUEUE_STEP_DELAY_MS));
