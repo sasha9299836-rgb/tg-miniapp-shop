@@ -213,12 +213,12 @@ export async function uploadMainPhotoViaProxy(
       field_post_id: post_id,
       field_photo_no: photo_no,
       field_item_id: item_id,
-      custom_header_x_admin_token: true,
+      auth_header_bearer: true,
     });
     response = await fetch(endpoint, {
       method: "POST",
       headers: {
-        "x-admin-token": token,
+        Authorization: `Bearer ${token}`,
       },
       body: formData,
     });
