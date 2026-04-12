@@ -217,7 +217,7 @@ export function AdminScheduledPostsPage() {
         {tab === "draft" ? (
           <div className="glass" style={{ padding: 12, display: "grid", gap: 8 }}>
             <div style={{ fontWeight: 700 }}>Планирование публикации</div>
-            <label>
+            <label className="admin-datetime-field">
               Начало публикации
               <input
                 type="datetime-local"

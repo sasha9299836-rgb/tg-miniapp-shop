@@ -1,21 +1,39 @@
+.admin-datetime-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
 .admin-datetime-control {
+  display: block;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   min-height: 46px;
-  padding: 10px 12px;
+  padding: 10px 40px 10px 12px;
   border-radius: 10px;
   border: 1px solid rgba(0, 0, 0, 0.12);
   background: var(--surface);
   color: var(--text);
   font-size: 16px;
-  line-height: 1.25;
+  line-height: 1.2;
   -webkit-appearance: auto;
   appearance: auto;
+  overflow: hidden;
 }
 
 .admin-datetime-control::-webkit-datetime-edit {
   padding: 0;
+  min-width: 0;
 }
 
 .admin-datetime-control::-webkit-date-and-time-value {
   text-align: left;
+  min-width: 0;
+}
+
+.admin-datetime-control::-webkit-calendar-picker-indicator {
+  margin: 0;
+  cursor: pointer;
 }
