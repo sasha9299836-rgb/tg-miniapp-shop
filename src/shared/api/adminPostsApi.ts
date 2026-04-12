@@ -170,6 +170,15 @@ type CreatePostPhotoProxyResponse = {
   details?: unknown;
 };
 
+type PublishPostProxyResponse = {
+  ok?: boolean;
+  post_id?: string;
+  status?: string;
+  post?: TgPost | null;
+  error?: string;
+  details?: unknown;
+};
+
 const cdekProxyBaseUrl = getCdekProxyBaseUrl();
 
 export type DraftWriteDebugEvent =
@@ -738,19 +747,38 @@ export async function deletePostDefectPhoto(photoId: number) {
 }
 
 export async function publishPostNow(postId: string): Promise<TgPost> {
-  const { data, error } = await supabase
-    .from("tg_posts")
-    .update({
-      status: "published",
-      published_at: new Date().toISOString(),
-      scheduled_at: null,
-      sale_status: "available",
-    })
-    .eq("id", postId)
-    .select("*")
-    .single();
-  if (error) throw error;
-  return data as TgPost;
+  const adminToken = readAdminToken();
+  if (!adminToken) {
+    throw new Error("ADMIN_TOKEN_MISSING");
+  }
+  const url = `${cdekProxyBaseUrl}/api/admin/post/publish`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${adminToken}`,
+    },
+    body: JSON.stringify({ post_id: postId }),
+  });
+
+  const rawText = await response.text().catch(() => "");
+  let parsed: PublishPostProxyResponse | null = null;
+  try {
+    parsed = rawText ? (JSON.parse(rawText) as PublishPostProxyResponse) : null;
+  } catch {
+    parsed = null;
+  }
+
+  if (!response.ok) {
+    const details = parsed?.details ? (safeJsonStringify(parsed.details) ?? String(parsed.details)) : rawText;
+    const message = parsed?.error ?? `HTTP_${response.status}`;
+    throw new Error(`[post-publish] ${message}${details ? ` | ${details}` : ""}`);
+  }
+
+  if (!parsed?.ok || parsed.status !== "published" || !parsed.post) {
+    throw new Error("[post-publish] EMPTY_OR_INVALID_RESPONSE");
+  }
+  return parsed.post as TgPost;
 }
 
 export async function schedulePost(postId: string, scheduledAtIso: string): Promise<TgPost> {
