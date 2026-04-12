@@ -11,6 +11,7 @@ import {
   unschedulePost,
   type ScheduledPostListItem,
 } from "../../../shared/api/adminPostsApi";
+import { AdminDateTimeField } from "../DateTimeField";
 import "../datetime-controls.css";
 import "./styles.css";
 
@@ -217,15 +218,11 @@ export function AdminScheduledPostsPage() {
         {tab === "draft" ? (
           <div className="glass" style={{ padding: 12, display: "grid", gap: 8 }}>
             <div style={{ fontWeight: 700 }}>Планирование публикации</div>
-            <label className="admin-datetime-field">
-              Начало публикации
-              <input
-                type="datetime-local"
-                value={startDateTime}
-                className="admin-datetime-control"
-                onChange={(e) => setStartDateTime(e.target.value)}
-              />
-            </label>
+            <AdminDateTimeField
+              label="Начало публикации"
+              value={startDateTime}
+              onChange={setStartDateTime}
+            />
             <label>
               Интервал, минут
               <input

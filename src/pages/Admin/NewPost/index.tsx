@@ -4,6 +4,7 @@ import { Page } from "../../../shared/ui/Page";
 import { Button } from "../../../shared/ui/Button";
 import { PhotoUploader, type PhotoPreviewItem } from "../../../shared/ui/PhotoUploader";
 import { Field } from "../../../shared/ui/form/Field";
+import { AdminDateTimeField } from "../DateTimeField";
 import "./styles.css";
 import "../datetime-controls.css";
 import {
@@ -1662,11 +1663,9 @@ export function AdminNewPostPage() {
 
         <div className="glass" style={{ padding: 12, display: "grid", gap: 8 }}>
           <div style={{ fontWeight: 700 }}>{"Отложенная публикация"}</div>
-          <input
-            type="datetime-local"
+          <AdminDateTimeField
             value={scheduleAtInput}
-            className="admin-datetime-control"
-            onChange={(e) => setScheduleAtInput(e.target.value)}
+            onChange={setScheduleAtInput}
           />
         </div>
 
