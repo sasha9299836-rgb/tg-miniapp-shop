@@ -161,6 +161,15 @@ type DraftWriteServerResponse = {
   } | null;
 };
 
+type CreatePostPhotoProxyResponse = {
+  ok?: boolean;
+  photo_no?: number;
+  key?: string;
+  photo?: TgPostPhoto | null;
+  error?: string;
+  details?: unknown;
+};
+
 const cdekProxyBaseUrl = getCdekProxyBaseUrl();
 
 export type DraftWriteDebugEvent =
@@ -661,21 +670,42 @@ export async function createPostPhoto(payload: {
   kind?: "main" | "defect";
   sort_order: number;
 }) {
-  const { data, error } = await supabase
-    .from("tg_post_photos")
-    .insert({
+  const adminToken = readAdminToken();
+  if (!adminToken) {
+    throw new Error("ADMIN_TOKEN_MISSING");
+  }
+  const url = `${cdekProxyBaseUrl}/api/admin/post-photo/create`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${adminToken}`,
+    },
+    body: JSON.stringify({
       post_id: payload.post_id,
-      item_id: payload.item_id,
       photo_no: payload.photo_no,
-      url: payload.url,
-      storage_key: payload.storage_key,
-      kind: payload.kind ?? "main",
-      sort_order: payload.sort_order,
-    })
-    .select("*")
-    .single();
-  if (error) throw error;
-  return data as TgPostPhoto;
+      key: payload.storage_key,
+    }),
+  });
+
+  const rawText = await response.text().catch(() => "");
+  let parsed: CreatePostPhotoProxyResponse | null = null;
+  try {
+    parsed = rawText ? (JSON.parse(rawText) as CreatePostPhotoProxyResponse) : null;
+  } catch {
+    parsed = null;
+  }
+
+  if (!response.ok) {
+    const details = parsed?.details ? (safeJsonStringify(parsed.details) ?? String(parsed.details)) : rawText;
+    const message = parsed?.error ?? `HTTP_${response.status}`;
+    throw new Error(`[post-photo-create] ${message}${details ? ` | ${details}` : ""}`);
+  }
+
+  if (!parsed?.ok || !parsed.photo) {
+    throw new Error("[post-photo-create] EMPTY_OR_INVALID_RESPONSE");
+  }
+  return parsed.photo as TgPostPhoto;
 }
 
 export async function createPostDefectPhoto(payload: {
