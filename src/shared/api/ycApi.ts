@@ -203,8 +203,7 @@ export async function uploadMainPhotoViaProxy(
   }
   formData.append("file", file);
 
-  let response: Response;
-  try {
+  const { status, responseText } = await new Promise<{ status: number; responseText: string }>((resolve, reject) => {
     console.debug("[ycApi][main-upload] fetch start");
     emitDebug("fetch_start", {
       endpoint,
@@ -214,46 +213,80 @@ export async function uploadMainPhotoViaProxy(
       field_photo_no: photo_no,
       field_item_id: item_id,
       auth_header_bearer: true,
+      transport: "xhr",
     });
-    response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: formData,
-    });
-  } catch (error) {
-    console.error("[ycApi][main-upload] fetch failed before response", {
-      endpoint,
-      message: error instanceof Error ? error.message : String(error),
-      name: error instanceof Error ? error.name : null,
-    });
-    emitDebug("fetch_failed_before_response", {
-      endpoint,
-      message: error instanceof Error ? error.message : String(error),
-      name: error instanceof Error ? error.name : null,
-      stack: error instanceof Error ? error.stack ?? null : null,
-    });
-    throw error;
-  }
 
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", endpoint, true);
+    xhr.timeout = 60_000;
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+
+    xhr.onload = () => {
+      resolve({
+        status: xhr.status,
+        responseText: xhr.responseText ?? "",
+      });
+    };
+
+    xhr.onerror = () => {
+      const error = new Error("NETWORK_ERROR");
+      emitDebug("fetch_failed_before_response", {
+        endpoint,
+        message: error.message,
+        name: error.name,
+        transport: "xhr",
+      });
+      reject(error);
+    };
+
+    xhr.ontimeout = () => {
+      const error = new Error("TIMEOUT");
+      emitDebug("fetch_failed_before_response", {
+        endpoint,
+        message: error.message,
+        name: error.name,
+        transport: "xhr",
+      });
+      reject(error);
+    };
+
+    try {
+      xhr.send(formData);
+    } catch (error) {
+      console.error("[ycApi][main-upload] xhr send failed before response", {
+        endpoint,
+        message: error instanceof Error ? error.message : String(error),
+        name: error instanceof Error ? error.name : null,
+      });
+      emitDebug("fetch_failed_before_response", {
+        endpoint,
+        message: error instanceof Error ? error.message : String(error),
+        name: error instanceof Error ? error.name : null,
+        stack: error instanceof Error ? error.stack ?? null : null,
+        transport: "xhr",
+      });
+      reject(error);
+    }
+  });
+
+  const isOk = status >= 200 && status < 300;
   console.debug("[ycApi][main-upload] response received", {
-    status: response.status,
-    ok: response.ok,
-    content_type: response.headers.get("content-type"),
+    status,
+    ok: isOk,
+    content_type: "unknown",
   });
   emitDebug("response_received", {
-    status: response.status,
-    ok: response.ok,
-    content_type: response.headers.get("content-type"),
+    status,
+    ok: isOk,
+    content_type: "unknown",
   });
-  const text = await response.text().catch(() => "");
+  const text = responseText;
   console.debug("[ycApi][main-upload] response text preview", {
-    status: response.status,
+    status,
     preview: text.slice(0, 500),
   });
   emitDebug("response_text_received", {
-    status: response.status,
+    status,
     text_preview: text.slice(0, 500),
     text_length: text.length,
   });
@@ -261,19 +294,19 @@ export async function uploadMainPhotoViaProxy(
   try {
     data = text ? (JSON.parse(text) as MainPhotoUploadViaProxyResponse) : null;
   } catch {
-    console.warn("[ycApi][main-upload] response json parse failed", { status: response.status });
+    console.warn("[ycApi][main-upload] response json parse failed", { status });
     emitDebug("response_json_parse_failed", {
-      status: response.status,
+      status,
       text_preview: text.slice(0, 500),
     });
     data = null;
   }
 
-  if (!response.ok) {
-    const message = data?.error ?? data?.message ?? `HTTP_${response.status}`;
+  if (!isOk) {
+    const message = data?.error ?? data?.message ?? `HTTP_${status}`;
     const details = data?.details ? `: ${JSON.stringify(data.details)}` : "";
     emitDebug("response_not_ok", {
-      status: response.status,
+      status,
       message,
       details: data?.details ?? null,
     });
@@ -282,7 +315,7 @@ export async function uploadMainPhotoViaProxy(
 
   if (!data?.ok || !data.key || !data.url || !Number.isFinite(Number(data.photo_no))) {
     emitDebug("response_not_ok", {
-      status: response.status,
+      status,
       message: "MAIN_UPLOAD_INVALID_RESPONSE",
       details: {
         ok: data?.ok ?? null,
@@ -295,7 +328,7 @@ export async function uploadMainPhotoViaProxy(
   }
 
   emitDebug("response_ok", {
-    status: response.status,
+    status,
     key: data.key,
     url: data.url,
     photo_no: Number(data.photo_no),
