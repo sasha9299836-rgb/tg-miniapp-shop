@@ -351,7 +351,13 @@ export async function uploadMainPhotoViaProxy(
   }
   formData.append("file", fileForUpload);
 
-  const { status, responseText } = await new Promise<{ status: number; responseText: string }>((resolve, reject) => {
+  console.log("FORMDATA CHECK", {
+    hasFile: formData.has("file"),
+    fileSize: fileForUpload.size,
+  });
+
+  let response: Response;
+  try {
     console.debug("[ycApi][main-upload] fetch start");
     emitDebug("fetch_start", {
       endpoint,
@@ -361,63 +367,37 @@ export async function uploadMainPhotoViaProxy(
       field_photo_no: photo_no,
       field_item_id: item_id,
       auth_header_bearer: true,
-      transport: "xhr",
+      transport: "fetch",
     });
 
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", endpoint, true);
-    xhr.timeout = 60_000;
-    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    });
+  } catch (error) {
+    const normalizedError = new Error("NETWORK_ERROR");
+    console.error("[ycApi][main-upload] fetch failed before response", {
+      endpoint,
+      message: error instanceof Error ? error.message : String(error),
+      name: error instanceof Error ? error.name : null,
+    });
+    emitDebug("fetch_failed_before_response", {
+      endpoint,
+      message: normalizedError.message,
+      name: normalizedError.name,
+      original_message: error instanceof Error ? error.message : String(error),
+      original_name: error instanceof Error ? error.name : null,
+      stack: error instanceof Error ? error.stack ?? null : null,
+      transport: "fetch",
+    });
+    throw normalizedError;
+  }
 
-    xhr.onload = () => {
-      resolve({
-        status: xhr.status,
-        responseText: xhr.responseText ?? "",
-      });
-    };
-
-    xhr.onerror = () => {
-      const error = new Error("NETWORK_ERROR");
-      emitDebug("fetch_failed_before_response", {
-        endpoint,
-        message: error.message,
-        name: error.name,
-        transport: "xhr",
-      });
-      reject(error);
-    };
-
-    xhr.ontimeout = () => {
-      const error = new Error("TIMEOUT");
-      emitDebug("fetch_failed_before_response", {
-        endpoint,
-        message: error.message,
-        name: error.name,
-        transport: "xhr",
-      });
-      reject(error);
-    };
-
-    try {
-      xhr.send(formData);
-    } catch (error) {
-      console.error("[ycApi][main-upload] xhr send failed before response", {
-        endpoint,
-        message: error instanceof Error ? error.message : String(error),
-        name: error instanceof Error ? error.name : null,
-      });
-      emitDebug("fetch_failed_before_response", {
-        endpoint,
-        message: error instanceof Error ? error.message : String(error),
-        name: error instanceof Error ? error.name : null,
-        stack: error instanceof Error ? error.stack ?? null : null,
-        transport: "xhr",
-      });
-      reject(error);
-    }
-  });
-
-  const isOk = status >= 200 && status < 300;
+  const status = response.status;
+  const isOk = response.ok;
   console.debug("[ycApi][main-upload] response received", {
     status,
     ok: isOk,
@@ -428,7 +408,7 @@ export async function uploadMainPhotoViaProxy(
     ok: isOk,
     content_type: "unknown",
   });
-  const text = responseText;
+  const text = await response.text().catch(() => "");
   console.debug("[ycApi][main-upload] response text preview", {
     status,
     preview: text.slice(0, 500),
