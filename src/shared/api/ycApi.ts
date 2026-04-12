@@ -34,9 +34,6 @@ type MainPhotoUploadViaProxyResponse = {
 export type MainUploadDebugEvent = {
   step:
     | "prepare"
-    | "compression_start"
-    | "compression_done"
-    | "compression_failed"
     | "fetch_start"
     | "fetch_failed_before_response"
     | "response_received"
@@ -47,11 +44,6 @@ export type MainUploadDebugEvent = {
   at: string;
   data?: Record<string, unknown>;
 };
-
-const MAIN_UPLOAD_TARGET_MAX_BYTES = 2.5 * 1024 * 1024;
-const MAIN_UPLOAD_PNG_PASSTHROUGH_MAX_BYTES = 5 * 1024 * 1024;
-const MAIN_UPLOAD_MAX_WIDTH = 1600;
-const MAIN_UPLOAD_QUALITY_STEPS = [0.9, 0.8, 0.7, 0.6] as const;
 
 function readAdminToken(): string {
   try {
@@ -150,125 +142,6 @@ export async function deleteYcObject(storageKey: string): Promise<void> {
   }
 }
 
-function stripExifCanvasOrientation(_canvas: HTMLCanvasElement): void {
-  // No-op placeholder to keep future extension point explicit.
-}
-
-function canvasToJpegBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        reject(new Error("CANVAS_TO_BLOB_FAILED"));
-        return;
-      }
-      resolve(blob);
-    }, "image/jpeg", quality);
-  });
-}
-
-async function loadImageForCompression(file: File): Promise<HTMLImageElement> {
-  const objectUrl = URL.createObjectURL(file);
-  try {
-    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error("IMAGE_DECODE_FAILED"));
-      img.src = objectUrl;
-    });
-    return image;
-  } finally {
-    URL.revokeObjectURL(objectUrl);
-  }
-}
-
-async function compressMainUploadImage(
-  originalFile: File,
-  emitDebug: (step: MainUploadDebugEvent["step"], data?: MainUploadDebugEvent["data"]) => void,
-): Promise<{ file: File; usedQuality: number | null; compressed: boolean }> {
-  const mime = String(originalFile.type ?? "").toLowerCase();
-  if (!mime.startsWith("image/")) {
-    return { file: originalFile, usedQuality: null, compressed: false };
-  }
-
-  if (mime === "image/png" && originalFile.size <= MAIN_UPLOAD_PNG_PASSTHROUGH_MAX_BYTES) {
-    emitDebug("compression_done", {
-      skipped: true,
-      reason: "PNG_SMALL_ENOUGH",
-      original_size: originalFile.size,
-      compressed_size: originalFile.size,
-      quality: null,
-    });
-    return { file: originalFile, usedQuality: null, compressed: false };
-  }
-
-  emitDebug("compression_start", {
-    original_size: originalFile.size,
-    file_type: originalFile.type || "unknown",
-    file_name: originalFile.name,
-    target_max_bytes: MAIN_UPLOAD_TARGET_MAX_BYTES,
-    max_width: MAIN_UPLOAD_MAX_WIDTH,
-  });
-
-  const image = await loadImageForCompression(originalFile);
-  const sourceWidth = Math.max(1, Math.floor(image.naturalWidth || image.width || 1));
-  const sourceHeight = Math.max(1, Math.floor(image.naturalHeight || image.height || 1));
-  const targetWidth = Math.min(sourceWidth, MAIN_UPLOAD_MAX_WIDTH);
-  const targetHeight = Math.max(1, Math.round(sourceHeight * (targetWidth / sourceWidth)));
-
-  const canvas = document.createElement("canvas");
-  canvas.width = targetWidth;
-  canvas.height = targetHeight;
-  stripExifCanvasOrientation(canvas);
-
-  const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    throw new Error("CANVAS_CONTEXT_UNAVAILABLE");
-  }
-  ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
-
-  let bestBlob: Blob | null = null;
-  let bestQuality: number | null = null;
-  for (const quality of MAIN_UPLOAD_QUALITY_STEPS) {
-    const blob = await canvasToJpegBlob(canvas, quality);
-    bestBlob = blob;
-    bestQuality = quality;
-    if (blob.size <= MAIN_UPLOAD_TARGET_MAX_BYTES) break;
-  }
-
-  if (!bestBlob) {
-    throw new Error("COMPRESS_RESULT_EMPTY");
-  }
-
-  if (bestBlob.size >= originalFile.size) {
-    emitDebug("compression_done", {
-      skipped: true,
-      reason: "NO_SIZE_GAIN",
-      original_size: originalFile.size,
-      compressed_size: bestBlob.size,
-      quality: bestQuality,
-      width: targetWidth,
-      height: targetHeight,
-    });
-    return { file: originalFile, usedQuality: null, compressed: false };
-  }
-
-  const compressedFile = new File([bestBlob], originalFile.name, {
-    type: "image/jpeg",
-    lastModified: Date.now(),
-  });
-
-  emitDebug("compression_done", {
-    skipped: false,
-    original_size: originalFile.size,
-    compressed_size: compressedFile.size,
-    quality: bestQuality,
-    width: targetWidth,
-    height: targetHeight,
-    target_achieved: compressedFile.size <= MAIN_UPLOAD_TARGET_MAX_BYTES,
-  });
-
-  return { file: compressedFile, usedQuality: bestQuality, compressed: true };
-}
 
 export async function uploadMainPhotoViaProxy(
   post_id: string,
@@ -301,21 +174,7 @@ export async function uploadMainPhotoViaProxy(
 
   const base = getCdekProxyBaseUrl();
   const endpoint = `${base}/api/admin/media/main/upload`;
-  let fileForUpload = file;
-  let compressionQuality: number | null = null;
-  try {
-    const compressionResult = await compressMainUploadImage(file, emitDebug);
-    fileForUpload = compressionResult.file;
-    compressionQuality = compressionResult.usedQuality;
-  } catch (error) {
-    emitDebug("compression_failed", {
-      original_size: file.size,
-      message: error instanceof Error ? error.message : String(error),
-      name: error instanceof Error ? error.name : null,
-    });
-    fileForUpload = file;
-    compressionQuality = null;
-  }
+  const fileForUpload = file;
 
   console.debug("[ycApi][main-upload] prepare", {
     endpoint,
@@ -328,7 +187,8 @@ export async function uploadMainPhotoViaProxy(
     file_type: fileForUpload.type,
     file_size: fileForUpload.size,
     original_file_size: file.size,
-    compression_quality: compressionQuality,
+    original_file_type: file.type || "unknown",
+    using_original_file: true,
   });
   emitDebug("prepare", {
     endpoint,
@@ -341,7 +201,8 @@ export async function uploadMainPhotoViaProxy(
     file_type: fileForUpload.type || "unknown",
     file_size: fileForUpload.size,
     original_file_size: file.size,
-    compression_quality: compressionQuality,
+    original_file_type: file.type || "unknown",
+    using_original_file: true,
   });
   const formData = new FormData();
   formData.append("post_id", post_id);
