@@ -1,6 +1,7 @@
 import { supabase } from "./supabaseClient";
 import type { DefectMediaItem, Product } from "../types/product";
 import { ensureAdminRuntimeReady } from "../auth/adminRuntimeReadiness";
+import { getCdekProxyBaseUrl } from "./cdekProxyBase";
 
 export type NalichieItem = {
   id: number;
@@ -150,7 +151,7 @@ type DraftWriteServerResponse = {
   branch?: string;
   post?: TgPost;
   error?: string;
-  details?: string;
+  details?: unknown;
   db?: {
     message?: string | null;
     code?: string | null;
@@ -160,8 +161,7 @@ type DraftWriteServerResponse = {
   } | null;
 };
 
-const supabaseFunctionsBaseUrl = String((import.meta as any).env?.VITE_SUPABASE_URL ?? "").trim().replace(/\/+$/, "");
-const supabaseAnonKey = String((import.meta as any).env?.VITE_SUPABASE_ANON_KEY ?? "").trim();
+const cdekProxyBaseUrl = getCdekProxyBaseUrl();
 
 export type DraftWriteDebugEvent =
   | { type: "branch_start"; branch: DraftWriteBranch; snapshot: DraftWritePayloadSnapshot; at: string; started_at_ms: number }
@@ -231,6 +231,11 @@ function safeJsonStringify(value: unknown): string | null {
   } catch {
     return null;
   }
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object") return null;
+  return value as Record<string, unknown>;
 }
 
 function toDebugText(value: unknown): string | null {
@@ -317,19 +322,15 @@ async function invokeDraftWriteWithFetch(input: {
   payload: DraftWritePayload;
   adminToken: string;
 }): Promise<DraftWriteServerResponse> {
-  if (!supabaseFunctionsBaseUrl) {
-    throw new Error("[tg_admin_draft_post_write] VITE_SUPABASE_URL is missing");
+  if (!cdekProxyBaseUrl) {
+    throw new Error("[tg_admin_draft_post_write] CDEK proxy URL is missing");
   }
 
-  const url = `${supabaseFunctionsBaseUrl}/functions/v1/tg_admin_draft_post_write`;
+  const url = `${cdekProxyBaseUrl}/api/admin/draft-post/write`;
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "x-admin-token": input.adminToken,
+    Authorization: `Bearer ${input.adminToken}`,
   };
-  if (supabaseAnonKey) {
-    headers.apikey = supabaseAnonKey;
-    headers.authorization = `Bearer ${supabaseAnonKey}`;
-  }
 
   const response = await fetch(url, {
     method: "POST",
@@ -351,9 +352,20 @@ async function invokeDraftWriteWithFetch(input: {
   }
 
   if (!response.ok) {
-    const details = parsed?.details ?? parsed?.db?.details ?? rawText;
-    const message = parsed?.error ?? parsed?.db?.message ?? `HTTP_${response.status}`;
-    throw new Error(`[tg_admin_draft_post_write] ${message}${details ? ` | ${details}` : ""}`);
+    const detailsRecord = asRecord(parsed?.details);
+    const dbFromDetails = asRecord(detailsRecord?.db);
+    const details =
+      parsed?.details ??
+      parsed?.db?.details ??
+      dbFromDetails?.details ??
+      rawText;
+    const message =
+      parsed?.error ??
+      parsed?.db?.message ??
+      (typeof dbFromDetails?.message === "string" ? dbFromDetails.message : null) ??
+      `HTTP_${response.status}`;
+    const detailsText = typeof details === "string" ? details : (safeJsonStringify(details) ?? String(details ?? ""));
+    throw new Error(`[tg_admin_draft_post_write] ${message}${detailsText ? ` | ${detailsText}` : ""}`);
   }
 
   if (!parsed) {
