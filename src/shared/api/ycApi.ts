@@ -1,5 +1,6 @@
 import { supabase } from "./supabaseClient";
 import { ensureAdminRuntimeReady } from "../auth/adminRuntimeReadiness";
+import { getCdekProxyBaseUrl } from "./cdekProxyBase";
 
 export type YcPresignPutPayload = {
   post_id: string;
@@ -18,6 +19,16 @@ export type YcPresignResponse = {
 
 type YcDeleteObjectResponse = {
   ok: boolean;
+};
+
+type MainPhotoUploadViaProxyResponse = {
+  ok?: boolean;
+  key?: string;
+  url?: string;
+  photo_no?: number;
+  error?: string;
+  message?: string;
+  details?: unknown;
 };
 
 function readAdminToken(): string {
@@ -115,4 +126,59 @@ export async function deleteYcObject(storageKey: string): Promise<void> {
   if (!data?.ok) {
     throw new Error("Failed to delete object from storage");
   }
+}
+
+export async function uploadMainPhotoViaProxy(
+  post_id: string,
+  item_id: number | null,
+  file: File,
+  photo_no: number,
+): Promise<{ key: string; url: string; photo_no: number }> {
+  await ensureAdminRuntimeReady();
+  const token = readAdminToken();
+  if (!token) {
+    throw new Error("ADMIN_TOKEN_MISSING");
+  }
+
+  const base = getCdekProxyBaseUrl();
+  const endpoint = `${base}/api/admin/media/main/upload`;
+  const formData = new FormData();
+  formData.append("post_id", post_id);
+  formData.append("photo_no", String(photo_no));
+  if (item_id != null) {
+    formData.append("item_id", String(item_id));
+  }
+  formData.append("file", file);
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "x-admin-token": token,
+    },
+    body: formData,
+  });
+
+  const text = await response.text().catch(() => "");
+  let data: MainPhotoUploadViaProxyResponse | null = null;
+  try {
+    data = text ? (JSON.parse(text) as MainPhotoUploadViaProxyResponse) : null;
+  } catch {
+    data = null;
+  }
+
+  if (!response.ok) {
+    const message = data?.error ?? data?.message ?? `HTTP_${response.status}`;
+    const details = data?.details ? `: ${JSON.stringify(data.details)}` : "";
+    throw new Error(`MAIN_UPLOAD_FAILED ${message}${details}`);
+  }
+
+  if (!data?.ok || !data.key || !data.url || !Number.isFinite(Number(data.photo_no))) {
+    throw new Error("MAIN_UPLOAD_INVALID_RESPONSE");
+  }
+
+  return {
+    key: data.key,
+    url: data.url,
+    photo_no: Number(data.photo_no),
+  };
 }

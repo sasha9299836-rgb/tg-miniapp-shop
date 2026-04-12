@@ -28,7 +28,7 @@ import {
   type TgPostPackagingPreset,
   type TgPostType,
 } from "../../../shared/api/adminPostsApi";
-import { deleteYcObject, getYcPresignedPut } from "../../../shared/api/ycApi";
+import { deleteYcObject, getYcPresignedPut, uploadMainPhotoViaProxy } from "../../../shared/api/ycApi";
 import { ensureAdminRuntimeReady } from "../../../shared/auth/adminRuntimeReadiness";
 
 const CONDITION_OPTIONS = [
@@ -1032,27 +1032,47 @@ export function AdminNewPostPage() {
   const uploadPendingItem = async (item: PendingUpload, kind: "main" | "defect") => {
     const postIdForUpload = currentPost?.id ?? draftUploadId;
     const itemIdForStorage = postType === "warehouse" ? (currentPost?.item_id ?? normalizedNalichieId) : null;
-    logUploadStep(item.localId, "presign start", {
-      kind,
-      fileName: item.file.name,
-      mimeType: item.file.type,
-      photoNo: item.photoNo,
-      postIdForUpload,
-      itemIdForStorage,
-    });
-    const { url, publicUrl, key } = await getYcPresignedPut(postIdForUpload, itemIdForStorage, item.file, item.photoNo, kind);
-    logUploadStep(item.localId, "presign success", { key, publicUrl });
+    let publicUrl = "";
+    let key = "";
 
-    logUploadStep(item.localId, "put upload start");
-    const uploadRes = await fetch(url, {
-      method: "PUT",
-      headers: { "Content-Type": item.file.type || "application/octet-stream" },
-      body: item.file,
-    });
-    logUploadStep(item.localId, "put upload finish", { status: uploadRes.status });
+    if (kind === "main") {
+      logUploadStep(item.localId, "proxy upload start", {
+        kind,
+        fileName: item.file.name,
+        mimeType: item.file.type,
+        photoNo: item.photoNo,
+        postIdForUpload,
+        itemIdForStorage,
+      });
+      const result = await uploadMainPhotoViaProxy(postIdForUpload, itemIdForStorage, item.file, item.photoNo);
+      publicUrl = result.url;
+      key = result.key;
+      logUploadStep(item.localId, "proxy upload success", { key, publicUrl, photoNo: result.photo_no });
+    } else {
+      logUploadStep(item.localId, "presign start", {
+        kind,
+        fileName: item.file.name,
+        mimeType: item.file.type,
+        photoNo: item.photoNo,
+        postIdForUpload,
+        itemIdForStorage,
+      });
+      const presigned = await getYcPresignedPut(postIdForUpload, itemIdForStorage, item.file, item.photoNo, kind);
+      logUploadStep(item.localId, "presign success", { key: presigned.key, publicUrl: presigned.publicUrl });
 
-    if (!(uploadRes.status === 200 || uploadRes.status === 204)) {
-      throw new Error(`Ошибка загрузки файла ${item.file.name}: ${uploadRes.status}`);
+      logUploadStep(item.localId, "put upload start");
+      const uploadRes = await fetch(presigned.url, {
+        method: "PUT",
+        headers: { "Content-Type": item.file.type || "application/octet-stream" },
+        body: item.file,
+      });
+      logUploadStep(item.localId, "put upload finish", { status: uploadRes.status });
+
+      if (!(uploadRes.status === 200 || uploadRes.status === 204)) {
+        throw new Error(`Ошибка загрузки файла ${item.file.name}: ${uploadRes.status}`);
+      }
+      publicUrl = presigned.publicUrl;
+      key = presigned.key;
     }
 
     const payload: UploadedPhoto = {
