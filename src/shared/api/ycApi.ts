@@ -142,6 +142,17 @@ export async function uploadMainPhotoViaProxy(
 
   const base = getCdekProxyBaseUrl();
   const endpoint = `${base}/api/admin/media/main/upload`;
+  console.debug("[ycApi][main-upload] prepare", {
+    endpoint,
+    token_present: Boolean(token),
+    token_length: token.length,
+    post_id,
+    item_id,
+    photo_no,
+    file_name: file.name,
+    file_type: file.type,
+    file_size: file.size,
+  });
   const formData = new FormData();
   formData.append("post_id", post_id);
   formData.append("photo_no", String(photo_no));
@@ -150,19 +161,40 @@ export async function uploadMainPhotoViaProxy(
   }
   formData.append("file", file);
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "x-admin-token": token,
-    },
-    body: formData,
-  });
+  let response: Response;
+  try {
+    console.debug("[ycApi][main-upload] fetch start");
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "x-admin-token": token,
+      },
+      body: formData,
+    });
+  } catch (error) {
+    console.error("[ycApi][main-upload] fetch failed before response", {
+      endpoint,
+      message: error instanceof Error ? error.message : String(error),
+      name: error instanceof Error ? error.name : null,
+    });
+    throw error;
+  }
 
+  console.debug("[ycApi][main-upload] response received", {
+    status: response.status,
+    ok: response.ok,
+    content_type: response.headers.get("content-type"),
+  });
   const text = await response.text().catch(() => "");
+  console.debug("[ycApi][main-upload] response text preview", {
+    status: response.status,
+    preview: text.slice(0, 500),
+  });
   let data: MainPhotoUploadViaProxyResponse | null = null;
   try {
     data = text ? (JSON.parse(text) as MainPhotoUploadViaProxyResponse) : null;
   } catch {
+    console.warn("[ycApi][main-upload] response json parse failed", { status: response.status });
     data = null;
   }
 
