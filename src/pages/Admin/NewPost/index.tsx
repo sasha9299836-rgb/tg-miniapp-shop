@@ -185,7 +185,9 @@ type PendingUpload = {
 };
 
 const MAX_DEFECT_VIDEO_DURATION_SECONDS = 120;
-const UPLOAD_QUEUE_STEP_DELAY_MS = 30;
+const UPLOAD_QUEUE_STEP_DELAY_MS = 500;
+const UPLOAD_RETRY_DELAY_MS = 700;
+const UPLOAD_MAX_ATTEMPTS = 3;
 const CONSIGNMENT_PUBLISH_COOLDOWN_MS = 600;
 
 function inferMediaTypeFromUrl(url: string): "image" | "video" {
@@ -315,6 +317,12 @@ function moscowDateTimeLocalToIso(value: string): string | null {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function isNetworkUploadError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  const name = error instanceof Error ? error.name : "";
+  return message.includes("Load failed") || name === "TypeError";
 }
 
 function toMoscowInputValue(iso: string | null) {
@@ -1123,6 +1131,26 @@ export function AdminNewPostPage() {
     setSuccessText(kind === "main" ? "Основные фотографии загружены." : "Медиа дефектов загружены.");
   };
 
+  const uploadQueue = async (
+    item: PendingUpload,
+    kind: "main" | "defect",
+  ) => {
+    let attempts = 0;
+    while (attempts < UPLOAD_MAX_ATTEMPTS) {
+      attempts += 1;
+      console.log("Uploading file:", item.file.name);
+      try {
+        await uploadPendingItem(item, kind);
+        return;
+      } catch (error) {
+        const shouldRetry = isNetworkUploadError(error) && attempts < UPLOAD_MAX_ATTEMPTS;
+        if (!shouldRetry) throw error;
+        console.log("Retry attempt:", attempts);
+        await delay(UPLOAD_RETRY_DELAY_MS);
+      }
+    }
+  };
+
   useEffect(() => {
     if (isUploadingPhotos || pendingMainActivationRef.current || uploadWorkerLockRef.current) return;
     const next = pendingMainUploads.find((entry) => entry.status === "pending");
@@ -1138,7 +1166,7 @@ export function AdminNewPostPage() {
           entry.localId === next.localId ? { ...entry, status: "uploading" } : entry
         )));
         setIsUploadingPhotos(true);
-        await uploadPendingItem(next, "main");
+        await uploadQueue(next, "main");
         URL.revokeObjectURL(next.previewUrl);
         setPendingMainUploads((prev) => prev.filter((entry) => entry.localId !== next.localId));
         logUploadStep(next.localId, "main upload completed");
@@ -1189,7 +1217,7 @@ export function AdminNewPostPage() {
           entry.localId === next.localId ? { ...entry, status: "uploading" } : entry
         )));
         setIsUploadingDefects(true);
-        await uploadPendingItem(next, "defect");
+        await uploadQueue(next, "defect");
         URL.revokeObjectURL(next.previewUrl);
         setPendingDefectUploads((prev) => prev.filter((entry) => entry.localId !== next.localId));
         logUploadStep(next.localId, "defect upload completed");
