@@ -66,6 +66,10 @@ type AdminUsersLookupResponse = {
 
 type ConfirmationDialogState =
   | {
+      kind: "confirm_payment";
+      order: TgOrder;
+    }
+  | {
       kind: "reject_payment";
       order: TgOrder;
     }
@@ -888,6 +892,12 @@ export function AdminOrdersPage() {
   const submitConfirmation = async () => {
     if (!confirmationDialog) return;
 
+    if (confirmationDialog.kind === "confirm_payment") {
+      setConfirmationDialog(null);
+      await onConfirm(confirmationDialog.order);
+      return;
+    }
+
     if (confirmationDialog.kind === "reject_payment") {
       setConfirmationDialog(null);
       await onReject(confirmationDialog.order.id);
@@ -898,14 +908,18 @@ export function AdminOrdersPage() {
     await onSyncAllShipmentStatuses();
   };
 
-  const dialogTitle = confirmationDialog?.kind === "reject_payment"
-    ? "\u041E\u0442\u043A\u043B\u043E\u043D\u0438\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443?"
+  const dialogTitle = confirmationDialog?.kind === "confirm_payment"
+    ? "Подтвердить оплату"
+    : confirmationDialog?.kind === "reject_payment"
+      ? "\u041E\u0442\u043A\u043B\u043E\u043D\u0438\u0442\u044C \u043E\u043F\u043B\u0430\u0442\u0443?"
     : confirmationDialog?.kind === "batch_sync"
       ? "\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0441\u0442\u0430\u0442\u0443\u0441\u044B \u0434\u043E\u0441\u0442\u0430\u0432\u043A\u0438?"
       : "";
 
-  const dialogText = confirmationDialog?.kind === "reject_payment"
-    ? "\u0417\u0430\u043A\u0430\u0437 \u0431\u0443\u0434\u0435\u0442 \u043E\u0442\u043A\u043B\u043E\u043D\u0435\u043D, \u0430 \u0442\u043E\u0432\u0430\u0440 \u0441\u043D\u043E\u0432\u0430 \u0441\u0442\u0430\u043D\u0435\u0442 \u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D \u0432 \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0435."
+  const dialogText = confirmationDialog?.kind === "confirm_payment"
+    ? "Подтвердить оплату этого заказа?"
+    : confirmationDialog?.kind === "reject_payment"
+      ? "\u0417\u0430\u043A\u0430\u0437 \u0431\u0443\u0434\u0435\u0442 \u043E\u0442\u043A\u043B\u043E\u043D\u0435\u043D, \u0430 \u0442\u043E\u0432\u0430\u0440 \u0441\u043D\u043E\u0432\u0430 \u0441\u0442\u0430\u043D\u0435\u0442 \u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D \u0432 \u043A\u0430\u0442\u0430\u043B\u043E\u0433\u0435."
     : confirmationDialog?.kind === "batch_sync"
       ? "\u0421\u0438\u0441\u0442\u0435\u043C\u0430 \u0437\u0430\u043F\u0440\u043E\u0441\u0438\u0442 \u0430\u043A\u0442\u0443\u0430\u043B\u044C\u043D\u044B\u0435 \u0441\u0442\u0430\u0442\u0443\u0441\u044B \u043F\u043E \u0432\u0441\u0435\u043C \u0430\u043A\u0442\u0438\u0432\u043D\u044B\u043C \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u044F\u043C."
       : "";
@@ -981,7 +995,7 @@ export function AdminOrdersPage() {
             isExpanded={expandedOrderId === order.id}
             onOpenOrder={(orderId) => setExpandedOrderId((current) => current === orderId ? null : orderId)}
             onOpenProof={onOpenProof}
-            onRequestConfirm={(currentOrder) => void onConfirm(currentOrder)}
+            onRequestConfirm={(currentOrder) => openConfirmation({ kind: "confirm_payment", order: currentOrder })}
             onRequestReject={(currentOrder) => openConfirmation({ kind: "reject_payment", order: currentOrder })}
             onRecoverShipmentLock={onRecoverShipmentLock}
             onSyncShipmentStatus={onSyncShipmentStatus}

@@ -28,7 +28,7 @@ import {
   type TgPostPackagingPreset,
   type TgPostType,
 } from "../../../shared/api/adminPostsApi";
-import { deleteYcObject, getYcPresignedPut, uploadMainPhotoViaProxy, type MainUploadDebugEvent } from "../../../shared/api/ycApi";
+import { deleteYcObject, getYcPresignedPut, uploadMainPhotoViaProxy } from "../../../shared/api/ycApi";
 import { ensureAdminRuntimeReady } from "../../../shared/auth/adminRuntimeReadiness";
 
 const CONDITION_OPTIONS = [
@@ -153,7 +153,6 @@ const BRAND_SUGGESTIONS = [
 ] as const;
 
 const ALLOWED_NALICHIE_STATUSES = new Set(["in_stock", "in_transit"]);
-const ENABLE_PUBLISH_DEBUG_OVERLAY = true;
 
 function getOriginProfileByPostType(postType: TgPostType): TgPostOriginProfile {
   return postType === "consignment" ? "YAN" : "ODN";
@@ -291,17 +290,6 @@ function logPublishStepConsole(message: string, extra?: unknown) {
   console.debug(`[admin-publish] ${message}`, extra);
 }
 
-function stringifyDebugExtra(extra: unknown): string {
-  if (extra == null) return "";
-  if (typeof extra === "string") return extra;
-  if (extra instanceof Error) return extra.stack || extra.message;
-  try {
-    return JSON.stringify(extra);
-  } catch {
-    return String(extra);
-  }
-}
-
 function normalizeConditionValue(value: string | null | undefined) {
   const raw = String(value ?? "").trim();
   if (!raw) return CONDITION_OPTIONS[0];
@@ -387,12 +375,6 @@ export function AdminNewPostPage() {
   const [isUnscheduling, setIsUnscheduling] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [successText, setSuccessText] = useState<string | null>(null);
-  const [publishDebugLog, setPublishDebugLog] = useState<string[]>([]);
-  const [publishDebugError, setPublishDebugError] = useState<string | null>(null);
-  const [publishDebugRawError, setPublishDebugRawError] = useState<string | null>(null);
-  const [mainUploadDebugLog, setMainUploadDebugLog] = useState<string[]>([]);
-  const [mainUploadDebugError, setMainUploadDebugError] = useState<string | null>(null);
-  const [mainUploadDebugRawError, setMainUploadDebugRawError] = useState<string | null>(null);
   const [isPreparingAdminRuntime, setIsPreparingAdminRuntime] = useState(true);
   const [isAdminRuntimeReady, setIsAdminRuntimeReady] = useState(false);
   const [manualPackagingOverrideTypeKey, setManualPackagingOverrideTypeKey] = useState<string | null>(null);
@@ -406,8 +388,6 @@ export function AdminNewPostPage() {
   const pendingMainActivationRef = useRef<string | null>(null);
   const pendingDefectActivationRef = useRef<string | null>(null);
   const uploadWorkerLockRef = useRef(false);
-  const publishDebugSeqRef = useRef(0);
-  const mainUploadDebugSeqRef = useRef(0);
   const publishAttemptRef = useRef(0);
   const parsedNalichieId = useMemo(() => Number(nalichieIdInput), [nalichieIdInput]);
   const normalizedNalichieId = Number.isInteger(parsedNalichieId) && parsedNalichieId > 0 ? parsedNalichieId : null;
@@ -447,34 +427,6 @@ export function AdminNewPostPage() {
 
   const logPublishStep = (message: string, extra?: unknown) => {
     logPublishStepConsole(message, extra);
-    if (!ENABLE_PUBLISH_DEBUG_OVERLAY) return;
-    const nextSeq = publishDebugSeqRef.current + 1;
-    publishDebugSeqRef.current = nextSeq;
-    const timestamp = new Date().toLocaleTimeString("ru-RU", { hour12: false });
-    const details = stringifyDebugExtra(extra);
-    const line = details
-      ? `${nextSeq}. [${timestamp}] ${message} | ${details}`
-      : `${nextSeq}. [${timestamp}] ${message}`;
-    setPublishDebugLog((prev) => [...prev.slice(-39), line]);
-  };
-
-  const logMainUploadDebugStep = (message: string, extra?: unknown) => {
-    if (!ENABLE_PUBLISH_DEBUG_OVERLAY) return;
-    const nextSeq = mainUploadDebugSeqRef.current + 1;
-    mainUploadDebugSeqRef.current = nextSeq;
-    const timestamp = new Date().toLocaleTimeString("ru-RU", { hour12: false });
-    const details = stringifyDebugExtra(extra);
-    const line = details
-      ? `${nextSeq}. [${timestamp}] ${message} | ${details}`
-      : `${nextSeq}. [${timestamp}] ${message}`;
-    setMainUploadDebugLog((prev) => [...prev.slice(-59), line]);
-  };
-
-  const onMainUploadDebugEvent = (event: MainUploadDebugEvent) => {
-    logMainUploadDebugStep(`main_upload ${event.step}`, {
-      at: event.at,
-      ...event.data,
-    });
   };
 
   const mainPreview: PhotoPreviewItem[] = useMemo(
@@ -953,7 +905,6 @@ export function AdminNewPostPage() {
         duration_ms: event.duration_ms,
         error: event.error,
       });
-      setPublishDebugRawError(event.error.raw_json ?? event.error.raw_value ?? null);
     });
     logPublishStep("createOrUpdateDraftPost success", { savedId: saved.id, status: saved.status });
 
@@ -982,12 +933,6 @@ export function AdminNewPostPage() {
   const stageSelectedFiles = (files: File[], kind: "main" | "defect") => {
     setErrorText(null);
     setSuccessText(null);
-    if (kind === "main" && ENABLE_PUBLISH_DEBUG_OVERLAY) {
-      mainUploadDebugSeqRef.current = 0;
-      setMainUploadDebugLog([]);
-      setMainUploadDebugError(null);
-      setMainUploadDebugRawError(null);
-    }
     if (!isAdminRuntimeReady) {
       setErrorText("Подождите: идет подготовка админ-сессии.");
       return;
@@ -1098,7 +1043,6 @@ export function AdminNewPostPage() {
         itemIdForStorage,
         item.file,
         item.photoNo,
-        onMainUploadDebugEvent,
       );
       publicUrl = result.url;
       key = result.key;
@@ -1213,16 +1157,6 @@ export function AdminNewPostPage() {
       } catch (error) {
         logUploadStep(pendingFile.localId, "main upload failed", error);
         const message = (error as Error).message ?? "";
-        logMainUploadDebugStep("main_upload failed", {
-          localId: pendingFile.localId,
-          message: (error as Error).message ?? String(error),
-          name: error instanceof Error ? error.name : null,
-          stack: error instanceof Error ? error.stack ?? null : null,
-        });
-        if (ENABLE_PUBLISH_DEBUG_OVERLAY) {
-          setMainUploadDebugError((error as Error).message ?? String(error));
-          setMainUploadDebugRawError(stringifyDebugExtra(error));
-        }
         if (message.includes("ALREADY_EXISTS") || message.includes("409")) {
           setErrorText("Медиа с таким номером уже загружено.");
         } else {
@@ -1385,12 +1319,6 @@ export function AdminNewPostPage() {
       setErrorText("Подождите: идет подготовка админ-сессии.");
       return;
     }
-    if (ENABLE_PUBLISH_DEBUG_OVERLAY) {
-      publishDebugSeqRef.current = 0;
-      setPublishDebugLog([]);
-      setPublishDebugError(null);
-      setPublishDebugRawError(null);
-    }
     if (mainPhotos.length < 1) {
       setErrorText("Для публикации нужно минимум 1 фото.");
       return;
@@ -1421,10 +1349,6 @@ export function AdminNewPostPage() {
         publish_attempt: attempt,
         error,
       });
-      if (ENABLE_PUBLISH_DEBUG_OVERLAY) {
-        setPublishDebugError(stringifyDebugExtra(error));
-        setPublishDebugRawError((prev) => prev ?? stringifyDebugExtra(error));
-      }
       setErrorText(`Ошибка публикации: ${(error as Error).message}`);
     } finally {
       setIsPublishingNow(false);
@@ -1772,60 +1696,6 @@ export function AdminNewPostPage() {
         </div>
         {errorText ? <div style={{ color: "#b42318" }}>{errorText}</div> : null}
         {successText ? <div style={{ color: "#067647" }}>{successText}</div> : null}
-        {ENABLE_PUBLISH_DEBUG_OVERLAY && publishDebugError ? (
-          <div className="glass" style={{ padding: 12, display: "grid", gap: 8, border: "1px solid rgba(180,35,24,0.35)" }}>
-            <div style={{ fontWeight: 700, color: "#b42318" }}>{"Publish Debug (temporary)"}</div>
-            <div style={{ fontSize: 13, color: "#b42318", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-              {publishDebugError}
-            </div>
-            {publishDebugRawError ? (
-              <>
-                <div style={{ fontSize: 12, color: "var(--muted)" }}>{"raw_error_snapshot:"}</div>
-                <div style={{ fontSize: 12, fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-word", color: "#b42318" }}>
-                  {publishDebugRawError}
-                </div>
-              </>
-            ) : null}
-            <div style={{ fontSize: 12, color: "var(--muted)" }}>{"Последние шаги:"}</div>
-            <div style={{ display: "grid", gap: 4, maxHeight: 220, overflowY: "auto" }}>
-              {publishDebugLog.length ? publishDebugLog.map((line) => (
-                <div key={line} style={{ fontSize: 12, fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                  {line}
-                </div>
-              )) : (
-                <div style={{ fontSize: 12, color: "var(--muted)" }}>{"Логи publish пока не собраны."}</div>
-              )}
-            </div>
-          </div>
-        ) : null}
-        {ENABLE_PUBLISH_DEBUG_OVERLAY && (mainUploadDebugError || mainUploadDebugLog.length > 0) ? (
-          <div className="glass" style={{ padding: 12, display: "grid", gap: 8, border: "1px solid rgba(180,35,24,0.35)" }}>
-            <div style={{ fontWeight: 700, color: "#b42318" }}>{"Main Upload Debug (temporary)"}</div>
-            {mainUploadDebugError ? (
-              <div style={{ fontSize: 13, color: "#b42318", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                {mainUploadDebugError}
-              </div>
-            ) : null}
-            {mainUploadDebugRawError ? (
-              <>
-                <div style={{ fontSize: 12, color: "var(--muted)" }}>{"raw_error_snapshot:"}</div>
-                <div style={{ fontSize: 12, fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-word", color: "#b42318" }}>
-                  {mainUploadDebugRawError}
-                </div>
-              </>
-            ) : null}
-            <div style={{ fontSize: 12, color: "var(--muted)" }}>{"Последние шаги main upload:"}</div>
-            <div style={{ display: "grid", gap: 4, maxHeight: 220, overflowY: "auto" }}>
-              {mainUploadDebugLog.length ? mainUploadDebugLog.map((line) => (
-                <div key={line} style={{ fontSize: 12, fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                  {line}
-                </div>
-              )) : (
-                <div style={{ fontSize: 12, color: "var(--muted)" }}>{"Логи main upload пока не собраны."}</div>
-              )}
-            </div>
-          </div>
-        ) : null}
       </div>
     </Page>
   );
