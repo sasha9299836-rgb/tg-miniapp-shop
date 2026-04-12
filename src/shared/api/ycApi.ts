@@ -31,6 +31,20 @@ type MainPhotoUploadViaProxyResponse = {
   details?: unknown;
 };
 
+export type MainUploadDebugEvent = {
+  step:
+    | "prepare"
+    | "fetch_start"
+    | "fetch_failed_before_response"
+    | "response_received"
+    | "response_text_received"
+    | "response_json_parse_failed"
+    | "response_not_ok"
+    | "response_ok";
+  at: string;
+  data?: Record<string, unknown>;
+};
+
 function readAdminToken(): string {
   try {
     return (window.localStorage.getItem("tg_admin_session_token") ?? "").trim();
@@ -133,10 +147,27 @@ export async function uploadMainPhotoViaProxy(
   item_id: number | null,
   file: File,
   photo_no: number,
+  onDebug?: (event: MainUploadDebugEvent) => void,
 ): Promise<{ key: string; url: string; photo_no: number }> {
+  const emitDebug = (
+    step: MainUploadDebugEvent["step"],
+    data?: MainUploadDebugEvent["data"],
+  ) => {
+    onDebug?.({
+      step,
+      at: new Date().toISOString(),
+      data,
+    });
+  };
+
   await ensureAdminRuntimeReady();
   const token = readAdminToken();
   if (!token) {
+    emitDebug("prepare", {
+      error: "ADMIN_TOKEN_MISSING",
+      token_present: false,
+      token_length: 0,
+    });
     throw new Error("ADMIN_TOKEN_MISSING");
   }
 
@@ -153,6 +184,17 @@ export async function uploadMainPhotoViaProxy(
     file_type: file.type,
     file_size: file.size,
   });
+  emitDebug("prepare", {
+    endpoint,
+    token_present: true,
+    token_length: token.length,
+    post_id,
+    item_id,
+    photo_no,
+    file_name: file.name,
+    file_type: file.type || "unknown",
+    file_size: file.size,
+  });
   const formData = new FormData();
   formData.append("post_id", post_id);
   formData.append("photo_no", String(photo_no));
@@ -164,6 +206,15 @@ export async function uploadMainPhotoViaProxy(
   let response: Response;
   try {
     console.debug("[ycApi][main-upload] fetch start");
+    emitDebug("fetch_start", {
+      endpoint,
+      method: "POST",
+      has_file: true,
+      field_post_id: post_id,
+      field_photo_no: photo_no,
+      field_item_id: item_id,
+      custom_header_x_admin_token: true,
+    });
     response = await fetch(endpoint, {
       method: "POST",
       headers: {
@@ -177,10 +228,21 @@ export async function uploadMainPhotoViaProxy(
       message: error instanceof Error ? error.message : String(error),
       name: error instanceof Error ? error.name : null,
     });
+    emitDebug("fetch_failed_before_response", {
+      endpoint,
+      message: error instanceof Error ? error.message : String(error),
+      name: error instanceof Error ? error.name : null,
+      stack: error instanceof Error ? error.stack ?? null : null,
+    });
     throw error;
   }
 
   console.debug("[ycApi][main-upload] response received", {
+    status: response.status,
+    ok: response.ok,
+    content_type: response.headers.get("content-type"),
+  });
+  emitDebug("response_received", {
     status: response.status,
     ok: response.ok,
     content_type: response.headers.get("content-type"),
@@ -190,24 +252,54 @@ export async function uploadMainPhotoViaProxy(
     status: response.status,
     preview: text.slice(0, 500),
   });
+  emitDebug("response_text_received", {
+    status: response.status,
+    text_preview: text.slice(0, 500),
+    text_length: text.length,
+  });
   let data: MainPhotoUploadViaProxyResponse | null = null;
   try {
     data = text ? (JSON.parse(text) as MainPhotoUploadViaProxyResponse) : null;
   } catch {
     console.warn("[ycApi][main-upload] response json parse failed", { status: response.status });
+    emitDebug("response_json_parse_failed", {
+      status: response.status,
+      text_preview: text.slice(0, 500),
+    });
     data = null;
   }
 
   if (!response.ok) {
     const message = data?.error ?? data?.message ?? `HTTP_${response.status}`;
     const details = data?.details ? `: ${JSON.stringify(data.details)}` : "";
+    emitDebug("response_not_ok", {
+      status: response.status,
+      message,
+      details: data?.details ?? null,
+    });
     throw new Error(`MAIN_UPLOAD_FAILED ${message}${details}`);
   }
 
   if (!data?.ok || !data.key || !data.url || !Number.isFinite(Number(data.photo_no))) {
+    emitDebug("response_not_ok", {
+      status: response.status,
+      message: "MAIN_UPLOAD_INVALID_RESPONSE",
+      details: {
+        ok: data?.ok ?? null,
+        has_key: Boolean(data?.key),
+        has_url: Boolean(data?.url),
+        photo_no: data?.photo_no ?? null,
+      },
+    });
     throw new Error("MAIN_UPLOAD_INVALID_RESPONSE");
   }
 
+  emitDebug("response_ok", {
+    status: response.status,
+    key: data.key,
+    url: data.url,
+    photo_no: Number(data.photo_no),
+  });
   return {
     key: data.key,
     url: data.url,

@@ -28,7 +28,7 @@ import {
   type TgPostPackagingPreset,
   type TgPostType,
 } from "../../../shared/api/adminPostsApi";
-import { deleteYcObject, getYcPresignedPut, uploadMainPhotoViaProxy } from "../../../shared/api/ycApi";
+import { deleteYcObject, getYcPresignedPut, uploadMainPhotoViaProxy, type MainUploadDebugEvent } from "../../../shared/api/ycApi";
 import { ensureAdminRuntimeReady } from "../../../shared/auth/adminRuntimeReadiness";
 
 const CONDITION_OPTIONS = [
@@ -374,6 +374,9 @@ export function AdminNewPostPage() {
   const [publishDebugLog, setPublishDebugLog] = useState<string[]>([]);
   const [publishDebugError, setPublishDebugError] = useState<string | null>(null);
   const [publishDebugRawError, setPublishDebugRawError] = useState<string | null>(null);
+  const [mainUploadDebugLog, setMainUploadDebugLog] = useState<string[]>([]);
+  const [mainUploadDebugError, setMainUploadDebugError] = useState<string | null>(null);
+  const [mainUploadDebugRawError, setMainUploadDebugRawError] = useState<string | null>(null);
   const [isPreparingAdminRuntime, setIsPreparingAdminRuntime] = useState(true);
   const [isAdminRuntimeReady, setIsAdminRuntimeReady] = useState(false);
   const [manualPackagingOverrideTypeKey, setManualPackagingOverrideTypeKey] = useState<string | null>(null);
@@ -388,6 +391,7 @@ export function AdminNewPostPage() {
   const pendingDefectActivationRef = useRef<string | null>(null);
   const uploadWorkerLockRef = useRef(false);
   const publishDebugSeqRef = useRef(0);
+  const mainUploadDebugSeqRef = useRef(0);
   const publishAttemptRef = useRef(0);
   const parsedNalichieId = useMemo(() => Number(nalichieIdInput), [nalichieIdInput]);
   const normalizedNalichieId = Number.isInteger(parsedNalichieId) && parsedNalichieId > 0 ? parsedNalichieId : null;
@@ -436,6 +440,25 @@ export function AdminNewPostPage() {
       ? `${nextSeq}. [${timestamp}] ${message} | ${details}`
       : `${nextSeq}. [${timestamp}] ${message}`;
     setPublishDebugLog((prev) => [...prev.slice(-39), line]);
+  };
+
+  const logMainUploadDebugStep = (message: string, extra?: unknown) => {
+    if (!ENABLE_PUBLISH_DEBUG_OVERLAY) return;
+    const nextSeq = mainUploadDebugSeqRef.current + 1;
+    mainUploadDebugSeqRef.current = nextSeq;
+    const timestamp = new Date().toLocaleTimeString("ru-RU", { hour12: false });
+    const details = stringifyDebugExtra(extra);
+    const line = details
+      ? `${nextSeq}. [${timestamp}] ${message} | ${details}`
+      : `${nextSeq}. [${timestamp}] ${message}`;
+    setMainUploadDebugLog((prev) => [...prev.slice(-59), line]);
+  };
+
+  const onMainUploadDebugEvent = (event: MainUploadDebugEvent) => {
+    logMainUploadDebugStep(`main_upload ${event.step}`, {
+      at: event.at,
+      ...event.data,
+    });
   };
 
   const mainPreview: PhotoPreviewItem[] = useMemo(
@@ -943,6 +966,12 @@ export function AdminNewPostPage() {
   const stageSelectedFiles = (files: File[], kind: "main" | "defect") => {
     setErrorText(null);
     setSuccessText(null);
+    if (kind === "main" && ENABLE_PUBLISH_DEBUG_OVERLAY) {
+      mainUploadDebugSeqRef.current = 0;
+      setMainUploadDebugLog([]);
+      setMainUploadDebugError(null);
+      setMainUploadDebugRawError(null);
+    }
     if (!isAdminRuntimeReady) {
       setErrorText("Подождите: идет подготовка админ-сессии.");
       return;
@@ -1044,7 +1073,13 @@ export function AdminNewPostPage() {
         postIdForUpload,
         itemIdForStorage,
       });
-      const result = await uploadMainPhotoViaProxy(postIdForUpload, itemIdForStorage, item.file, item.photoNo);
+      const result = await uploadMainPhotoViaProxy(
+        postIdForUpload,
+        itemIdForStorage,
+        item.file,
+        item.photoNo,
+        onMainUploadDebugEvent,
+      );
       publicUrl = result.url;
       key = result.key;
       logUploadStep(item.localId, "proxy upload success", { key, publicUrl, photoNo: result.photo_no });
@@ -1110,6 +1145,16 @@ export function AdminNewPostPage() {
       } catch (error) {
         logUploadStep(next.localId, "main upload failed", error);
         const message = (error as Error).message ?? "";
+        logMainUploadDebugStep("main_upload failed", {
+          localId: next.localId,
+          message: (error as Error).message ?? String(error),
+          name: error instanceof Error ? error.name : null,
+          stack: error instanceof Error ? error.stack ?? null : null,
+        });
+        if (ENABLE_PUBLISH_DEBUG_OVERLAY) {
+          setMainUploadDebugError((error as Error).message ?? String(error));
+          setMainUploadDebugRawError(stringifyDebugExtra(error));
+        }
         if (message.includes("ALREADY_EXISTS") || message.includes("409")) {
           setErrorText("Медиа с таким номером уже загружено.");
         } else {
@@ -1661,6 +1706,34 @@ export function AdminNewPostPage() {
                 </div>
               )) : (
                 <div style={{ fontSize: 12, color: "var(--muted)" }}>{"Логи publish пока не собраны."}</div>
+              )}
+            </div>
+          </div>
+        ) : null}
+        {ENABLE_PUBLISH_DEBUG_OVERLAY && (mainUploadDebugError || mainUploadDebugLog.length > 0) ? (
+          <div className="glass" style={{ padding: 12, display: "grid", gap: 8, border: "1px solid rgba(180,35,24,0.35)" }}>
+            <div style={{ fontWeight: 700, color: "#b42318" }}>{"Main Upload Debug (temporary)"}</div>
+            {mainUploadDebugError ? (
+              <div style={{ fontSize: 13, color: "#b42318", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                {mainUploadDebugError}
+              </div>
+            ) : null}
+            {mainUploadDebugRawError ? (
+              <>
+                <div style={{ fontSize: 12, color: "var(--muted)" }}>{"raw_error_snapshot:"}</div>
+                <div style={{ fontSize: 12, fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-word", color: "#b42318" }}>
+                  {mainUploadDebugRawError}
+                </div>
+              </>
+            ) : null}
+            <div style={{ fontSize: 12, color: "var(--muted)" }}>{"Последние шаги main upload:"}</div>
+            <div style={{ display: "grid", gap: 4, maxHeight: 220, overflowY: "auto" }}>
+              {mainUploadDebugLog.length ? mainUploadDebugLog.map((line) => (
+                <div key={line} style={{ fontSize: 12, fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                  {line}
+                </div>
+              )) : (
+                <div style={{ fontSize: 12, color: "var(--muted)" }}>{"Логи main upload пока не собраны."}</div>
               )}
             </div>
           </div>
