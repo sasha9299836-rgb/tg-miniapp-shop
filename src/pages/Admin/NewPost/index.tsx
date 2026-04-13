@@ -389,6 +389,7 @@ export function AdminNewPostPage() {
   const [successText, setSuccessText] = useState<string | null>(null);
   const [isPreparingAdminRuntime, setIsPreparingAdminRuntime] = useState(true);
   const [isAdminRuntimeReady, setIsAdminRuntimeReady] = useState(false);
+  const currentPostRef = useRef<TgPost | null>(null);
   const [manualPackagingOverrideTypeKey, setManualPackagingOverrideTypeKey] = useState<string | null>(null);
   const [isTypeSuggestionsOpen, setIsTypeSuggestionsOpen] = useState(false);
   const [isBrandSuggestionsOpen, setIsBrandSuggestionsOpen] = useState(false);
@@ -585,6 +586,7 @@ export function AdminNewPostPage() {
     setPostType("warehouse");
     setNalichieIdInput("");
     setItemData(null);
+    currentPostRef.current = null;
     setCurrentPost(null);
     setMainPhotos([]);
     setDefectPhotos([]);
@@ -615,6 +617,7 @@ export function AdminNewPostPage() {
     const nextTypeKey = normalizeItemTypeKey(post.title);
     lastAutoAppliedTypeKey.current = nextTypeKey || null;
     setManualPackagingOverrideTypeKey(nextTypeKey || null);
+    currentPostRef.current = post;
     setCurrentPost(post);
     setPostType(post.post_type ?? "warehouse");
     setNalichieIdInput(post.nalichie_id == null ? "" : String(post.nalichie_id));
@@ -682,6 +685,7 @@ export function AdminNewPostPage() {
 
       if (!foundItem) {
         setItemData(null);
+        currentPostRef.current = null;
         setCurrentPost(null);
         setMainPhotos([]);
         setDefectPhotos([]);
@@ -692,6 +696,7 @@ export function AdminNewPostPage() {
       const itemStatus = String(foundItem.status ?? "").trim();
       if (!ALLOWED_NALICHIE_STATUSES.has(itemStatus)) {
         setItemData(null);
+        currentPostRef.current = null;
         setCurrentPost(null);
         setMainPhotos([]);
         setDefectPhotos([]);
@@ -713,6 +718,7 @@ export function AdminNewPostPage() {
         const nextCondition = foundItem.defekt_marker ? CONDITION_OPTIONS[6] : CONDITION_OPTIONS[1];
         const nextCost = (foundItem.obh_summa ?? 0) > 0 ? Number(foundItem.obh_summa) : Number(foundItem.vikup_rub ?? 0);
         const suggestedPrice = nextCost > 0 ? Math.round(nextCost * 1.8) : null;
+        currentPostRef.current = null;
         setCurrentPost(null);
         setTitle((prev) => (prev.trim() ? prev : nextTitle));
         setBrand((prev) => (prev.trim() ? prev : (foundItem.brend ?? "")));
@@ -739,6 +745,7 @@ export function AdminNewPostPage() {
       fetchRequestId.current += 1;
       setFieldError(null);
       setItemData(null);
+      currentPostRef.current = null;
       setCurrentPost(null);
       return;
     }
@@ -795,6 +802,7 @@ export function AdminNewPostPage() {
       pendingMeasurementUploads.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
       setNalichieIdInput("");
       setItemData(null);
+      currentPostRef.current = null;
       setCurrentPost(null);
       setMainPhotos([]);
       setDefectPhotos([]);
@@ -872,8 +880,9 @@ export function AdminNewPostPage() {
       }
     }
 
+    const effectivePost = currentPostRef.current ?? currentPost;
     logPublishStep("createOrUpdateDraftPost start", {
-      currentPostId: currentPost?.id ?? null,
+      currentPostId: effectivePost?.id ?? null,
       postType,
       normalizedNalichieId,
       hasDefects,
@@ -882,7 +891,7 @@ export function AdminNewPostPage() {
     });
 
     const saved = await createOrUpdateDraftPost({
-      item_id: postType === "warehouse" ? (currentPost?.item_id ?? normalizedNalichieId) : null,
+      item_id: postType === "warehouse" ? (effectivePost?.item_id ?? normalizedNalichieId) : null,
       nalichie_id: postType === "warehouse" ? normalizedNalichieId : null,
       post_type: postType,
       origin_profile: getOriginProfileByPostType(postType),
@@ -897,9 +906,9 @@ export function AdminNewPostPage() {
       defects_text: hasDefects ? defectsText.trim() : null,
       measurements_text: measurementsText.trim() || null,
       scheduled_at: moscowDateTimeLocalToIso(scheduleAtInput),
-      current_status: currentPost?.status,
-      current_published_at: currentPost?.published_at ?? null,
-    }, currentPost?.id, (event) => {
+      current_status: effectivePost?.status,
+      current_published_at: effectivePost?.published_at ?? null,
+    }, effectivePost?.id, (event) => {
       if (event.type === "branch_start") {
         logPublishStep(`draft branch start: ${event.branch}`, {
           ...event.snapshot,
@@ -962,10 +971,11 @@ export function AdminNewPostPage() {
 
     await syncUploadedPhotosToPost(saved.id);
     await syncUploadedMeasurementPhotosToPost(saved.id);
-    logPublishStep("persistDraft hydrateFromPost", { savedId: saved.id });
-    hydrateFromPost(saved);
-    return saved;
-  };
+      logPublishStep("persistDraft hydrateFromPost", { savedId: saved.id });
+      currentPostRef.current = saved;
+      hydrateFromPost(saved);
+      return saved;
+    };
 
   const saveAsDraft = async () => {
     setErrorText(null);
@@ -1086,10 +1096,11 @@ export function AdminNewPostPage() {
       kind: "main" | "defect" | "measurement",
       context?: { post_id: string; item_id: number | null },
     ) => {
-      let postIdForUpload = context?.post_id ?? (currentPost?.id ?? draftUploadId);
+      const effectivePost = currentPostRef.current ?? currentPost;
+      let postIdForUpload = context?.post_id ?? (effectivePost?.id ?? draftUploadId);
       let itemIdForStorage = kind === "measurement"
         ? null
-        : context?.item_id ?? (postType === "warehouse" ? (currentPost?.item_id ?? normalizedNalichieId) : null);
+        : context?.item_id ?? (postType === "warehouse" ? (effectivePost?.item_id ?? normalizedNalichieId) : null);
       let publicUrl = "";
       let key = "";
       let defectDbId: number | null = null;
@@ -1114,7 +1125,7 @@ export function AdminNewPostPage() {
         key = result.key;
         logUploadStep(item.localId, "proxy upload success", { key, publicUrl, photoNo: result.photo_no });
       } else if (kind === "measurement") {
-        if (!currentPost?.id) {
+        if (!effectivePost?.id) {
           logUploadStep(item.localId, "measurement upload requires draft", {
             postIdForUpload,
           });
@@ -1141,7 +1152,7 @@ export function AdminNewPostPage() {
         key = result.key;
         logUploadStep(item.localId, "measurement proxy upload success", { key, publicUrl, photoNo: result.photo_no });
       } else {
-        if (!currentPost?.id) {
+        if (!effectivePost?.id) {
           logUploadStep(item.localId, "defect upload requires draft", {
             postIdForUpload,
             itemIdForStorage,
@@ -1355,8 +1366,8 @@ export function AdminNewPostPage() {
     uploadWorkerLockRef.current = true;
     pendingMainActivationRef.current = queue[0].localId;
     const mainUploadContext = {
-      post_id: currentPost?.id ?? draftUploadId,
-      item_id: postType === "warehouse" ? (currentPost?.item_id ?? normalizedNalichieId) : null,
+      post_id: (currentPostRef.current ?? currentPost)?.id ?? draftUploadId,
+      item_id: postType === "warehouse" ? ((currentPostRef.current ?? currentPost)?.item_id ?? normalizedNalichieId) : null,
     };
     void (async () => {
       try {
@@ -1384,7 +1395,7 @@ export function AdminNewPostPage() {
     uploadWorkerLockRef.current = true;
     pendingMeasurementActivationRef.current = queue[0].localId;
     const measurementUploadContext = {
-      post_id: currentPost?.id ?? draftUploadId,
+      post_id: (currentPostRef.current ?? currentPost)?.id ?? draftUploadId,
     };
     void (async () => {
       try {
