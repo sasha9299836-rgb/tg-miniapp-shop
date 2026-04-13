@@ -300,18 +300,27 @@ function readVideoDurationSeconds(previewUrl: string): Promise<number> {
 }
 
 function uploadToPresignedUrl(url: string, file: File): Promise<void> {
+  console.log("UPLOAD REQUEST", {
+    url,
+    fileName: file.name,
+    fileSize: file.size,
+    fileType: file.type,
+  });
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url);
     xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
     xhr.onload = () => {
+      console.log("UPLOAD STATUS:", xhr.status);
+      console.log("UPLOAD RESPONSE:", xhr.responseText);
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve();
       } else {
-        reject(new Error(`Upload failed: ${xhr.status}`));
+        reject(new Error(`Upload failed: ${xhr.status} | ${xhr.responseText}`));
       }
     };
     xhr.onerror = () => {
+      console.log("UPLOAD NETWORK ERROR");
       reject(new Error("Network error during upload"));
     };
     xhr.send(file);
