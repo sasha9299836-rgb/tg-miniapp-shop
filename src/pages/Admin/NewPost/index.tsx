@@ -299,6 +299,25 @@ function readVideoDurationSeconds(previewUrl: string): Promise<number> {
   });
 }
 
+function uploadToPresignedUrl(url: string, file: File): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+      } else {
+        reject(new Error(`Upload failed: ${xhr.status}`));
+      }
+    };
+    xhr.onerror = () => {
+      reject(new Error("Network error during upload"));
+    };
+    xhr.send(file);
+  });
+}
+
 function logUploadStep(localId: string, message: string, extra?: unknown) {
   if (extra === undefined) {
     console.debug(`[admin-media][${localId}] ${message}`);
@@ -1265,15 +1284,8 @@ export function AdminNewPostPage() {
             photoNo: presigned.photo_no,
           });
           logUploadStep(item.localId, "defect video put start");
-          const uploadRes = await fetch(presigned.presigned_url, {
-            method: "PUT",
-            headers: { "Content-Type": item.file.type || "video/mp4" },
-            body: item.file,
-          });
-          logUploadStep(item.localId, "defect video put finish", { status: uploadRes.status });
-          if (!(uploadRes.status === 200 || uploadRes.status === 204)) {
-            throw new Error(`Ошибка загрузки файла ${item.file.name}: ${uploadRes.status}`);
-          }
+          await uploadToPresignedUrl(presigned.presigned_url, item.file);
+          logUploadStep(item.localId, "defect video put finish", { status: 200 });
           const created = await createPostDefectPhoto({
             post_id: postIdForUpload,
             photo_no: item.photoNo,
