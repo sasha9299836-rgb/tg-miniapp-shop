@@ -1081,13 +1081,13 @@ export function AdminNewPostPage() {
     };
   }, [pendingDefectUploads]);
 
-  const uploadPendingItem = async (
-    item: PendingUpload,
-    kind: "main" | "defect" | "measurement",
-    context?: { post_id: string; item_id: number | null },
+    const uploadPendingItem = async (
+      item: PendingUpload,
+      kind: "main" | "defect" | "measurement",
+      context?: { post_id: string; item_id: number | null },
     ) => {
-      const postIdForUpload = context?.post_id ?? (currentPost?.id ?? draftUploadId);
-      const itemIdForStorage = kind === "measurement"
+      let postIdForUpload = context?.post_id ?? (currentPost?.id ?? draftUploadId);
+      let itemIdForStorage = kind === "measurement"
         ? null
         : context?.item_id ?? (postType === "warehouse" ? (currentPost?.item_id ?? normalizedNalichieId) : null);
       let publicUrl = "";
@@ -1098,9 +1098,9 @@ export function AdminNewPostPage() {
       if (kind === "main") {
         logUploadStep(item.localId, "proxy upload start", {
           kind,
-        fileName: item.file.name,
-        mimeType: item.file.type,
-        photoNo: item.photoNo,
+          fileName: item.file.name,
+          mimeType: item.file.type,
+          photoNo: item.photoNo,
         postIdForUpload,
         itemIdForStorage,
       });
@@ -1113,23 +1113,37 @@ export function AdminNewPostPage() {
       publicUrl = result.url;
       key = result.key;
       logUploadStep(item.localId, "proxy upload success", { key, publicUrl, photoNo: result.photo_no });
-    } else if (kind === "measurement") {
-      logUploadStep(item.localId, "measurement proxy upload start", {
-        kind,
-        fileName: item.file.name,
-        mimeType: item.file.type,
-        photoNo: item.photoNo,
-        postIdForUpload,
-      });
-      const result = await uploadMeasurementPhotoViaProxy(
-        postIdForUpload,
-        item.file,
-        item.photoNo,
-      );
+      } else if (kind === "measurement") {
+        logUploadStep(item.localId, "measurement proxy upload start", {
+          kind,
+          fileName: item.file.name,
+          mimeType: item.file.type,
+          photoNo: item.photoNo,
+          postIdForUpload,
+        });
+        const result = await uploadMeasurementPhotoViaProxy(
+          postIdForUpload,
+          item.file,
+          item.photoNo,
+        );
         publicUrl = result.url;
         key = result.key;
         logUploadStep(item.localId, "measurement proxy upload success", { key, publicUrl, photoNo: result.photo_no });
       } else {
+        if (!currentPost?.id) {
+          logUploadStep(item.localId, "defect upload requires draft", {
+            postIdForUpload,
+            itemIdForStorage,
+          });
+          const saved = await persistDraft();
+          postIdForUpload = saved.id;
+          itemIdForStorage = saved.item_id ?? itemIdForStorage;
+          logUploadStep(item.localId, "defect draft ensured", {
+            postIdForUpload,
+            itemIdForStorage,
+            savedStatus: saved.status,
+          });
+        }
         logUploadStep(item.localId, "defect proxy upload start", {
           kind,
           fileName: item.file.name,
