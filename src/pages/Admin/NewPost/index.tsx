@@ -182,6 +182,20 @@ type UploadedPhoto = {
   mediaType: "image" | "video";
 };
 
+type DraftDebugEntry = {
+  step: string;
+  time: string;
+  currentPostId: string | null;
+  currentPostRefId: string | null;
+  draftUploadId: string;
+  effectivePostId: string | null;
+  uploadPostId?: string | null;
+  fileName?: string | null;
+  fileSize?: number | null;
+  mediaType?: string | null;
+  photoNo?: number | null;
+};
+
 type PendingUpload = {
   localId: string;
   file: File;
@@ -390,6 +404,7 @@ export function AdminNewPostPage() {
   const [isPreparingAdminRuntime, setIsPreparingAdminRuntime] = useState(true);
   const [isAdminRuntimeReady, setIsAdminRuntimeReady] = useState(false);
   const currentPostRef = useRef<TgPost | null>(null);
+  const [draftDebugEntries, setDraftDebugEntries] = useState<DraftDebugEntry[]>([]);
   const [manualPackagingOverrideTypeKey, setManualPackagingOverrideTypeKey] = useState<string | null>(null);
   const [isTypeSuggestionsOpen, setIsTypeSuggestionsOpen] = useState(false);
   const [isBrandSuggestionsOpen, setIsBrandSuggestionsOpen] = useState(false);
@@ -442,6 +457,13 @@ export function AdminNewPostPage() {
 
   const logPublishStep = (message: string, extra?: unknown) => {
     logPublishStepConsole(message, extra);
+  };
+
+  const pushDraftDebug = (entry: Omit<DraftDebugEntry, "time">) => {
+    setDraftDebugEntries((prev) => [{
+      ...entry,
+      time: new Date().toISOString(),
+    }, ...prev].slice(0, 30));
   };
 
   const mainPreview: PhotoPreviewItem[] = useMemo(
@@ -820,6 +842,13 @@ export function AdminNewPostPage() {
 
   const syncUploadedPhotosToPost = async (postId: string) => {
     const unsyncedMain = mainPhotos.filter((photo) => !photo.dbId);
+    pushDraftDebug({
+      step: "main_sync:start",
+      currentPostId: currentPost?.id ?? null,
+      currentPostRefId: currentPostRef.current?.id ?? null,
+      draftUploadId,
+      effectivePostId: postId,
+    });
     logPublishStep("syncUploadedPhotosToPost start", {
       postId,
       unsyncedMain: unsyncedMain.map((photo) => ({ localId: photo.localId, photoNo: photo.photoNo, key: photo.key })),
@@ -881,6 +910,13 @@ export function AdminNewPostPage() {
     }
 
     const effectivePost = currentPostRef.current ?? currentPost;
+    pushDraftDebug({
+      step: "persistDraft:before_write",
+      currentPostId: currentPost?.id ?? null,
+      currentPostRefId: currentPostRef.current?.id ?? null,
+      draftUploadId,
+      effectivePostId: effectivePost?.id ?? null,
+    });
     logPublishStep("createOrUpdateDraftPost start", {
       currentPostId: effectivePost?.id ?? null,
       postType,
@@ -971,11 +1007,18 @@ export function AdminNewPostPage() {
 
     await syncUploadedPhotosToPost(saved.id);
     await syncUploadedMeasurementPhotosToPost(saved.id);
-      logPublishStep("persistDraft hydrateFromPost", { savedId: saved.id });
-      currentPostRef.current = saved;
-      hydrateFromPost(saved);
-      return saved;
-    };
+    logPublishStep("persistDraft hydrateFromPost", { savedId: saved.id });
+    pushDraftDebug({
+      step: "persistDraft:success",
+      currentPostId: currentPost?.id ?? null,
+      currentPostRefId: currentPostRef.current?.id ?? null,
+      draftUploadId,
+      effectivePostId: saved.id,
+    });
+    currentPostRef.current = saved;
+    hydrateFromPost(saved);
+    return saved;
+  };
 
   const saveAsDraft = async () => {
     setErrorText(null);
@@ -1125,6 +1168,18 @@ export function AdminNewPostPage() {
         key = result.key;
         logUploadStep(item.localId, "proxy upload success", { key, publicUrl, photoNo: result.photo_no });
       } else if (kind === "measurement") {
+        pushDraftDebug({
+          step: "measurement:before_upload",
+          currentPostId: currentPost?.id ?? null,
+          currentPostRefId: currentPostRef.current?.id ?? null,
+          draftUploadId,
+          effectivePostId: effectivePost?.id ?? null,
+          uploadPostId: postIdForUpload,
+          fileName: item.file.name,
+          fileSize: item.file.size,
+          mediaType: item.mediaType,
+          photoNo: item.photoNo,
+        });
         if (!effectivePost?.id) {
           logUploadStep(item.localId, "measurement upload requires draft", {
             postIdForUpload,
@@ -1152,6 +1207,18 @@ export function AdminNewPostPage() {
         key = result.key;
         logUploadStep(item.localId, "measurement proxy upload success", { key, publicUrl, photoNo: result.photo_no });
       } else {
+        pushDraftDebug({
+          step: "defect:before_upload",
+          currentPostId: currentPost?.id ?? null,
+          currentPostRefId: currentPostRef.current?.id ?? null,
+          draftUploadId,
+          effectivePostId: effectivePost?.id ?? null,
+          uploadPostId: postIdForUpload,
+          fileName: item.file.name,
+          fileSize: item.file.size,
+          mediaType: item.mediaType,
+          photoNo: item.photoNo,
+        });
         if (!effectivePost?.id) {
           logUploadStep(item.localId, "defect upload requires draft", {
             postIdForUpload,
@@ -1574,6 +1641,13 @@ export function AdminNewPostPage() {
       return;
     }
 
+    pushDraftDebug({
+      step: "publish:before",
+      currentPostId: currentPost?.id ?? null,
+      currentPostRefId: currentPostRef.current?.id ?? null,
+      draftUploadId,
+      effectivePostId: (currentPostRef.current ?? currentPost)?.id ?? null,
+    });
     setIsPublishingNow(true);
     const attempt = publishAttemptRef.current + 1;
     publishAttemptRef.current = attempt;
@@ -1971,11 +2045,23 @@ export function AdminNewPostPage() {
           ) : null}
           <Button variant="secondary" onClick={() => nav("/admin/posts/scheduled")}>{"Назад"}</Button>
         </div>
-        {errorText ? <div style={{ color: "#b42318" }}>{errorText}</div> : null}
-        {successText ? <div style={{ color: "#067647" }}>{successText}</div> : null}
-      </div>
-    </Page>
-  );
-}
+          {errorText ? <div style={{ color: "#b42318" }}>{errorText}</div> : null}
+          {successText ? <div style={{ color: "#067647" }}>{successText}</div> : null}
+          {draftDebugEntries.length ? (
+            <div className="glass" style={{ padding: 12 }}>
+              <div style={{ fontWeight: 700, marginBottom: 8 }}>{"Draft / Upload Debug (temporary)"}</div>
+              <div style={{ display: "grid", gap: 8, fontSize: 12 }}>
+                {draftDebugEntries.map((entry, index) => (
+                  <pre key={`${entry.time}-${index}`} style={{ margin: 0, whiteSpace: "pre-wrap" }}>
+                    {JSON.stringify(entry, null, 2)}
+                  </pre>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </Page>
+    );
+  }
 
 export default AdminNewPostPage;
