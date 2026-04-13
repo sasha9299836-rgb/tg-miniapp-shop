@@ -182,6 +182,7 @@ type UploadedPhoto = {
   url: string;
   key: string;
   mediaType: "image" | "video";
+  postIdUsedForUpload?: string | null;
 };
 
 type DraftDebugEntry = {
@@ -541,6 +542,7 @@ export function AdminNewPostPage() {
       url: photo.public_url,
       key: photo.storage_key,
       mediaType: "image",
+      postIdUsedForUpload: postId,
     })));
   };
 
@@ -883,9 +885,17 @@ export function AdminNewPostPage() {
     });
 
     for (const photo of unsynced) {
+      const createPostId = photo.postIdUsedForUpload ?? postId;
+      if (photo.postIdUsedForUpload && photo.postIdUsedForUpload !== (currentPostRef.current?.id ?? null)) {
+        console.warn("Measurement post_id mismatch", {
+          upload_post_id: photo.postIdUsedForUpload,
+          current_post_id: currentPostRef.current?.id ?? null,
+          photo_no: photo.photoNo,
+        });
+      }
       logPublishStep("createMeasurementPhoto start", { postId, localId: photo.localId, photoNo: photo.photoNo, key: photo.key });
       const created = await createPostMeasurementPhoto({
-        post_id: postId,
+        post_id: createPostId,
         photo_no: photo.photoNo,
         storage_key: photo.key,
       });
@@ -1317,6 +1327,7 @@ export function AdminNewPostPage() {
         url: publicUrl,
         key,
         mediaType: kind === "defect" && defectMediaType ? defectMediaType : item.mediaType,
+        ...(kind === "measurement" ? { postIdUsedForUpload: postIdForUpload } : {}),
       };
     if (kind === "main") setMainPhotos((prev) => [...prev, payload]);
     if (kind === "defect") setDefectPhotos((prev) => [...prev, payload]);
