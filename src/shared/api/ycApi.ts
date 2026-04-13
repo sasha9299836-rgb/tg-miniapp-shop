@@ -43,6 +43,17 @@ type DefectUploadViaProxyResponse = {
   details?: unknown;
 };
 
+type DefectVideoPresignResponse = {
+  ok?: boolean;
+  presigned_url?: string;
+  storage_key?: string;
+  public_url?: string;
+  photo_no?: number;
+  error?: string;
+  message?: string;
+  details?: unknown;
+};
+
 export type MainUploadDebugEvent = {
   step:
     | "prepare"
@@ -433,5 +444,51 @@ export async function uploadDefectMediaViaProxy(input: {
     url: data.public_url,
     photo_no: Number(data.photo_no),
     media_type: data.media_type === "video" ? "video" : "image",
+  };
+}
+
+export async function presignDefectVideoViaProxy(input: {
+  post_id: string;
+  item_id: number | null;
+  photo_no: number;
+  mime: string;
+}): Promise<{ presigned_url: string; storage_key: string; public_url: string; photo_no: number }> {
+  await ensureAdminRuntimeReady();
+  const token = readAdminToken();
+  if (!token) {
+    throw new Error("ADMIN_TOKEN_MISSING");
+  }
+
+  const base = getCdekProxyBaseUrl();
+  const endpoint = `${base}/api/admin/defect-video/presign`;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      post_id: input.post_id,
+      photo_no: input.photo_no,
+      mime: input.mime,
+      item_id: input.item_id ?? null,
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`DEFECT_VIDEO_PRESIGN_FAILED ${response.status} ${text}`.trim());
+  }
+
+  const data = (await response.json().catch(() => null)) as DefectVideoPresignResponse | null;
+  if (!data?.ok || !data.presigned_url || !data.storage_key || !data.public_url || !Number.isFinite(Number(data.photo_no))) {
+    throw new Error("DEFECT_VIDEO_PRESIGN_INVALID_RESPONSE");
+  }
+
+  return {
+    presigned_url: data.presigned_url,
+    storage_key: data.storage_key,
+    public_url: data.public_url,
+    photo_no: Number(data.photo_no),
   };
 }

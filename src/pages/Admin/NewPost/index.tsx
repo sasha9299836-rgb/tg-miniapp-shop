@@ -9,6 +9,7 @@ import "./styles.css";
 import "../datetime-controls.css";
 import {
   createOrUpdateDraftPost,
+  createPostDefectPhoto,
   createPostMeasurementPhoto,
   createPostPhoto,
   deleteDefectPhotoViaProxy,
@@ -33,6 +34,7 @@ import {
 } from "../../../shared/api/adminPostsApi";
 import {
   deleteYcObject,
+  presignDefectVideoViaProxy,
   uploadDefectMediaViaProxy,
   uploadMainPhotoViaProxy,
   uploadMeasurementPhotoViaProxy,
@@ -1233,32 +1235,79 @@ export function AdminNewPostPage() {
             savedStatus: saved.status,
           });
         }
-        logUploadStep(item.localId, "defect proxy upload start", {
-          kind,
-          fileName: item.file.name,
-          mimeType: item.file.type,
-          photoNo: item.photoNo,
-          postIdForUpload,
-          itemIdForStorage,
-        });
-        const result = await uploadDefectMediaViaProxy({
-          post_id: postIdForUpload,
-          item_id: itemIdForStorage,
-          file: item.file,
-          photo_no: item.photoNo,
-          media_type: item.mediaType,
-        });
-        publicUrl = result.url;
-        key = result.key;
-        defectDbId = result.id ?? null;
-        defectMediaType = result.media_type;
-        logUploadStep(item.localId, "defect proxy upload success", {
-          key,
-          publicUrl,
-          photoNo: result.photo_no,
-          mediaType: result.media_type,
-          dbId: result.id ?? null,
-        });
+        if (item.mediaType === "video") {
+          logUploadStep(item.localId, "defect video presign start", {
+            fileName: item.file.name,
+            mimeType: item.file.type,
+            photoNo: item.photoNo,
+            postIdForUpload,
+            itemIdForStorage,
+          });
+          const presigned = await presignDefectVideoViaProxy({
+            post_id: postIdForUpload,
+            item_id: itemIdForStorage,
+            photo_no: item.photoNo,
+            mime: item.file.type || "video/mp4",
+          });
+          logUploadStep(item.localId, "defect video presign success", {
+            key: presigned.storage_key,
+            publicUrl: presigned.public_url,
+            photoNo: presigned.photo_no,
+          });
+          logUploadStep(item.localId, "defect video put start");
+          const uploadRes = await fetch(presigned.presigned_url, {
+            method: "PUT",
+            headers: { "Content-Type": item.file.type || "video/mp4" },
+            body: item.file,
+          });
+          logUploadStep(item.localId, "defect video put finish", { status: uploadRes.status });
+          if (!(uploadRes.status === 200 || uploadRes.status === 204)) {
+            throw new Error(`Ошибка загрузки файла ${item.file.name}: ${uploadRes.status}`);
+          }
+          const created = await createPostDefectPhoto({
+            post_id: postIdForUpload,
+            photo_no: item.photoNo,
+            storage_key: presigned.storage_key,
+            public_url: presigned.public_url,
+            media_type: "video",
+          });
+          publicUrl = presigned.public_url;
+          key = presigned.storage_key;
+          defectDbId = created.id ?? null;
+          defectMediaType = "video";
+          logUploadStep(item.localId, "defect video record created", {
+            dbId: created.id ?? null,
+            key,
+            publicUrl,
+          });
+        } else {
+          logUploadStep(item.localId, "defect proxy upload start", {
+            kind,
+            fileName: item.file.name,
+            mimeType: item.file.type,
+            photoNo: item.photoNo,
+            postIdForUpload,
+            itemIdForStorage,
+          });
+          const result = await uploadDefectMediaViaProxy({
+            post_id: postIdForUpload,
+            item_id: itemIdForStorage,
+            file: item.file,
+            photo_no: item.photoNo,
+            media_type: item.mediaType,
+          });
+          publicUrl = result.url;
+          key = result.key;
+          defectDbId = result.id ?? null;
+          defectMediaType = result.media_type;
+          logUploadStep(item.localId, "defect proxy upload success", {
+            key,
+            publicUrl,
+            photoNo: result.photo_no,
+            mediaType: result.media_type,
+            dbId: result.id ?? null,
+          });
+        }
       }
 
       const payload: UploadedPhoto = {
