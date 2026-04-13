@@ -34,7 +34,8 @@ import {
 } from "../../../shared/api/adminPostsApi";
 import {
   deleteYcObject,
-  presignDefectVideoViaProxy,
+  completeDefectVideoMultipartViaProxy,
+  startDefectVideoMultipartViaProxy,
   uploadDefectMediaViaProxy,
   uploadMainPhotoViaProxy,
   uploadMeasurementPhotoViaProxy,
@@ -299,31 +300,26 @@ function readVideoDurationSeconds(previewUrl: string): Promise<number> {
   });
 }
 
-function uploadToPresignedUrl(url: string, file: File): Promise<void> {
-  console.log("UPLOAD REQUEST", {
-    url,
-    fileName: file.name,
-    fileSize: file.size,
-    fileType: file.type,
-  });
+function uploadPartToPresignedUrl(url: string, part: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url);
-    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
     xhr.onload = () => {
-      console.log("UPLOAD STATUS:", xhr.status);
-      console.log("UPLOAD RESPONSE:", xhr.responseText);
       if (xhr.status >= 200 && xhr.status < 300) {
-        resolve();
-      } else {
-        reject(new Error(`Upload failed: ${xhr.status} | ${xhr.responseText}`));
+        const etag = xhr.getResponseHeader("ETag") || xhr.getResponseHeader("etag");
+        if (!etag) {
+          reject(new Error("Upload failed: missing ETag"));
+          return;
+        }
+        resolve(etag);
+        return;
       }
+      reject(new Error(`Upload failed: ${xhr.status}`));
     };
     xhr.onerror = () => {
-      console.log("UPLOAD NETWORK ERROR");
       reject(new Error("Network error during upload"));
     };
-    xhr.send(file);
+    xhr.send(part);
   });
 }
 
@@ -1274,36 +1270,61 @@ export function AdminNewPostPage() {
           });
         }
         if (item.mediaType === "video") {
-          logUploadStep(item.localId, "defect video presign start", {
+          logUploadStep(item.localId, "defect video multipart start", {
             fileName: item.file.name,
             mimeType: item.file.type,
             photoNo: item.photoNo,
             postIdForUpload,
             itemIdForStorage,
           });
-          const presigned = await presignDefectVideoViaProxy({
+          const multipart = await startDefectVideoMultipartViaProxy({
             post_id: postIdForUpload,
             item_id: itemIdForStorage,
             photo_no: item.photoNo,
             mime: item.file.type || "video/mp4",
+            file_size: item.file.size,
           });
-          logUploadStep(item.localId, "defect video presign success", {
-            key: presigned.storage_key,
-            publicUrl: presigned.public_url,
-            photoNo: presigned.photo_no,
+          logUploadStep(item.localId, "defect video multipart prepared", {
+            key: multipart.storage_key,
+            publicUrl: multipart.public_url,
+            photoNo: multipart.photo_no,
+            uploadId: multipart.upload_id,
+            parts: multipart.parts.length,
+            partSize: multipart.part_size,
           });
-          logUploadStep(item.localId, "defect video put start");
-          await uploadToPresignedUrl(presigned.presigned_url, item.file);
-          logUploadStep(item.localId, "defect video put finish", { status: 200 });
+          logUploadStep(item.localId, "defect video parts upload start", { parts: multipart.parts.length });
+          const uploadedParts: Array<{ PartNumber: number; ETag: string }> = [];
+          for (const part of multipart.parts) {
+            const partNumber = part.part_number;
+            const start = (partNumber - 1) * multipart.part_size;
+            const end = Math.min(start + multipart.part_size, item.file.size);
+            const chunk = item.file.slice(start, end);
+            logUploadStep(item.localId, "defect video part upload", {
+              partNumber,
+              start,
+              end,
+            });
+            const etag = await uploadPartToPresignedUrl(part.url, chunk);
+            uploadedParts.push({ PartNumber: partNumber, ETag: etag });
+          }
+          logUploadStep(item.localId, "defect video parts upload finish", { parts: uploadedParts.length });
+          logUploadStep(item.localId, "defect video multipart complete start");
+          await completeDefectVideoMultipartViaProxy({
+            post_id: postIdForUpload,
+            storage_key: multipart.storage_key,
+            upload_id: multipart.upload_id,
+            parts: uploadedParts,
+          });
+          logUploadStep(item.localId, "defect video multipart complete finish", { status: 200 });
           const created = await createPostDefectPhoto({
             post_id: postIdForUpload,
             photo_no: item.photoNo,
-            storage_key: presigned.storage_key,
-            public_url: presigned.public_url,
+            storage_key: multipart.storage_key,
+            public_url: multipart.public_url,
             media_type: "video",
           });
-          publicUrl = presigned.public_url;
-          key = presigned.storage_key;
+          publicUrl = multipart.public_url;
+          key = multipart.storage_key;
           defectDbId = created.id ?? null;
           defectMediaType = "video";
           logUploadStep(item.localId, "defect video record created", {

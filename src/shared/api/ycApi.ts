@@ -54,6 +54,27 @@ type DefectVideoPresignResponse = {
   details?: unknown;
 };
 
+type DefectVideoMultipartStartResponse = {
+  ok?: boolean;
+  upload_id?: string;
+  storage_key?: string;
+  public_url?: string;
+  part_size?: number;
+  parts?: Array<{ part_number?: number; url?: string }>;
+  photo_no?: number;
+  error?: string;
+  message?: string;
+  details?: unknown;
+};
+
+type DefectVideoMultipartCompleteResponse = {
+  ok?: boolean;
+  storage_key?: string;
+  error?: string;
+  message?: string;
+  details?: unknown;
+};
+
 export type MainUploadDebugEvent = {
   step:
     | "prepare"
@@ -490,5 +511,109 @@ export async function presignDefectVideoViaProxy(input: {
     storage_key: data.storage_key,
     public_url: data.public_url,
     photo_no: Number(data.photo_no),
+  };
+}
+
+export async function startDefectVideoMultipartViaProxy(input: {
+  post_id: string;
+  item_id: number | null;
+  photo_no: number;
+  mime: string;
+  file_size: number;
+}): Promise<{ upload_id: string; storage_key: string; public_url: string; part_size: number; parts: Array<{ part_number: number; url: string }>; photo_no: number }> {
+  await ensureAdminRuntimeReady();
+  const token = readAdminToken();
+  if (!token) {
+    throw new Error("ADMIN_TOKEN_MISSING");
+  }
+
+  const base = getCdekProxyBaseUrl();
+  const endpoint = `${base}/api/admin/defect-video/multipart/start`;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      post_id: input.post_id,
+      photo_no: input.photo_no,
+      mime: input.mime,
+      file_size: input.file_size,
+      item_id: input.item_id ?? null,
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`DEFECT_VIDEO_MULTIPART_START_FAILED ${response.status} ${text}`.trim());
+  }
+
+  const data = (await response.json().catch(() => null)) as DefectVideoMultipartStartResponse | null;
+  if (!data?.ok || !data.upload_id || !data.storage_key || !data.public_url || !Number.isFinite(Number(data.part_size)) || !Array.isArray(data.parts)) {
+    throw new Error("DEFECT_VIDEO_MULTIPART_START_INVALID_RESPONSE");
+  }
+
+  const parts = data.parts
+    .map((part) => ({
+      part_number: Number(part.part_number),
+      url: String(part.url ?? "").trim(),
+    }))
+    .filter((part) => Number.isInteger(part.part_number) && part.part_number > 0 && part.url);
+
+  if (!parts.length) {
+    throw new Error("DEFECT_VIDEO_MULTIPART_START_INVALID_PARTS");
+  }
+
+  return {
+    upload_id: data.upload_id,
+    storage_key: data.storage_key,
+    public_url: data.public_url,
+    part_size: Number(data.part_size),
+    parts,
+    photo_no: Number(data.photo_no),
+  };
+}
+
+export async function completeDefectVideoMultipartViaProxy(input: {
+  post_id: string;
+  storage_key: string;
+  upload_id: string;
+  parts: Array<{ PartNumber: number; ETag: string }>;
+}): Promise<{ storage_key: string }> {
+  await ensureAdminRuntimeReady();
+  const token = readAdminToken();
+  if (!token) {
+    throw new Error("ADMIN_TOKEN_MISSING");
+  }
+
+  const base = getCdekProxyBaseUrl();
+  const endpoint = `${base}/api/admin/defect-video/multipart/complete`;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      post_id: input.post_id,
+      storage_key: input.storage_key,
+      upload_id: input.upload_id,
+      parts: input.parts,
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`DEFECT_VIDEO_MULTIPART_COMPLETE_FAILED ${response.status} ${text}`.trim());
+  }
+
+  const data = (await response.json().catch(() => null)) as DefectVideoMultipartCompleteResponse | null;
+  if (!data?.ok || !data.storage_key) {
+    throw new Error("DEFECT_VIDEO_MULTIPART_COMPLETE_INVALID_RESPONSE");
+  }
+
+  return {
+    storage_key: data.storage_key,
   };
 }
