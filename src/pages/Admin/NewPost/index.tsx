@@ -300,11 +300,32 @@ function readVideoDurationSeconds(previewUrl: string): Promise<number> {
   });
 }
 
-function uploadPartToPresignedUrl(url: string, part: Blob): Promise<string> {
+function uploadPartToPresignedUrl(
+  url: string,
+  part: Blob,
+  meta: { partNumber: number; chunkSize: number },
+): Promise<string> {
   return new Promise((resolve, reject) => {
+    const startedAt = Date.now();
+    const shortUrl = url.length > 120 ? `${url.slice(0, 120)}...` : url;
+    console.log("DEFECT_VIDEO_PART_UPLOAD_START", {
+      partNumber: meta.partNumber,
+      chunkSize: meta.chunkSize,
+      url: shortUrl,
+      startedAt,
+    });
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url);
     xhr.onload = () => {
+      console.log("DEFECT_VIDEO_PART_UPLOAD_DONE", {
+        partNumber: meta.partNumber,
+        chunkSize: meta.chunkSize,
+        url: shortUrl,
+        status: xhr.status,
+        readyState: xhr.readyState,
+        responseText: xhr.responseText,
+        durationMs: Date.now() - startedAt,
+      });
       if (xhr.status >= 200 && xhr.status < 300) {
         const etag = xhr.getResponseHeader("ETag") || xhr.getResponseHeader("etag");
         if (!etag) {
@@ -317,7 +338,40 @@ function uploadPartToPresignedUrl(url: string, part: Blob): Promise<string> {
       reject(new Error(`Upload failed: ${xhr.status}`));
     };
     xhr.onerror = () => {
+      console.log("DEFECT_VIDEO_PART_UPLOAD_ERROR", {
+        partNumber: meta.partNumber,
+        chunkSize: meta.chunkSize,
+        url: shortUrl,
+        status: xhr.status,
+        readyState: xhr.readyState,
+        responseText: xhr.responseText,
+        durationMs: Date.now() - startedAt,
+      });
       reject(new Error("Network error during upload"));
+    };
+    xhr.onabort = () => {
+      console.log("DEFECT_VIDEO_PART_UPLOAD_ABORT", {
+        partNumber: meta.partNumber,
+        chunkSize: meta.chunkSize,
+        url: shortUrl,
+        status: xhr.status,
+        readyState: xhr.readyState,
+        responseText: xhr.responseText,
+        durationMs: Date.now() - startedAt,
+      });
+      reject(new Error("Upload aborted"));
+    };
+    xhr.ontimeout = () => {
+      console.log("DEFECT_VIDEO_PART_UPLOAD_TIMEOUT", {
+        partNumber: meta.partNumber,
+        chunkSize: meta.chunkSize,
+        url: shortUrl,
+        status: xhr.status,
+        readyState: xhr.readyState,
+        responseText: xhr.responseText,
+        durationMs: Date.now() - startedAt,
+      });
+      reject(new Error("Upload timeout"));
     };
     xhr.send(part);
   });
@@ -1304,7 +1358,10 @@ export function AdminNewPostPage() {
               start,
               end,
             });
-            const etag = await uploadPartToPresignedUrl(part.url, chunk);
+            const etag = await uploadPartToPresignedUrl(part.url, chunk, {
+              partNumber,
+              chunkSize: chunk.size,
+            });
             uploadedParts.push({ PartNumber: partNumber, ETag: etag });
           }
           logUploadStep(item.localId, "defect video parts upload finish", { parts: uploadedParts.length });
