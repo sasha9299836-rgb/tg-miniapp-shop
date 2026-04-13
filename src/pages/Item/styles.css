@@ -191,6 +191,14 @@
   margin-bottom: 8px;
 }
 
+.item-measurements-text {
+  margin-bottom: 8px;
+}
+
+.item-measurements-section {
+  scroll-margin-top: calc(var(--safe-top, 0px) + 72px);
+}
+
 .item-defects-section {
   scroll-margin-top: calc(var(--safe-top, 0px) + 72px);
 }

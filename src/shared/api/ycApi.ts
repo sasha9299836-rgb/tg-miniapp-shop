@@ -328,3 +328,47 @@ export async function uploadMainPhotoViaProxy(
     photo_no: Number(data.photo_no),
   };
 }
+
+export async function uploadMeasurementPhotoViaProxy(
+  post_id: string,
+  file: File,
+  photo_no: number,
+): Promise<{ key: string; url: string; photo_no: number }> {
+  await ensureAdminRuntimeReady();
+  const token = readAdminToken();
+  if (!token) {
+    throw new Error("ADMIN_TOKEN_MISSING");
+  }
+
+  const base = getCdekProxyBaseUrl();
+  const endpoint = `${base}/api/admin/media/main/upload`;
+  const formData = new FormData();
+  formData.append("post_id", post_id);
+  formData.append("photo_no", String(photo_no));
+  formData.append("kind", "measurement");
+  formData.append("file", file);
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`MEASUREMENT_UPLOAD_FAILED ${response.status} ${text}`.trim());
+  }
+
+  const data = (await response.json().catch(() => null)) as MainPhotoUploadViaProxyResponse | null;
+  if (!data?.ok || !data.key || !data.url || !Number.isFinite(Number(data.photo_no))) {
+    throw new Error("MEASUREMENT_UPLOAD_INVALID_RESPONSE");
+  }
+
+  return {
+    key: data.key,
+    url: data.url,
+    photo_no: Number(data.photo_no),
+  };
+}

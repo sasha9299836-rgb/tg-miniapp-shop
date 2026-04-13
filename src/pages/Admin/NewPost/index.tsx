@@ -10,8 +10,10 @@ import "../datetime-controls.css";
 import {
   createOrUpdateDraftPost,
   createPostDefectPhoto,
+  createPostMeasurementPhoto,
   createPostPhoto,
   deletePostDefectPhoto,
+  deletePostMeasurementPhoto,
   deletePostPhoto,
   fetchNalichieById,
   fetchNalichieByIdViaRpc,
@@ -19,6 +21,7 @@ import {
   getPostByItemId,
   getPostByNalichieId,
   getPostDefectPhotos,
+  getPostMeasurementPhotos,
   getPostPhotos,
   publishPostNow,
   schedulePost,
@@ -29,7 +32,7 @@ import {
   type TgPostPackagingPreset,
   type TgPostType,
 } from "../../../shared/api/adminPostsApi";
-import { deleteYcObject, getYcPresignedPut, uploadMainPhotoViaProxy } from "../../../shared/api/ycApi";
+import { deleteYcObject, getYcPresignedPut, uploadMainPhotoViaProxy, uploadMeasurementPhotoViaProxy } from "../../../shared/api/ycApi";
 import { ensureAdminRuntimeReady } from "../../../shared/auth/adminRuntimeReadiness";
 
 const CONDITION_OPTIONS = [
@@ -352,8 +355,10 @@ export function AdminNewPostPage() {
   const [draftUploadId] = useState(() => crypto.randomUUID());
   const [mainPhotos, setMainPhotos] = useState<UploadedPhoto[]>([]);
   const [defectPhotos, setDefectPhotos] = useState<UploadedPhoto[]>([]);
+  const [measurementPhotos, setMeasurementPhotos] = useState<UploadedPhoto[]>([]);
   const [pendingMainUploads, setPendingMainUploads] = useState<PendingUpload[]>([]);
   const [pendingDefectUploads, setPendingDefectUploads] = useState<PendingUpload[]>([]);
+  const [pendingMeasurementUploads, setPendingMeasurementUploads] = useState<PendingUpload[]>([]);
 
   const [title, setTitle] = useState("");
   const [brand, setBrand] = useState("");
@@ -361,6 +366,7 @@ export function AdminNewPostPage() {
   const [condition, setCondition] = useState(CONDITION_OPTIONS[0]);
   const [size, setSize] = useState("");
   const [price, setPrice] = useState("");
+  const [measurementsText, setMeasurementsText] = useState("");
   const [hasDefects, setHasDefects] = useState(false);
   const [defectsText, setDefectsText] = useState("");
   const [scheduleAtInput, setScheduleAtInput] = useState("");
@@ -371,6 +377,7 @@ export function AdminNewPostPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
   const [isUploadingDefects, setIsUploadingDefects] = useState(false);
+  const [isUploadingMeasurements, setIsUploadingMeasurements] = useState(false);
   const [isPublishingNow, setIsPublishingNow] = useState(false);
   const [isScheduling, setIsScheduling] = useState(false);
   const [isUnscheduling, setIsUnscheduling] = useState(false);
@@ -386,8 +393,10 @@ export function AdminNewPostPage() {
   const pendingUnsyncedUploadsRef = useRef<UploadedPhoto[]>([]);
   const pendingMainUploadsRef = useRef<PendingUpload[]>([]);
   const pendingDefectUploadsRef = useRef<PendingUpload[]>([]);
+  const pendingMeasurementUploadsRef = useRef<PendingUpload[]>([]);
   const pendingMainActivationRef = useRef<string | null>(null);
   const pendingDefectActivationRef = useRef<string | null>(null);
+  const pendingMeasurementActivationRef = useRef<string | null>(null);
   const uploadWorkerLockRef = useRef(false);
   const publishAttemptRef = useRef(0);
   const parsedNalichieId = useMemo(() => Number(nalichieIdInput), [nalichieIdInput]);
@@ -424,7 +433,7 @@ export function AdminNewPostPage() {
     if (!query) return BRAND_SUGGESTIONS.slice(0, 8);
     return BRAND_SUGGESTIONS.filter((value) => value.toLowerCase().startsWith(query)).slice(0, 8);
   }, [brand]);
-  const hasPendingUploads = pendingMainUploads.length > 0 || pendingDefectUploads.length > 0;
+  const hasPendingUploads = pendingMainUploads.length > 0 || pendingDefectUploads.length > 0 || pendingMeasurementUploads.length > 0;
 
   const logPublishStep = (message: string, extra?: unknown) => {
     logPublishStepConsole(message, extra);
@@ -456,6 +465,19 @@ export function AdminNewPostPage() {
     ],
     [defectPhotos, pendingDefectUploads],
   );
+  const measurementPreview: PhotoPreviewItem[] = useMemo(
+    () => [
+      ...measurementPhotos.map((photo) => ({ id: photo.localId, photoNo: photo.photoNo, url: photo.url, mediaType: "image" as const, status: "uploaded" as const })),
+      ...pendingMeasurementUploads.map((upload) => ({
+        id: upload.localId,
+        photoNo: upload.photoNo,
+        url: upload.previewUrl,
+        mediaType: upload.mediaType,
+        status: upload.status,
+      })),
+    ],
+    [measurementPhotos, pendingMeasurementUploads],
+  );
 
   const hydrateMainPhotosFromDb = async (postId: string) => {
     const rows = await getPostPhotos(postId);
@@ -481,8 +503,20 @@ export function AdminNewPostPage() {
     })));
   };
 
+  const hydrateMeasurementPhotosFromDb = async (postId: string) => {
+    const rows = await getPostMeasurementPhotos(postId);
+    setMeasurementPhotos(rows.map((photo) => ({
+      localId: `db-${photo.id}`,
+      dbId: photo.id,
+      photoNo: photo.photo_no,
+      url: photo.public_url,
+      key: photo.storage_key,
+      mediaType: "image",
+    })));
+  };
+
   const hydrateAllPhotosFromDb = async (postId: string) => {
-    await Promise.all([hydrateMainPhotosFromDb(postId), hydrateDefectPhotosFromDb(postId)]);
+    await Promise.all([hydrateMainPhotosFromDb(postId), hydrateDefectPhotosFromDb(postId), hydrateMeasurementPhotosFromDb(postId)]);
   };
 
   useEffect(() => {
@@ -508,8 +542,8 @@ export function AdminNewPostPage() {
   }, []);
 
   useEffect(() => {
-    pendingUnsyncedUploadsRef.current = [...mainPhotos, ...defectPhotos].filter((photo) => !photo.dbId);
-  }, [mainPhotos, defectPhotos]);
+    pendingUnsyncedUploadsRef.current = [...mainPhotos, ...defectPhotos, ...measurementPhotos].filter((photo) => !photo.dbId);
+  }, [mainPhotos, defectPhotos, measurementPhotos]);
 
   useEffect(() => {
     pendingMainUploadsRef.current = pendingMainUploads;
@@ -518,6 +552,10 @@ export function AdminNewPostPage() {
   useEffect(() => {
     pendingDefectUploadsRef.current = pendingDefectUploads;
   }, [pendingDefectUploads]);
+
+  useEffect(() => {
+    pendingMeasurementUploadsRef.current = pendingMeasurementUploads;
+  }, [pendingMeasurementUploads]);
 
   useEffect(() => {
     return () => {
@@ -531,6 +569,7 @@ export function AdminNewPostPage() {
     return () => {
       pendingMainUploadsRef.current.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
       pendingDefectUploadsRef.current.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
+      pendingMeasurementUploadsRef.current.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
     };
   }, []);
 
@@ -538,20 +577,24 @@ export function AdminNewPostPage() {
     fetchRequestId.current += 1;
     pendingMainUploads.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
     pendingDefectUploads.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
+    pendingMeasurementUploads.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
     setPostType("warehouse");
     setNalichieIdInput("");
     setItemData(null);
     setCurrentPost(null);
     setMainPhotos([]);
     setDefectPhotos([]);
+    setMeasurementPhotos([]);
     setPendingMainUploads([]);
     setPendingDefectUploads([]);
+    setPendingMeasurementUploads([]);
     setTitle("");
     setBrand("");
     setDescription("");
     setCondition(CONDITION_OPTIONS[0]);
     setSize("");
     setPrice("");
+    setMeasurementsText("");
     setHasDefects(false);
     setDefectsText("");
     setScheduleAtInput("");
@@ -577,6 +620,7 @@ export function AdminNewPostPage() {
     setCondition(normalizeConditionValue(post.condition));
     setSize(post.size ?? "");
     setPrice(String(post.price));
+    setMeasurementsText(post.measurements_text ?? "");
     setHasDefects(post.has_defects);
     setDefectsText(post.defects_text ?? "");
     setScheduleAtInput(toMoscowInputValue(post.scheduled_at));
@@ -744,13 +788,16 @@ export function AdminNewPostPage() {
     if (nextType === "consignment") {
       pendingMainUploads.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
       pendingDefectUploads.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
+      pendingMeasurementUploads.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
       setNalichieIdInput("");
       setItemData(null);
       setCurrentPost(null);
       setMainPhotos([]);
       setDefectPhotos([]);
+      setMeasurementPhotos([]);
       setPendingMainUploads([]);
       setPendingDefectUploads([]);
+      setPendingMeasurementUploads([]);
       setFieldError(null);
       return;
     }
@@ -808,6 +855,28 @@ export function AdminNewPostPage() {
     logPublishStep("syncUploadedPhotosToPost finish", { postId });
   };
 
+  const syncUploadedMeasurementPhotosToPost = async (postId: string) => {
+    const unsynced = measurementPhotos.filter((photo) => !photo.dbId);
+    logPublishStep("syncUploadedMeasurementPhotos start", {
+      postId,
+      unsynced: unsynced.map((photo) => ({ localId: photo.localId, photoNo: photo.photoNo, key: photo.key })),
+    });
+
+    for (const photo of unsynced) {
+      logPublishStep("createMeasurementPhoto start", { postId, localId: photo.localId, photoNo: photo.photoNo, key: photo.key });
+      const created = await createPostMeasurementPhoto({
+        post_id: postId,
+        photo_no: photo.photoNo,
+        storage_key: photo.key,
+      });
+      logPublishStep("createMeasurementPhoto success", { postId, localId: photo.localId, dbId: created.id });
+      setMeasurementPhotos((prev) => prev.map((entry) => (
+        entry.localId === photo.localId ? { ...entry, dbId: created.id } : entry
+      )));
+    }
+    logPublishStep("syncUploadedMeasurementPhotos finish", { postId });
+  };
+
   const persistDraft = async (): Promise<TgPost> => {
     const validationError = validateDraftForm();
     if (validationError) throw new Error(validationError);
@@ -845,6 +914,7 @@ export function AdminNewPostPage() {
       condition: condition.trim(),
       has_defects: hasDefects,
       defects_text: hasDefects ? defectsText.trim() : null,
+      measurements_text: measurementsText.trim() || null,
       scheduled_at: moscowDateTimeLocalToIso(scheduleAtInput),
       current_status: currentPost?.status,
       current_published_at: currentPost?.published_at ?? null,
@@ -910,6 +980,7 @@ export function AdminNewPostPage() {
     logPublishStep("createOrUpdateDraftPost success", { savedId: saved.id, status: saved.status });
 
     await syncUploadedPhotosToPost(saved.id);
+    await syncUploadedMeasurementPhotosToPost(saved.id);
     logPublishStep("persistDraft hydrateFromPost", { savedId: saved.id });
     hydrateFromPost(saved);
     return saved;
@@ -931,7 +1002,7 @@ export function AdminNewPostPage() {
     }
   };
 
-  const stageSelectedFiles = (files: File[], kind: "main" | "defect") => {
+  const stageSelectedFiles = (files: File[], kind: "main" | "defect" | "measurement") => {
     setErrorText(null);
     setSuccessText(null);
     if (!isAdminRuntimeReady) {
@@ -943,8 +1014,16 @@ export function AdminNewPostPage() {
       return;
     }
 
-    const uploadedList = kind === "main" ? mainPhotos : defectPhotos;
-    const pendingList = kind === "main" ? pendingMainUploads : pendingDefectUploads;
+    const uploadedList = kind === "main"
+      ? mainPhotos
+      : kind === "defect"
+      ? defectPhotos
+      : measurementPhotos;
+    const pendingList = kind === "main"
+      ? pendingMainUploads
+      : kind === "defect"
+      ? pendingDefectUploads
+      : pendingMeasurementUploads;
     let nextPhotoNo = [...uploadedList, ...pendingList].reduce((max, photo) => Math.max(max, photo.photoNo), 0) + 1;
     const staged: PendingUpload[] = [];
 
@@ -954,8 +1033,8 @@ export function AdminNewPostPage() {
         setErrorText(`Неподдерживаемый тип файла: ${file.name}`);
         continue;
       }
-      if (kind === "main" && mediaType !== "image") {
-        setErrorText("Для основных фото разрешены только изображения.");
+      if ((kind === "main" || kind === "measurement") && mediaType !== "image") {
+        setErrorText(kind === "measurement" ? "Для замеров разрешены только изображения." : "Для основных фото разрешены только изображения.");
         continue;
       }
       const previewUrl = URL.createObjectURL(file);
@@ -978,6 +1057,7 @@ export function AdminNewPostPage() {
     if (!staged.length) return;
     if (kind === "main") setPendingMainUploads((prev) => [...prev, ...staged]);
     if (kind === "defect") setPendingDefectUploads((prev) => [...prev, ...staged]);
+    if (kind === "measurement") setPendingMeasurementUploads((prev) => [...prev, ...staged]);
   };
 
   useEffect(() => {
@@ -1022,11 +1102,13 @@ export function AdminNewPostPage() {
 
   const uploadPendingItem = async (
     item: PendingUpload,
-    kind: "main" | "defect",
+    kind: "main" | "defect" | "measurement",
     context?: { post_id: string; item_id: number | null },
   ) => {
     const postIdForUpload = context?.post_id ?? (currentPost?.id ?? draftUploadId);
-    const itemIdForStorage = context?.item_id ?? (postType === "warehouse" ? (currentPost?.item_id ?? normalizedNalichieId) : null);
+    const itemIdForStorage = kind === "measurement"
+      ? null
+      : context?.item_id ?? (postType === "warehouse" ? (currentPost?.item_id ?? normalizedNalichieId) : null);
     let publicUrl = "";
     let key = "";
 
@@ -1048,6 +1130,22 @@ export function AdminNewPostPage() {
       publicUrl = result.url;
       key = result.key;
       logUploadStep(item.localId, "proxy upload success", { key, publicUrl, photoNo: result.photo_no });
+    } else if (kind === "measurement") {
+      logUploadStep(item.localId, "measurement proxy upload start", {
+        kind,
+        fileName: item.file.name,
+        mimeType: item.file.type,
+        photoNo: item.photoNo,
+        postIdForUpload,
+      });
+      const result = await uploadMeasurementPhotoViaProxy(
+        postIdForUpload,
+        item.file,
+        item.photoNo,
+      );
+      publicUrl = result.url;
+      key = result.key;
+      logUploadStep(item.localId, "measurement proxy upload success", { key, publicUrl, photoNo: result.photo_no });
     } else {
       logUploadStep(item.localId, "presign start", {
         kind,
@@ -1084,8 +1182,11 @@ export function AdminNewPostPage() {
     };
     if (kind === "main") setMainPhotos((prev) => [...prev, payload]);
     if (kind === "defect") setDefectPhotos((prev) => [...prev, payload]);
+    if (kind === "measurement") setMeasurementPhotos((prev) => [...prev, payload]);
     logUploadStep(item.localId, "local state updated -> uploaded");
-    setSuccessText(kind === "main" ? "Основные фотографии загружены." : "Медиа дефектов загружены.");
+    if (kind === "main") setSuccessText("Основные фотографии загружены.");
+    if (kind === "defect") setSuccessText("Медиа дефектов загружены.");
+    if (kind === "measurement") setSuccessText("Фотографии замеров загружены.");
   };
 
   const uploadQueue = async (
@@ -1140,6 +1241,38 @@ export function AdminNewPostPage() {
     }
   };
 
+  const uploadMeasurementWithRetry = async (
+    file: PendingUpload,
+    context: { post_id: string },
+  ) => {
+    for (let attemptIndex = 0; attemptIndex < MAIN_UPLOAD_RETRY_DELAYS_MS.length; attemptIndex += 1) {
+      const attempt = attemptIndex + 1;
+      const retryDelay = MAIN_UPLOAD_RETRY_DELAYS_MS[attemptIndex];
+      if (retryDelay > 0) {
+        await delay(retryDelay);
+      }
+      console.log("UPLOAD_START", {
+        file_name: file.file.name,
+        size: file.file.size,
+        attempt,
+      });
+      try {
+        await uploadPendingItem(file, "measurement", { post_id: context.post_id, item_id: null });
+        return;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error ?? "");
+        console.error("UPLOAD_FAIL", {
+          file_name: file.file.name,
+          attempt,
+          error_message: message,
+        });
+        if (attemptIndex === MAIN_UPLOAD_RETRY_DELAYS_MS.length - 1 || !shouldRetryMainUpload(error)) {
+          throw error;
+        }
+      }
+    }
+  };
+
   const uploadPhotosSequentially = async (
     files: PendingUpload[],
     context: { post_id: string; item_id: number | null },
@@ -1172,6 +1305,38 @@ export function AdminNewPostPage() {
     }
   };
 
+  const uploadMeasurementPhotosSequentially = async (
+    files: PendingUpload[],
+    context: { post_id: string },
+  ) => {
+    for (const pendingFile of files) {
+      await waitForAppToBeInteractive();
+      setPendingMeasurementUploads((prev) => prev.map((entry) => (
+        entry.localId === pendingFile.localId ? { ...entry, status: "uploading" } : entry
+      )));
+
+      try {
+        await uploadMeasurementWithRetry(pendingFile, context);
+        URL.revokeObjectURL(pendingFile.previewUrl);
+        setPendingMeasurementUploads((prev) => prev.filter((entry) => entry.localId !== pendingFile.localId));
+        logUploadStep(pendingFile.localId, "measurement upload completed");
+      } catch (error) {
+        logUploadStep(pendingFile.localId, "measurement upload failed", error);
+        const message = (error as Error).message ?? "";
+        if (message.includes("ALREADY_EXISTS") || message.includes("409")) {
+          setErrorText("Медиа с таким номером уже загружено.");
+        } else {
+          setErrorText(`Ошибка загрузки медиа: ${message || "неизвестная ошибка"}`);
+        }
+        setPendingMeasurementUploads((prev) => prev.map((entry) => (
+          entry.localId === pendingFile.localId ? { ...entry, status: "failed" } : entry
+        )));
+      }
+
+      await delay(MAIN_UPLOAD_INTER_FILE_DELAY_MS);
+    }
+  };
+
   useEffect(() => {
     if (isUploadingPhotos || pendingMainActivationRef.current || uploadWorkerLockRef.current) return;
     const queue = pendingMainUploads.filter((entry) => entry.status === "pending");
@@ -1187,7 +1352,11 @@ export function AdminNewPostPage() {
         setIsUploadingPhotos(true);
         await uploadPhotosSequentially(queue, mainUploadContext);
       } finally {
-        if (pendingMainUploadsRef.current.length > 0 || pendingDefectUploadsRef.current.length > 0) {
+        if (
+          pendingMainUploadsRef.current.length > 0
+          || pendingDefectUploadsRef.current.length > 0
+          || pendingMeasurementUploadsRef.current.length > 0
+        ) {
           await new Promise((resolve) => window.setTimeout(resolve, UPLOAD_QUEUE_STEP_DELAY_MS));
         }
         uploadWorkerLockRef.current = false;
@@ -1196,6 +1365,34 @@ export function AdminNewPostPage() {
       }
     })();
   }, [pendingMainUploads, isUploadingPhotos, currentPost?.id, currentPost?.item_id, draftUploadId, postType, normalizedNalichieId]);
+
+  useEffect(() => {
+    if (isUploadingMeasurements || pendingMeasurementActivationRef.current || uploadWorkerLockRef.current) return;
+    const queue = pendingMeasurementUploads.filter((entry) => entry.status === "pending");
+    if (!queue.length) return;
+    uploadWorkerLockRef.current = true;
+    pendingMeasurementActivationRef.current = queue[0].localId;
+    const measurementUploadContext = {
+      post_id: currentPost?.id ?? draftUploadId,
+    };
+    void (async () => {
+      try {
+        setIsUploadingMeasurements(true);
+        await uploadMeasurementPhotosSequentially(queue, measurementUploadContext);
+      } finally {
+        if (
+          pendingMainUploadsRef.current.length > 0
+          || pendingDefectUploadsRef.current.length > 0
+          || pendingMeasurementUploadsRef.current.length > 0
+        ) {
+          await new Promise((resolve) => window.setTimeout(resolve, UPLOAD_QUEUE_STEP_DELAY_MS));
+        }
+        uploadWorkerLockRef.current = false;
+        pendingMeasurementActivationRef.current = null;
+        setIsUploadingMeasurements(false);
+      }
+    })();
+  }, [pendingMeasurementUploads, isUploadingMeasurements, currentPost?.id, draftUploadId]);
 
   useEffect(() => {
     if (isUploadingDefects || pendingDefectActivationRef.current || uploadWorkerLockRef.current) return;
@@ -1228,7 +1425,11 @@ export function AdminNewPostPage() {
           entry.localId === next.localId ? { ...entry, status: "failed" } : entry
         )));
       } finally {
-        if (pendingMainUploadsRef.current.length > 0 || pendingDefectUploadsRef.current.length > 0) {
+        if (
+          pendingMainUploadsRef.current.length > 0
+          || pendingDefectUploadsRef.current.length > 0
+          || pendingMeasurementUploadsRef.current.length > 0
+        ) {
           await new Promise((resolve) => window.setTimeout(resolve, UPLOAD_QUEUE_STEP_DELAY_MS));
         }
         uploadWorkerLockRef.current = false;
@@ -1281,6 +1482,30 @@ export function AdminNewPostPage() {
         return;
       }
       setDefectPhotos((prev) => prev.filter((entry) => entry.localId !== localId));
+    } catch (error) {
+      setErrorText(`Ошибка удаления фото: ${(error as Error).message}`);
+    }
+  };
+
+  const onDeleteMeasurementPhoto = async (localId: string) => {
+    const pending = pendingMeasurementUploads.find((entry) => entry.localId === localId);
+    if (pending) {
+      URL.revokeObjectURL(pending.previewUrl);
+      setPendingMeasurementUploads((prev) => prev.filter((entry) => entry.localId !== localId));
+      return;
+    }
+    const photo = measurementPhotos.find((entry) => entry.localId === localId);
+    if (!photo) return;
+    setErrorText(null);
+    setSuccessText(null);
+    try {
+      await deleteYcObject(photo.key);
+      if (photo.dbId && currentPost) {
+        await deletePostMeasurementPhoto(Number(photo.dbId));
+        await hydrateMeasurementPhotosFromDb(currentPost.id);
+        return;
+      }
+      setMeasurementPhotos((prev) => prev.filter((entry) => entry.localId !== localId));
     } catch (error) {
       setErrorText(`Ошибка удаления фото: ${(error as Error).message}`);
     }
@@ -1451,7 +1676,7 @@ export function AdminNewPostPage() {
               ? "Файлы добавлены в очередь."
               : null
           }
-          isBusy={!isAdminRuntimeReady || isPreparingAdminRuntime || isUploadingPhotos || isSaving || isPublishingNow || isScheduling}
+          isBusy={!isAdminRuntimeReady || isPreparingAdminRuntime || isUploadingPhotos || isUploadingMeasurements || isSaving || isPublishingNow || isScheduling}
           onSelect={(files) => stageSelectedFiles(files, "main")}
           onRemove={(id) => void onDeleteMainPhoto(id)}
         />
@@ -1604,6 +1829,35 @@ export function AdminNewPostPage() {
                 style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }}
               />
             </Field>
+            <Field label={"Замеры"}>
+              <textarea
+                value={measurementsText}
+                className="admin-post-form-control"
+                onChange={(e) => setMeasurementsText(e.target.value)}
+                placeholder={"Введите замеры"}
+                rows={3}
+                style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }}
+              />
+            </Field>
+            <PhotoUploader
+              title={"Фотографии замеров"}
+              inputId="post-measurement-files"
+              selectLabel={"Выбрать фото замеров"}
+              items={measurementPreview}
+              loadingText={
+                isPreparingAdminRuntime
+                  ? "Подготовка..."
+                  : isUploadingMeasurements
+                  ? "Загрузка фото замеров..."
+                  : pendingMeasurementUploads.length
+                  ? "Файлы добавлены в очередь."
+                  : null
+              }
+              accept="image/*"
+              isBusy={!isAdminRuntimeReady || isPreparingAdminRuntime || isUploadingMeasurements || isSaving || isPublishingNow || isScheduling}
+              onSelect={(files) => stageSelectedFiles(files, "measurement")}
+              onRemove={(id) => void onDeleteMeasurementPhoto(id)}
+            />
             <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <input type="checkbox" checked={hasDefects} onChange={(e) => setHasDefects(e.target.checked)} />
               {"Есть дефекты?"}
@@ -1628,7 +1882,7 @@ export function AdminNewPostPage() {
                       : null
                   }
                   accept="image/*,video/mp4,video/quicktime,.mov"
-                  isBusy={!isAdminRuntimeReady || isPreparingAdminRuntime || isUploadingDefects || isSaving || isPublishingNow || isScheduling}
+                  isBusy={!isAdminRuntimeReady || isPreparingAdminRuntime || isUploadingDefects || isUploadingMeasurements || isSaving || isPublishingNow || isScheduling}
                   onSelect={(files) => stageSelectedFiles(files, "defect")}
                   onRemove={(id) => void onDeleteDefectPhoto(id)}
                 />
@@ -1673,16 +1927,16 @@ export function AdminNewPostPage() {
           {isPreparingAdminRuntime ? (
             <div style={{ color: "var(--muted)", fontSize: 13 }}>{"Подготовка админ-сессии..."}</div>
           ) : null}
-          <Button onClick={() => void saveAsDraft()} disabled={isSaving || isUploadingPhotos || isUploadingDefects || hasPendingUploads || isPublishingNow || isScheduling || isUnscheduling}>
+          <Button onClick={() => void saveAsDraft()} disabled={isSaving || isUploadingPhotos || isUploadingDefects || isUploadingMeasurements || hasPendingUploads || isPublishingNow || isScheduling || isUnscheduling}>
             {isSaving ? "Сохраняем..." : "Сохранить черновик"}
           </Button>
-          <Button variant="secondary" onClick={() => void onSchedule()} disabled={isScheduling || isSaving || isUploadingPhotos || isUploadingDefects || hasPendingUploads || isUnscheduling}>
+          <Button variant="secondary" onClick={() => void onSchedule()} disabled={isScheduling || isSaving || isUploadingPhotos || isUploadingDefects || isUploadingMeasurements || hasPendingUploads || isUnscheduling}>
             {isScheduling ? "Планируем..." : scheduleButtonLabel}
           </Button>
           <Button
             variant="secondary"
             onClick={() => void onPublishNow()}
-            disabled={!isAdminRuntimeReady || isPreparingAdminRuntime || isPublishingNow || isSaving || isUploadingPhotos || isUploadingDefects || hasPendingUploads || isUnscheduling}
+            disabled={!isAdminRuntimeReady || isPreparingAdminRuntime || isPublishingNow || isSaving || isUploadingPhotos || isUploadingDefects || isUploadingMeasurements || hasPendingUploads || isUnscheduling}
           >
             {isPublishingNow ? "Публикуем..." : "Опубликовать пост"}
           </Button>

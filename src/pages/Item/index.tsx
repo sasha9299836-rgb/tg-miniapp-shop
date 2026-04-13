@@ -95,6 +95,7 @@ export function ItemPage() {
   const [viewerImages, setViewerImages] = useState<string[]>([]);
   const [photoIndex, setPhotoIndex] = useState(0);
   const [isDescOpen, setIsDescOpen] = useState(true);
+  const [isMeasurementsOpen, setIsMeasurementsOpen] = useState(false);
   const [isDefectsOpen, setIsDefectsOpen] = useState(false);
   const [videoPosterByUrl, setVideoPosterByUrl] = useState<Record<string, string>>({});
   const defectsSectionRef = useRef<HTMLDivElement | null>(null);
@@ -140,6 +141,7 @@ export function ItemPage() {
     if (Array.isArray(product.defectMedia) && product.defectMedia.length) return product.defectMedia;
     return (product.defectImages ?? []).map((url) => ({ type: "image" as const, url }));
   }, [product]);
+  const measurementPhotos = useMemo(() => (product?.measurementPhotos?.length ? product.measurementPhotos : []), [product]);
   const defectImages = useMemo(
     () => defectMedia.filter((item) => item.type === "image").map((item) => item.url),
     [defectMedia],
@@ -155,6 +157,7 @@ export function ItemPage() {
   const viewerIndex = viewerTotal ? photoIndex % viewerTotal : 0;
   const viewerImage = viewerTotal ? viewerImages[viewerIndex] : undefined;
 
+  const hasMeasurementsSection = Boolean(product?.measurementsText?.trim() || measurementPhotos.length);
   const hasDefectsSection = Boolean(product?.hasDefects || product?.defectsText?.trim() || defectImages.length || defectVideos.length);
   const itemHeaderTitle = useMemo(() => {
     if (!product) return "";
@@ -348,6 +351,47 @@ export function ItemPage() {
 
         <div className="item-meta"><span>Состояние</span><span>{product.condition || "Не указано"}</span></div>
         <div className="item-meta"><span>Размер</span><span>{product.size || "Не указан"}</span></div>
+
+        {hasMeasurementsSection ? (
+          <div className="item-accordion item-accordion--plain item-measurements-section">
+            <button
+              type="button"
+              className="item-accordion__head"
+              onClick={() => setIsMeasurementsOpen((v) => !v)}
+            >
+              <span>Замеры</span>
+              <span className={`item-accordion__chevron ${isMeasurementsOpen ? "is-open" : ""}`}>
+                <svg className="item-accordion__chevronIcon" viewBox="0 0 24 24" aria-hidden>
+                  <path d="M8 5L16 12L8 19" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
+            </button>
+            {isMeasurementsOpen ? (
+              <div className="item-accordion__body">
+                {product.measurementsText?.trim() ? <div className="item-measurements-text">{product.measurementsText}</div> : null}
+                {measurementPhotos.length > 0 ? (
+                  <div className="item-defect-grid">
+                    {measurementPhotos.map((url, index) => (
+                      <button
+                        key={`${product.id}-measurement-image-${index}`}
+                        type="button"
+                        className="item-defect-grid__btn"
+                        onClick={() => openViewer(measurementPhotos, index)}
+                      >
+                        <ProductThumb
+                          src={url}
+                          alt={`Замеры ${index + 1}`}
+                          className="item-defect-grid__thumb"
+                          mediaClassName="item-defect-grid__img"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         {hasDefectsSection ? (
           <div ref={defectsSectionRef} className="item-accordion item-accordion--plain item-defects-section">

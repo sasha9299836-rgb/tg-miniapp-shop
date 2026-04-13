@@ -35,3 +35,7 @@ tools/telegram-bot/.env
 
 .vercel
 supabase/.temp/
+
+# Local agent instructions
+AGENTS.md
+

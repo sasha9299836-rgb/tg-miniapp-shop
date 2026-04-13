@@ -43,6 +43,7 @@ export type TgPost = {
   condition: string;
   has_defects: boolean;
   defects_text: string | null;
+  measurements_text: string | null;
   status: TgPostStatus;
   sale_status: "available" | "reserved" | "sold";
   reserved_until: string | null;
@@ -74,6 +75,15 @@ export type TgPostDefectPhoto = {
   created_at: string;
 };
 
+export type TgPostMeasurementPhoto = {
+  id: number;
+  post_id: string;
+  photo_no: number;
+  storage_key: string;
+  public_url: string;
+  created_at: string;
+};
+
 export type CreateDraftPostPayload = {
   item_id: number | null;
   nalichie_id: number | null;
@@ -88,6 +98,7 @@ export type CreateDraftPostPayload = {
   condition: string;
   has_defects: boolean;
   defects_text: string | null;
+  measurements_text: string | null;
   scheduled_at: string | null;
   current_status?: TgPostStatus;
   current_published_at?: string | null;
@@ -124,6 +135,7 @@ export type DraftWritePayload = {
   condition: string;
   has_defects: boolean;
   defects_text: string | null;
+  measurements_text: string | null;
   status: TgPostStatus;
   scheduled_at: string | null;
   published_at: string | null;
@@ -166,6 +178,16 @@ type CreatePostPhotoProxyResponse = {
   photo_no?: number;
   key?: string;
   photo?: TgPostPhoto | null;
+  error?: string;
+  details?: unknown;
+};
+
+type CreateMeasurementPhotoProxyResponse = {
+  ok?: boolean;
+  photo_no?: number;
+  storage_key?: string;
+  public_url?: string;
+  photo?: TgPostMeasurementPhoto | null;
   error?: string;
   details?: unknown;
 };
@@ -525,6 +547,7 @@ export async function createOrUpdateDraftPost(
     condition: payload.condition,
     has_defects: payload.has_defects,
     defects_text: payload.has_defects ? payload.defects_text : null,
+    measurements_text: payload.measurements_text,
     status: nextStatus,
     scheduled_at: scheduledAt,
     published_at: nextPublishedAt,
@@ -670,6 +693,16 @@ export async function getPostDefectPhotos(postId: string): Promise<TgPostDefectP
   return (data as TgPostDefectPhoto[]) ?? [];
 }
 
+export async function getPostMeasurementPhotos(postId: string): Promise<TgPostMeasurementPhoto[]> {
+  const { data, error } = await supabase
+    .from("tg_post_measurement_photos")
+    .select("*")
+    .eq("post_id", postId)
+    .order("photo_no", { ascending: true });
+  if (error) throw error;
+  return (data as TgPostMeasurementPhoto[]) ?? [];
+}
+
 export async function createPostPhoto(payload: {
   post_id: string;
   item_id: number | null;
@@ -736,6 +769,49 @@ export async function createPostDefectPhoto(payload: {
   return data as TgPostDefectPhoto;
 }
 
+export async function createPostMeasurementPhoto(payload: {
+  post_id: string;
+  photo_no: number;
+  storage_key: string;
+}) {
+  const adminToken = readAdminToken();
+  if (!adminToken) {
+    throw new Error("ADMIN_TOKEN_MISSING");
+  }
+  const url = `${cdekProxyBaseUrl}/api/admin/measurement-photo/create`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${adminToken}`,
+    },
+    body: JSON.stringify({
+      post_id: payload.post_id,
+      photo_no: payload.photo_no,
+      storage_key: payload.storage_key,
+    }),
+  });
+
+  const rawText = await response.text().catch(() => "");
+  let parsed: CreateMeasurementPhotoProxyResponse | null = null;
+  try {
+    parsed = rawText ? (JSON.parse(rawText) as CreateMeasurementPhotoProxyResponse) : null;
+  } catch {
+    parsed = null;
+  }
+
+  if (!response.ok) {
+    const details = parsed?.details ? (safeJsonStringify(parsed.details) ?? String(parsed.details)) : rawText;
+    const message = parsed?.error ?? `HTTP_${response.status}`;
+    throw new Error(`[measurement-photo-create] ${message}${details ? ` | ${details}` : ""}`);
+  }
+
+  if (!parsed?.ok || !parsed.photo) {
+    throw new Error("[measurement-photo-create] EMPTY_OR_INVALID_RESPONSE");
+  }
+  return parsed.photo as TgPostMeasurementPhoto;
+}
+
 export async function deletePostPhoto(photoId: string) {
   const { error } = await supabase.from("tg_post_photos").delete().eq("id", photoId);
   if (error) throw error;
@@ -743,6 +819,11 @@ export async function deletePostPhoto(photoId: string) {
 
 export async function deletePostDefectPhoto(photoId: number) {
   const { error } = await supabase.from("tg_post_defect_photos").delete().eq("id", photoId);
+  if (error) throw error;
+}
+
+export async function deletePostMeasurementPhoto(photoId: number) {
+  const { error } = await supabase.from("tg_post_measurement_photos").delete().eq("id", photoId);
   if (error) throw error;
 }
 
@@ -912,6 +993,21 @@ export async function getPublishedCatalogProducts(): Promise<Product[]> {
     defectsByPost.set(entry.post_id, current);
   });
 
+  const { data: measurementData, error: measurementError } = await supabase
+    .from("tg_post_measurement_photos")
+    .select("post_id, public_url, photo_no")
+    .in("post_id", postIds)
+    .order("photo_no", { ascending: true });
+  if (measurementError) throw measurementError;
+
+  const measurementsByPost = new Map<string, string[]>();
+  (measurementData ?? []).forEach((row) => {
+    const entry = row as { post_id: string; public_url: string };
+    const current = measurementsByPost.get(entry.post_id) ?? [];
+    current.push(entry.public_url);
+    measurementsByPost.set(entry.post_id, current);
+  });
+
   return posts.map((post) => ({
     id: post.item_id ?? syntheticIdFromUuid(post.id),
     postId: post.id,
@@ -928,6 +1024,8 @@ export async function getPublishedCatalogProducts(): Promise<Product[]> {
     defectsText: post.defects_text,
     defectMedia: defectsByPost.get(post.id) ?? [],
     defectImages: (defectsByPost.get(post.id) ?? []).filter((item) => item.type === "image").map((item) => item.url),
+    measurementsText: post.measurements_text,
+    measurementPhotos: measurementsByPost.get(post.id) ?? [],
     saleStatus: post.sale_status,
   }));
 }
@@ -977,6 +1075,21 @@ export async function getCatalogProductsByPostIds(postIds: string[]): Promise<Pr
     defectsByPost.set(entry.post_id, current);
   });
 
+  const { data: measurementData, error: measurementError } = await supabase
+    .from("tg_post_measurement_photos")
+    .select("post_id, public_url, photo_no")
+    .in("post_id", normalized)
+    .order("photo_no", { ascending: true });
+  if (measurementError) throw measurementError;
+
+  const measurementsByPost = new Map<string, string[]>();
+  (measurementData ?? []).forEach((row) => {
+    const entry = row as { post_id: string; public_url: string };
+    const current = measurementsByPost.get(entry.post_id) ?? [];
+    current.push(entry.public_url);
+    measurementsByPost.set(entry.post_id, current);
+  });
+
   return posts.map((post) => ({
     id: post.item_id ?? syntheticIdFromUuid(post.id),
     postId: post.id,
@@ -993,6 +1106,8 @@ export async function getCatalogProductsByPostIds(postIds: string[]): Promise<Pr
     defectsText: post.defects_text,
     defectMedia: defectsByPost.get(post.id) ?? [],
     defectImages: (defectsByPost.get(post.id) ?? []).filter((item) => item.type === "image").map((item) => item.url),
+    measurementsText: post.measurements_text,
+    measurementPhotos: measurementsByPost.get(post.id) ?? [],
     saleStatus: post.sale_status,
   }));
 }

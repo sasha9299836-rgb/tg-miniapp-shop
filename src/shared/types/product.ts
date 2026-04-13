@@ -21,5 +21,7 @@ export type Product = {
   defectsText?: string | null;
   defectMedia?: DefectMediaItem[];
   defectImages?: string[];
+  measurementsText?: string | null;
+  measurementPhotos?: string[];
   saleStatus?: "available" | "reserved" | "sold";
 };
