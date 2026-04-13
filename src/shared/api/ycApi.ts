@@ -31,6 +31,18 @@ type MainPhotoUploadViaProxyResponse = {
   details?: unknown;
 };
 
+type DefectUploadViaProxyResponse = {
+  ok?: boolean;
+  id?: number | null;
+  photo_no?: number;
+  storage_key?: string;
+  public_url?: string;
+  media_type?: "image" | "video";
+  error?: string;
+  message?: string;
+  details?: unknown;
+};
+
 export type MainUploadDebugEvent = {
   step:
     | "prepare"
@@ -370,5 +382,56 @@ export async function uploadMeasurementPhotoViaProxy(
     key: data.key,
     url: data.url,
     photo_no: Number(data.photo_no),
+  };
+}
+
+export async function uploadDefectMediaViaProxy(input: {
+  post_id: string;
+  item_id: number | null;
+  file: File;
+  photo_no: number;
+  media_type: "image" | "video";
+}): Promise<{ id: number | null; key: string; url: string; photo_no: number; media_type: "image" | "video" }> {
+  await ensureAdminRuntimeReady();
+  const token = readAdminToken();
+  if (!token) {
+    throw new Error("ADMIN_TOKEN_MISSING");
+  }
+
+  const base = getCdekProxyBaseUrl();
+  const endpoint = `${base}/api/admin/defect-photo/create`;
+  const formData = new FormData();
+  formData.append("post_id", input.post_id);
+  formData.append("photo_no", String(input.photo_no));
+  if (input.item_id != null) {
+    formData.append("item_id", String(input.item_id));
+  }
+  formData.append("media_type", input.media_type);
+  formData.append("file", input.file);
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`DEFECT_UPLOAD_FAILED ${response.status} ${text}`.trim());
+  }
+
+  const data = (await response.json().catch(() => null)) as DefectUploadViaProxyResponse | null;
+  if (!data?.ok || !data.storage_key || !data.public_url || !Number.isFinite(Number(data.photo_no))) {
+    throw new Error("DEFECT_UPLOAD_INVALID_RESPONSE");
+  }
+
+  return {
+    id: data.id ?? null,
+    key: data.storage_key,
+    url: data.public_url,
+    photo_no: Number(data.photo_no),
+    media_type: data.media_type === "video" ? "video" : "image",
   };
 }

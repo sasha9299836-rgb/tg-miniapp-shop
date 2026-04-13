@@ -9,10 +9,9 @@ import "./styles.css";
 import "../datetime-controls.css";
 import {
   createOrUpdateDraftPost,
-  createPostDefectPhoto,
   createPostMeasurementPhoto,
   createPostPhoto,
-  deletePostDefectPhoto,
+  deleteDefectPhotoViaProxy,
   deletePostMeasurementPhoto,
   deletePostPhoto,
   fetchNalichieById,
@@ -32,7 +31,12 @@ import {
   type TgPostPackagingPreset,
   type TgPostType,
 } from "../../../shared/api/adminPostsApi";
-import { deleteYcObject, getYcPresignedPut, uploadMainPhotoViaProxy, uploadMeasurementPhotoViaProxy } from "../../../shared/api/ycApi";
+import {
+  deleteYcObject,
+  uploadDefectMediaViaProxy,
+  uploadMainPhotoViaProxy,
+  uploadMeasurementPhotoViaProxy,
+} from "../../../shared/api/ycApi";
 import { ensureAdminRuntimeReady } from "../../../shared/auth/adminRuntimeReadiness";
 
 const CONDITION_OPTIONS = [
@@ -808,11 +812,9 @@ export function AdminNewPostPage() {
 
   const syncUploadedPhotosToPost = async (postId: string) => {
     const unsyncedMain = mainPhotos.filter((photo) => !photo.dbId);
-    const unsyncedDefect = defectPhotos.filter((photo) => !photo.dbId);
     logPublishStep("syncUploadedPhotosToPost start", {
       postId,
       unsyncedMain: unsyncedMain.map((photo) => ({ localId: photo.localId, photoNo: photo.photoNo, key: photo.key })),
-      unsyncedDefect: unsyncedDefect.map((photo) => ({ localId: photo.localId, photoNo: photo.photoNo, key: photo.key, mediaType: photo.mediaType })),
     });
 
     for (const photo of unsyncedMain) {
@@ -828,27 +830,6 @@ export function AdminNewPostPage() {
       });
       logPublishStep("createPostPhoto success", { postId, localId: photo.localId, dbId: created.id });
       setMainPhotos((prev) => prev.map((entry) => (
-        entry.localId === photo.localId ? { ...entry, dbId: created.id } : entry
-      )));
-    }
-
-    for (const photo of unsyncedDefect) {
-      logPublishStep("createPostDefectPhoto start", {
-        postId,
-        localId: photo.localId,
-        photoNo: photo.photoNo,
-        key: photo.key,
-        mediaType: photo.mediaType,
-      });
-      const created = await createPostDefectPhoto({
-        post_id: postId,
-        photo_no: photo.photoNo,
-        storage_key: photo.key,
-        public_url: photo.url,
-        media_type: photo.mediaType,
-      });
-      logPublishStep("createPostDefectPhoto success", { postId, localId: photo.localId, dbId: created.id });
-      setDefectPhotos((prev) => prev.map((entry) => (
         entry.localId === photo.localId ? { ...entry, dbId: created.id } : entry
       )));
     }
@@ -1104,17 +1085,19 @@ export function AdminNewPostPage() {
     item: PendingUpload,
     kind: "main" | "defect" | "measurement",
     context?: { post_id: string; item_id: number | null },
-  ) => {
-    const postIdForUpload = context?.post_id ?? (currentPost?.id ?? draftUploadId);
-    const itemIdForStorage = kind === "measurement"
-      ? null
-      : context?.item_id ?? (postType === "warehouse" ? (currentPost?.item_id ?? normalizedNalichieId) : null);
-    let publicUrl = "";
-    let key = "";
+    ) => {
+      const postIdForUpload = context?.post_id ?? (currentPost?.id ?? draftUploadId);
+      const itemIdForStorage = kind === "measurement"
+        ? null
+        : context?.item_id ?? (postType === "warehouse" ? (currentPost?.item_id ?? normalizedNalichieId) : null);
+      let publicUrl = "";
+      let key = "";
+      let defectDbId: number | null = null;
+      let defectMediaType: "image" | "video" | null = null;
 
-    if (kind === "main") {
-      logUploadStep(item.localId, "proxy upload start", {
-        kind,
+      if (kind === "main") {
+        logUploadStep(item.localId, "proxy upload start", {
+          kind,
         fileName: item.file.name,
         mimeType: item.file.type,
         photoNo: item.photoNo,
@@ -1143,43 +1126,46 @@ export function AdminNewPostPage() {
         item.file,
         item.photoNo,
       );
-      publicUrl = result.url;
-      key = result.key;
-      logUploadStep(item.localId, "measurement proxy upload success", { key, publicUrl, photoNo: result.photo_no });
-    } else {
-      logUploadStep(item.localId, "presign start", {
-        kind,
-        fileName: item.file.name,
-        mimeType: item.file.type,
-        photoNo: item.photoNo,
-        postIdForUpload,
-        itemIdForStorage,
-      });
-      const presigned = await getYcPresignedPut(postIdForUpload, itemIdForStorage, item.file, item.photoNo, kind);
-      logUploadStep(item.localId, "presign success", { key: presigned.key, publicUrl: presigned.publicUrl });
-
-      logUploadStep(item.localId, "put upload start");
-      const uploadRes = await fetch(presigned.url, {
-        method: "PUT",
-        headers: { "Content-Type": item.file.type || "application/octet-stream" },
-        body: item.file,
-      });
-      logUploadStep(item.localId, "put upload finish", { status: uploadRes.status });
-
-      if (!(uploadRes.status === 200 || uploadRes.status === 204)) {
-        throw new Error(`Ошибка загрузки файла ${item.file.name}: ${uploadRes.status}`);
+        publicUrl = result.url;
+        key = result.key;
+        logUploadStep(item.localId, "measurement proxy upload success", { key, publicUrl, photoNo: result.photo_no });
+      } else {
+        logUploadStep(item.localId, "defect proxy upload start", {
+          kind,
+          fileName: item.file.name,
+          mimeType: item.file.type,
+          photoNo: item.photoNo,
+          postIdForUpload,
+          itemIdForStorage,
+        });
+        const result = await uploadDefectMediaViaProxy({
+          post_id: postIdForUpload,
+          item_id: itemIdForStorage,
+          file: item.file,
+          photo_no: item.photoNo,
+          media_type: item.mediaType,
+        });
+        publicUrl = result.url;
+        key = result.key;
+        defectDbId = result.id ?? null;
+        defectMediaType = result.media_type;
+        logUploadStep(item.localId, "defect proxy upload success", {
+          key,
+          publicUrl,
+          photoNo: result.photo_no,
+          mediaType: result.media_type,
+          dbId: result.id ?? null,
+        });
       }
-      publicUrl = presigned.publicUrl;
-      key = presigned.key;
-    }
 
-    const payload: UploadedPhoto = {
-      localId: crypto.randomUUID(),
-      photoNo: item.photoNo,
-      url: publicUrl,
-      key,
-      mediaType: item.mediaType,
-    };
+      const payload: UploadedPhoto = {
+        localId: crypto.randomUUID(),
+        ...(kind === "defect" && defectDbId != null ? { dbId: defectDbId } : {}),
+        photoNo: item.photoNo,
+        url: publicUrl,
+        key,
+        mediaType: kind === "defect" && defectMediaType ? defectMediaType : item.mediaType,
+      };
     if (kind === "main") setMainPhotos((prev) => [...prev, payload]);
     if (kind === "defect") setDefectPhotos((prev) => [...prev, payload]);
     if (kind === "measurement") setMeasurementPhotos((prev) => [...prev, payload]);
@@ -1475,9 +1461,11 @@ export function AdminNewPostPage() {
     setErrorText(null);
     setSuccessText(null);
     try {
-      await deleteYcObject(photo.key);
-      if (photo.dbId && currentPost) {
-        await deletePostDefectPhoto(Number(photo.dbId));
+      await deleteDefectPhotoViaProxy({
+        id: photo.dbId ? Number(photo.dbId) : null,
+        storage_key: photo.key,
+      });
+      if (currentPost) {
         await hydrateDefectPhotosFromDb(currentPost.id);
         return;
       }

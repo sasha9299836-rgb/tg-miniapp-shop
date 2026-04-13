@@ -822,6 +822,39 @@ export async function deletePostDefectPhoto(photoId: number) {
   if (error) throw error;
 }
 
+export async function deleteDefectPhotoViaProxy(payload: { id?: number | null; storage_key?: string | null }) {
+  const adminToken = readAdminToken();
+  if (!adminToken) {
+    throw new Error("ADMIN_TOKEN_MISSING");
+  }
+  if (!cdekProxyBaseUrl) {
+    throw new Error("CDEK_PROXY_URL_MISSING");
+  }
+  const url = `${cdekProxyBaseUrl}/api/admin/defect-photo/delete`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${adminToken}`,
+    },
+    body: JSON.stringify({
+      id: payload.id ?? null,
+      storage_key: payload.storage_key ?? null,
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`DEFECT_DELETE_FAILED ${response.status} ${text}`.trim());
+  }
+
+  const data = (await response.json().catch(() => null)) as { ok?: boolean } | null;
+  if (!data?.ok) {
+    throw new Error("DEFECT_DELETE_INVALID_RESPONSE");
+  }
+  return data;
+}
+
 export async function deletePostMeasurementPhoto(photoId: number) {
   const { error } = await supabase.from("tg_post_measurement_photos").delete().eq("id", photoId);
   if (error) throw error;
