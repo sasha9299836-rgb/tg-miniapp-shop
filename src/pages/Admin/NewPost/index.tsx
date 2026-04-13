@@ -1230,7 +1230,7 @@ export function AdminNewPostPage() {
       context?: { post_id: string; item_id: number | null },
     ) => {
       const effectivePost = currentPostRef.current ?? currentPost;
-      let postIdForUpload = context?.post_id ?? (effectivePost?.id ?? draftUploadId);
+      let postIdForUpload = context?.post_id ?? (effectivePost?.id ?? "");
       let itemIdForStorage = kind === "measurement"
         ? null
         : context?.item_id ?? (postType === "warehouse" ? (effectivePost?.item_id ?? normalizedNalichieId) : null);
@@ -1238,6 +1238,20 @@ export function AdminNewPostPage() {
       let key = "";
       let defectDbId: number | null = null;
       let defectMediaType: "image" | "video" | null = null;
+
+      if (!postIdForUpload) {
+        logUploadStep(item.localId, "upload blocked: no post_id, creating draft", {
+          kind,
+        });
+        const saved = await persistDraft();
+        postIdForUpload = saved.id;
+        if (kind !== "measurement") {
+          itemIdForStorage = saved.item_id ?? itemIdForStorage;
+        }
+      }
+      if (!postIdForUpload) {
+        throw new Error("UPLOAD_BLOCKED_NO_POST_ID");
+      }
 
       if (kind === "main") {
         logUploadStep(item.localId, "proxy upload start", {
@@ -1592,7 +1606,7 @@ export function AdminNewPostPage() {
     uploadWorkerLockRef.current = true;
     pendingMainActivationRef.current = queue[0].localId;
     const mainUploadContext = {
-      post_id: (currentPostRef.current ?? currentPost)?.id ?? draftUploadId,
+      post_id: (currentPostRef.current ?? currentPost)?.id ?? "",
       item_id: postType === "warehouse" ? ((currentPostRef.current ?? currentPost)?.item_id ?? normalizedNalichieId) : null,
     };
     void (async () => {
@@ -1621,7 +1635,7 @@ export function AdminNewPostPage() {
     uploadWorkerLockRef.current = true;
     pendingMeasurementActivationRef.current = queue[0].localId;
     const measurementUploadContext = {
-      post_id: (currentPostRef.current ?? currentPost)?.id ?? draftUploadId,
+      post_id: (currentPostRef.current ?? currentPost)?.id ?? "",
     };
     void (async () => {
       try {
