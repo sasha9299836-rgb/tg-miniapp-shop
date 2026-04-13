@@ -541,6 +541,43 @@ export function AdminNewPostPage() {
     logPublishStepConsole(message, extra);
   };
 
+  const clearPostIdentity = (
+    source: string,
+    options?: { force?: boolean },
+  ): boolean => {
+    const force = Boolean(options?.force);
+    console.log("POST_ID_RESET_SOURCE", {
+      source,
+      stablePostId: stablePostIdRef.current,
+      currentPostRefId: currentPostRef.current?.id ?? null,
+      currentPostId: currentPost?.id ?? null,
+      time: new Date().toISOString(),
+      force,
+    });
+
+    const hasProtectedLifecycle = Boolean(stablePostIdRef.current) && (
+      isSaving
+      || isUploadingPhotos
+      || isUploadingDefects
+      || isUploadingMeasurements
+      || isPublishingNow
+      || isScheduling
+      || hasPendingUploads
+    );
+    if (!force && hasProtectedLifecycle) {
+      console.warn("POST_ID_RESET_BLOCKED", {
+        source,
+        stablePostId: stablePostIdRef.current,
+      });
+      return false;
+    }
+
+    currentPostRef.current = null;
+    stablePostIdRef.current = null;
+    setCurrentPost(null);
+    return true;
+  };
+
   const pushDraftDebug = (entry: Omit<DraftDebugEntry, "time">) => {
     setDraftDebugEntries((prev) => [{
       ...entry,
@@ -691,9 +728,7 @@ export function AdminNewPostPage() {
     setPostType("warehouse");
     setNalichieIdInput("");
     setItemData(null);
-    currentPostRef.current = null;
-    stablePostIdRef.current = null;
-    setCurrentPost(null);
+    clearPostIdentity("resetFormToEmpty", { force: true });
     setMainPhotos([]);
     setDefectPhotos([]);
     setMeasurementPhotos([]);
@@ -792,11 +827,11 @@ export function AdminNewPostPage() {
 
       if (!foundItem) {
         setItemData(null);
-        currentPostRef.current = null;
-        stablePostIdRef.current = null;
-        setCurrentPost(null);
-        setMainPhotos([]);
-        setDefectPhotos([]);
+        const cleared = clearPostIdentity("applyFetchedItem:not_found");
+        if (cleared) {
+          setMainPhotos([]);
+          setDefectPhotos([]);
+        }
         setFieldError("Товар с таким nalichie_id не найден в наличии.");
         return;
       }
@@ -804,11 +839,11 @@ export function AdminNewPostPage() {
       const itemStatus = String(foundItem.status ?? "").trim();
       if (!ALLOWED_NALICHIE_STATUSES.has(itemStatus)) {
         setItemData(null);
-        currentPostRef.current = null;
-        stablePostIdRef.current = null;
-        setCurrentPost(null);
-        setMainPhotos([]);
-        setDefectPhotos([]);
+        const cleared = clearPostIdentity("applyFetchedItem:status_not_allowed");
+        if (cleared) {
+          setMainPhotos([]);
+          setDefectPhotos([]);
+        }
         setFieldError("Товар недоступен для создания поста. Разрешены только in_stock и in_transit.");
         return;
       }
@@ -827,9 +862,7 @@ export function AdminNewPostPage() {
         const nextCondition = foundItem.defekt_marker ? CONDITION_OPTIONS[6] : CONDITION_OPTIONS[1];
         const nextCost = (foundItem.obh_summa ?? 0) > 0 ? Number(foundItem.obh_summa) : Number(foundItem.vikup_rub ?? 0);
         const suggestedPrice = nextCost > 0 ? Math.round(nextCost * 1.8) : null;
-        currentPostRef.current = null;
-        stablePostIdRef.current = null;
-        setCurrentPost(null);
+        clearPostIdentity("applyFetchedItem:no_existing_post");
         setTitle((prev) => (prev.trim() ? prev : nextTitle));
         setBrand((prev) => (prev.trim() ? prev : (foundItem.brend ?? "")));
         setSize((prev) => (prev.trim() ? prev : (foundItem.razmer ?? "")));
@@ -855,9 +888,7 @@ export function AdminNewPostPage() {
       fetchRequestId.current += 1;
       setFieldError(null);
       setItemData(null);
-      currentPostRef.current = null;
-      stablePostIdRef.current = null;
-      setCurrentPost(null);
+      clearPostIdentity("startFetchById:empty_input");
       return;
     }
 
@@ -913,9 +944,7 @@ export function AdminNewPostPage() {
       pendingMeasurementUploads.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
       setNalichieIdInput("");
       setItemData(null);
-      currentPostRef.current = null;
-      stablePostIdRef.current = null;
-      setCurrentPost(null);
+      clearPostIdentity("onPostTypeChange:consignment", { force: true });
       setMainPhotos([]);
       setDefectPhotos([]);
       setMeasurementPhotos([]);
