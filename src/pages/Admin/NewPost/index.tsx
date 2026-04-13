@@ -1111,9 +1111,20 @@ export function AdminNewPostPage() {
         item.photoNo,
       );
       publicUrl = result.url;
-      key = result.key;
-      logUploadStep(item.localId, "proxy upload success", { key, publicUrl, photoNo: result.photo_no });
+        key = result.key;
+        logUploadStep(item.localId, "proxy upload success", { key, publicUrl, photoNo: result.photo_no });
       } else if (kind === "measurement") {
+        if (!currentPost?.id) {
+          logUploadStep(item.localId, "measurement upload requires draft", {
+            postIdForUpload,
+          });
+          const saved = await persistDraft();
+          postIdForUpload = saved.id;
+          logUploadStep(item.localId, "measurement draft ensured", {
+            postIdForUpload,
+            savedStatus: saved.status,
+          });
+        }
         logUploadStep(item.localId, "measurement proxy upload start", {
           kind,
           fileName: item.file.name,
