@@ -1455,6 +1455,7 @@ export function AdminNewPostPage() {
                 console.log("DEFECT_VIDEO_PART_UPLOAD_RETRY", {
                   partNumber,
                   attempt,
+                  reason: message,
                   canRetry,
                   error: message,
                 });
