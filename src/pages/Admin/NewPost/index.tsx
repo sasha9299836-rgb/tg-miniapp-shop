@@ -32,11 +32,7 @@ import {
   type TgPostType,
 } from "../../../shared/api/adminPostsApi";
 import {
-  abortDefectVideoRelayViaProxy,
-  completeDefectVideoRelayViaProxy,
   deleteYcObject,
-  startDefectVideoRelayViaProxy,
-  uploadDefectVideoRelayPartViaProxy,
   uploadDefectMediaViaProxy,
   uploadMainPhotoViaProxy,
   uploadMeasurementPhotoViaProxy,
@@ -201,30 +197,6 @@ type DraftDebugEntry = {
   photoNo?: number | null;
 };
 
-type MultipartDebugEvent = {
-  time: string;
-  step: string;
-  partNumber?: number;
-  attempt?: number;
-  status?: number;
-  readyState?: number;
-  responseText?: string;
-  etag?: string | null;
-  chunkSize?: number;
-  durationMs?: number;
-  shortUrl?: string;
-  uploadId?: string;
-  totalParts?: number;
-  partSize?: number;
-  error?: string;
-  fileName?: string;
-  fileSize?: number;
-  postId?: string;
-  loaded?: number;
-  total?: number;
-  percent?: number;
-};
-
 type PendingUpload = {
   localId: string;
   file: File;
@@ -234,20 +206,12 @@ type PendingUpload = {
   status: "validating" | "pending" | "uploading" | "failed";
 };
 
-const MAX_DEFECT_VIDEO_DURATION_SECONDS = 120;
 const UPLOAD_QUEUE_STEP_DELAY_MS = 500;
 const UPLOAD_RETRY_DELAY_MS = 700;
 const UPLOAD_MAX_ATTEMPTS = 3;
 const CONSIGNMENT_PUBLISH_COOLDOWN_MS = 600;
 const MAIN_UPLOAD_RETRY_DELAYS_MS = [0, 500, 1000] as const;
 const MAIN_UPLOAD_INTER_FILE_DELAY_MS = 300;
-const DEFECT_VIDEO_PART_UPLOAD_MAX_ATTEMPTS = 5;
-const DEFECT_VIDEO_PART_UPLOAD_RETRY_DELAY_MS = 700;
-const DEFECT_VIDEO_INTER_PART_DELAY_MS = 200;
-
-function inferMediaTypeFromUrl(url: string): "image" | "video" {
-  return /\.(mp4|mov)(?:$|\?)/i.test(url) ? "video" : "image";
-}
 
 function inferMediaTypeFromFile(file: File): "image" | "video" | null {
   const mime = String(file.type ?? "").toLowerCase();
@@ -295,36 +259,6 @@ function waitForAppToBeInteractive(): Promise<void> {
     document.addEventListener("visibilitychange", finishIfVisible);
     window.addEventListener("focus", finishIfVisible);
     window.addEventListener("pageshow", finishIfVisible);
-  });
-}
-
-function readVideoDurationSeconds(previewUrl: string): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const video = document.createElement("video");
-
-    const cleanup = () => {
-      video.onloadedmetadata = null;
-      video.onerror = null;
-      video.removeAttribute("src");
-      video.load();
-    };
-
-    video.preload = "metadata";
-    video.playsInline = true;
-    video.onloadedmetadata = () => {
-      const duration = Number(video.duration);
-      cleanup();
-      if (!Number.isFinite(duration) || duration <= 0) {
-        reject(new Error("Не удалось определить длительность видео."));
-        return;
-      }
-      resolve(duration);
-    };
-    video.onerror = () => {
-      cleanup();
-      reject(new Error("Не удалось прочитать длительность видео."));
-    };
-    video.src = previewUrl;
   });
 }
 
@@ -438,7 +372,6 @@ export function AdminNewPostPage() {
   const currentPostRef = useRef<TgPost | null>(null);
   const stablePostIdRef = useRef<string | null>(null);
   const [draftDebugEntries, setDraftDebugEntries] = useState<DraftDebugEntry[]>([]);
-  const [multipartDebugEvents, setMultipartDebugEvents] = useState<MultipartDebugEvent[]>([]);
   const [manualPackagingOverrideTypeKey, setManualPackagingOverrideTypeKey] = useState<string | null>(null);
   const [isTypeSuggestionsOpen, setIsTypeSuggestionsOpen] = useState(false);
   const [isBrandSuggestionsOpen, setIsBrandSuggestionsOpen] = useState(false);
@@ -452,7 +385,6 @@ export function AdminNewPostPage() {
   const pendingDefectActivationRef = useRef<string | null>(null);
   const pendingMeasurementActivationRef = useRef<string | null>(null);
   const uploadWorkerLockRef = useRef(false);
-  const defectVideoChainActiveRef = useRef(false);
   const publishAttemptRef = useRef(0);
   const parsedNalichieId = useMemo(() => Number(nalichieIdInput), [nalichieIdInput]);
   const normalizedNalichieId = Number.isInteger(parsedNalichieId) && parsedNalichieId > 0 ? parsedNalichieId : null;
@@ -515,7 +447,6 @@ export function AdminNewPostPage() {
       || isUploadingMeasurements
       || isPublishingNow
       || isScheduling
-      || defectVideoChainActiveRef.current
       || hasPendingUploads
     );
     if (!force && hasProtectedLifecycle) {
@@ -537,13 +468,6 @@ export function AdminNewPostPage() {
       ...entry,
       time: new Date().toISOString(),
     }, ...prev].slice(0, 30));
-  };
-
-  const pushMultipartDebug = (event: Omit<MultipartDebugEvent, "time">) => {
-    setMultipartDebugEvents((prev) => [{
-      ...event,
-      time: new Date().toISOString(),
-    }, ...prev].slice(0, 100));
   };
 
   const mainPreview: PhotoPreviewItem[] = useMemo(
@@ -600,13 +524,13 @@ export function AdminNewPostPage() {
 
   const hydrateDefectPhotosFromDb = async (postId: string) => {
     const rows = await getPostDefectPhotos(postId);
-    setDefectPhotos(rows.map((photo) => ({
+    setDefectPhotos(rows.filter((photo) => photo.media_type === "image").map((photo) => ({
       localId: `db-${photo.id}`,
       dbId: photo.id,
       photoNo: photo.photo_no,
       url: photo.public_url,
       key: photo.storage_key,
-      mediaType: photo.media_type ?? inferMediaTypeFromUrl(photo.public_url),
+      mediaType: "image",
     })));
   };
 
@@ -782,15 +706,6 @@ export function AdminNewPostPage() {
 
   const applyFetchedItem = async (nalichieIdValue: number, requestId: number) => {
     if (postType !== "warehouse") return;
-    if (defectVideoChainActiveRef.current) {
-      console.log("WAREHOUSE_FETCH_BLOCKED_DURING_DEFECT_VIDEO_CHAIN", {
-        source: "applyFetchedItem",
-        nalichieIdValue,
-        requestId,
-        stablePostId: stablePostIdRef.current,
-      });
-      return;
-    }
     try {
       const foundItem = await fetchNalichieByIdViaRpc(nalichieIdValue) ?? await fetchNalichieById(nalichieIdValue);
       if (requestId !== fetchRequestId.current) return;
@@ -853,14 +768,6 @@ export function AdminNewPostPage() {
   const startFetchById = (force = false) => {
     if (isEditMode) return;
     if (postType !== "warehouse") return;
-    if (defectVideoChainActiveRef.current) {
-      console.log("WAREHOUSE_FETCH_BLOCKED_DURING_DEFECT_VIDEO_CHAIN", {
-        source: "startFetchById",
-        force,
-        stablePostId: stablePostIdRef.current,
-      });
-      return;
-    }
 
     if (!nalichieIdInput.trim()) {
       fetchRequestId.current += 1;
@@ -915,14 +822,6 @@ export function AdminNewPostPage() {
   };
 
   const onPostTypeChange = (nextType: TgPostType) => {
-    if (defectVideoChainActiveRef.current) {
-      console.log("POST_TYPE_CHANGE_BLOCKED_DURING_DEFECT_VIDEO_CHAIN", {
-        nextType,
-        stablePostId: stablePostIdRef.current,
-      });
-      setErrorText("Дождитесь завершения загрузки видео дефекта.");
-      return;
-    }
     setPostType(nextType);
     if (nextType === "consignment") {
       pendingMainUploads.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
@@ -1190,8 +1089,16 @@ export function AdminNewPostPage() {
         setErrorText(`Неподдерживаемый тип файла: ${file.name}`);
         continue;
       }
-      if ((kind === "main" || kind === "measurement") && mediaType !== "image") {
-        setErrorText(kind === "measurement" ? "Для замеров разрешены только изображения." : "Для основных фото разрешены только изображения.");
+      if (mediaType !== "image") {
+        if (kind === "measurement") {
+          setErrorText("Для замеров разрешены только изображения.");
+          continue;
+        }
+        if (kind === "main") {
+          setErrorText("Для основных фото разрешены только изображения.");
+          continue;
+        }
+        setErrorText("Для дефектов разрешены только изображения.");
         continue;
       }
       const previewUrl = URL.createObjectURL(file);
@@ -1201,7 +1108,7 @@ export function AdminNewPostPage() {
         photoNo: nextPhotoNo,
         mediaType,
         previewUrl,
-        status: mediaType === "video" ? "validating" : "pending",
+        status: "pending",
       });
       logUploadStep(staged[staged.length - 1].localId, `selected ${kind}`, {
         fileName: file.name,
@@ -1216,46 +1123,6 @@ export function AdminNewPostPage() {
     if (kind === "defect") setPendingDefectUploads((prev) => [...prev, ...staged]);
     if (kind === "measurement") setPendingMeasurementUploads((prev) => [...prev, ...staged]);
   };
-
-  useEffect(() => {
-    const next = pendingDefectUploads.find((entry) => entry.status === "validating" && entry.mediaType === "video");
-    if (!next) return;
-
-    let cancelled = false;
-
-    void (async () => {
-      try {
-        logUploadStep(next.localId, "video validation wait start", { fileName: next.file.name });
-        await waitForAppToBeInteractive();
-        if (cancelled) return;
-        logUploadStep(next.localId, "video validation metadata read start");
-        const durationSeconds = await readVideoDurationSeconds(next.previewUrl);
-        if (cancelled) return;
-        logUploadStep(next.localId, "video validation metadata read finish", { durationSeconds });
-        if (durationSeconds > MAX_DEFECT_VIDEO_DURATION_SECONDS) {
-          URL.revokeObjectURL(next.previewUrl);
-          setPendingDefectUploads((prev) => prev.filter((entry) => entry.localId !== next.localId));
-          setErrorText("Видео дефекта должно быть не длиннее 2 минут.");
-          logUploadStep(next.localId, "video validation rejected by duration");
-          return;
-        }
-        setPendingDefectUploads((prev) => prev.map((entry) => (
-          entry.localId === next.localId ? { ...entry, status: "pending" } : entry
-        )));
-        logUploadStep(next.localId, "video validation passed -> pending");
-      } catch (error) {
-        if (cancelled) return;
-        URL.revokeObjectURL(next.previewUrl);
-        setPendingDefectUploads((prev) => prev.filter((entry) => entry.localId !== next.localId));
-        setErrorText((error as Error).message || "Не удалось проверить длительность видео.");
-        logUploadStep(next.localId, "video validation failed", error);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [pendingDefectUploads]);
 
     const uploadPendingItem = async (
       item: PendingUpload,
@@ -1343,181 +1210,32 @@ export function AdminNewPostPage() {
           mediaType: item.mediaType,
           photoNo: item.photoNo,
         });
-        if (item.mediaType === "video") {
-          const frozenUploadContext = {
-            postId: postIdForUpload,
-            itemId: itemIdForStorage,
-          };
-          defectVideoChainActiveRef.current = true;
-          console.log("DEFECT_VIDEO_CHAIN_STARTED", {
-            stablePostId: stablePostIdRef.current,
-            postId: frozenUploadContext.postId,
-            itemId: frozenUploadContext.itemId,
-            photoNo: item.photoNo,
-          });
-          try {
-            logUploadStep(item.localId, "defect video relay start", {
-              fileName: item.file.name,
-              fileSize: item.file.size,
-              photoNo: item.photoNo,
-              postIdForUpload: frozenUploadContext.postId,
-              itemIdForStorage: frozenUploadContext.itemId,
-            });
-            const relayStart = await startDefectVideoRelayViaProxy({
-              post_id: frozenUploadContext.postId,
-              photo_no: item.photoNo,
-              mime: item.file.type || "video/mp4",
-              file_size: item.file.size,
-            });
-            pushMultipartDebug({
-              step: "RELAY_START",
-              uploadId: relayStart.session_id,
-              totalParts: Math.ceil(item.file.size / relayStart.part_size),
-              partSize: relayStart.part_size,
-              postId: frozenUploadContext.postId,
-              fileName: item.file.name,
-              fileSize: item.file.size,
-            });
-
-            const totalParts = Math.ceil(item.file.size / relayStart.part_size);
-            for (let partIndex = 0; partIndex < totalParts; partIndex += 1) {
-              const partNumber = partIndex + 1;
-              const start = partIndex * relayStart.part_size;
-              const end = Math.min(start + relayStart.part_size, item.file.size);
-              const chunk = item.file.slice(start, end);
-              for (let attempt = 1; attempt <= DEFECT_VIDEO_PART_UPLOAD_MAX_ATTEMPTS; attempt += 1) {
-                try {
-                  pushMultipartDebug({
-                    step: "RELAY_PART_START",
-                    partNumber,
-                    attempt,
-                    chunkSize: chunk.size,
-                    uploadId: relayStart.session_id,
-                    postId: frozenUploadContext.postId,
-                  });
-                  const startedAt = Date.now();
-                  const relayPart = await uploadDefectVideoRelayPartViaProxy({
-                    session_id: relayStart.session_id,
-                    part_number: partNumber,
-                    chunk,
-                    onProgress: (progress) => {
-                      pushMultipartDebug({
-                        step: "RELAY_PART_PROGRESS",
-                        partNumber,
-                        attempt,
-                        chunkSize: chunk.size,
-                        loaded: progress.loaded,
-                        total: progress.total,
-                        uploadId: relayStart.session_id,
-                      });
-                    },
-                    onDebug: (event) => {
-                      pushMultipartDebug({
-                        step: event.step,
-                        partNumber,
-                        attempt,
-                        chunkSize: chunk.size,
-                        status: event.status,
-                        readyState: event.readyState,
-                        responseText: event.responseText,
-                        loaded: event.loaded,
-                        total: event.total,
-                        uploadId: relayStart.session_id,
-                      });
-                    },
-                  });
-                  pushMultipartDebug({
-                    step: "RELAY_PART_DONE",
-                    partNumber,
-                    attempt,
-                    chunkSize: chunk.size,
-                    durationMs: Date.now() - startedAt,
-                    etag: relayPart.etag,
-                    uploadId: relayStart.session_id,
-                    error: "success",
-                  });
-                  break;
-                } catch (error) {
-                  const message = error instanceof Error ? error.message : String(error ?? "");
-                  const retryable =
-                    attempt < DEFECT_VIDEO_PART_UPLOAD_MAX_ATTEMPTS
-                    && (
-                      message.includes("Network error during upload")
-                      || message.includes("Relay part upload timeout")
-                      || message.includes("Relay part upload aborted")
-                      || message.includes("Network error during relay part upload")
-                      || message.includes(" 0 ")
-                    );
-                  pushMultipartDebug({
-                    step: retryable ? "RELAY_PART_RETRY" : "RELAY_PART_FAIL_FINAL",
-                    partNumber,
-                    attempt,
-                    chunkSize: chunk.size,
-                    error: message,
-                    uploadId: relayStart.session_id,
-                  });
-                  if (!retryable) {
-                    await abortDefectVideoRelayViaProxy({ session_id: relayStart.session_id }).catch(() => undefined);
-                    throw error;
-                  }
-                  await delay(DEFECT_VIDEO_PART_UPLOAD_RETRY_DELAY_MS);
-                }
-              }
-              const isLastPart = partIndex === totalParts - 1;
-              if (!isLastPart) {
-                await delay(DEFECT_VIDEO_INTER_PART_DELAY_MS);
-              }
-            }
-
-            const completed = await completeDefectVideoRelayViaProxy({
-              session_id: relayStart.session_id,
-            });
-            pushMultipartDebug({
-              step: "RELAY_COMPLETE",
-              uploadId: relayStart.session_id,
-              postId: frozenUploadContext.postId,
-            });
-            publicUrl = completed.public_url;
-            key = completed.storage_key;
-            defectDbId = completed.id ?? null;
-            defectMediaType = "video";
-          } finally {
-            defectVideoChainActiveRef.current = false;
-            console.log("DEFECT_VIDEO_CHAIN_FINISHED", {
-              stablePostId: stablePostIdRef.current,
-              postId: frozenUploadContext.postId,
-              itemId: frozenUploadContext.itemId,
-              photoNo: item.photoNo,
-            });
-          }
-        } else {
-          logUploadStep(item.localId, "defect proxy upload start", {
-            kind,
-            fileName: item.file.name,
-            mimeType: item.file.type,
-            photoNo: item.photoNo,
-            postIdForUpload,
-            itemIdForStorage,
-          });
-          const result = await uploadDefectMediaViaProxy({
-            post_id: postIdForUpload,
-            item_id: itemIdForStorage,
-            file: item.file,
-            photo_no: item.photoNo,
-            media_type: item.mediaType,
-          });
-          publicUrl = result.url;
-          key = result.key;
-          defectDbId = result.id ?? null;
-          defectMediaType = result.media_type;
-          logUploadStep(item.localId, "defect proxy upload success", {
-            key,
-            publicUrl,
-            photoNo: result.photo_no,
-            mediaType: result.media_type,
-            dbId: result.id ?? null,
-          });
-        }
+        logUploadStep(item.localId, "defect proxy upload start", {
+          kind,
+          fileName: item.file.name,
+          mimeType: item.file.type,
+          photoNo: item.photoNo,
+          postIdForUpload,
+          itemIdForStorage,
+        });
+        const result = await uploadDefectMediaViaProxy({
+          post_id: postIdForUpload,
+          item_id: itemIdForStorage,
+          file: item.file,
+          photo_no: item.photoNo,
+          media_type: "image",
+        });
+        publicUrl = result.url;
+        key = result.key;
+        defectDbId = result.id ?? null;
+        defectMediaType = "image";
+        logUploadStep(item.localId, "defect proxy upload success", {
+          key,
+          publicUrl,
+          photoNo: result.photo_no,
+          mediaType: result.media_type,
+          dbId: result.id ?? null,
+        });
       }
 
       const payload: UploadedPhoto = {
@@ -2220,20 +1938,20 @@ export function AdminNewPostPage() {
                   <textarea value={defectsText} className="admin-post-form-control" onChange={(e) => setDefectsText(e.target.value)} placeholder={"Введите описание"} rows={3} style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }} />
                 </Field>
                 <PhotoUploader
-                  title={"Медиа дефектов"}
+                  title={"Фотографии дефектов"}
                   inputId="post-defect-files"
-                  selectLabel={"Выбрать фото/видео дефектов"}
+                  selectLabel={"Выбрать фото дефектов"}
                   items={defectPreview}
                   loadingText={
                     isPreparingAdminRuntime
                       ? "Подготовка..."
                       : isUploadingDefects
-                      ? "Загрузка медиа дефектов..."
+                      ? "Загрузка фото дефектов..."
                       : pendingDefectUploads.length
                       ? "Файлы добавлены в очередь."
                       : null
                   }
-                  accept="image/*,video/mp4,video/quicktime,.mov"
+                  accept="image/*"
                   isBusy={!isAdminRuntimeReady || isPreparingAdminRuntime || isUploadingDefects || isUploadingMeasurements || isSaving || isPublishingNow || isScheduling}
                   onSelect={(files) => stageSelectedFiles(files, "defect")}
                   onRemove={(id) => void onDeleteDefectPhoto(id)}
@@ -2307,18 +2025,6 @@ export function AdminNewPostPage() {
               <div style={{ display: "grid", gap: 8, fontSize: 12 }}>
                 {draftDebugEntries.map((entry, index) => (
                   <pre key={`${entry.time}-${index}`} style={{ margin: 0, whiteSpace: "pre-wrap" }}>
-                    {JSON.stringify(entry, null, 2)}
-                  </pre>
-                ))}
-              </div>
-            </div>
-          ) : null}
-          {multipartDebugEvents.length ? (
-            <div className="glass" style={{ padding: 12 }}>
-              <div style={{ fontWeight: 700, marginBottom: 8 }}>{"Multipart Debug"}</div>
-              <div style={{ display: "grid", gap: 8, fontSize: 12 }}>
-                {multipartDebugEvents.map((entry, index) => (
-                  <pre key={`${entry.time}-${entry.step}-${index}`} style={{ margin: 0, whiteSpace: "pre-wrap" }}>
                     {JSON.stringify(entry, null, 2)}
                   </pre>
                 ))}

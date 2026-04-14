@@ -21,6 +21,7 @@ export type Product = {
   defectsText?: string | null;
   defectMedia?: DefectMediaItem[];
   defectImages?: string[];
+  videoUrl?: string | null;
   measurementsText?: string | null;
   measurementPhotos?: string[];
   saleStatus?: "available" | "reserved" | "sold";

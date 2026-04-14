@@ -43,6 +43,7 @@ export type TgPost = {
   condition: string;
   has_defects: boolean;
   defects_text: string | null;
+  video_url: string | null;
   measurements_text: string | null;
   status: TgPostStatus;
   sale_status: "available" | "reserved" | "sold";
@@ -1057,6 +1058,7 @@ export async function getPublishedCatalogProducts(): Promise<Product[]> {
     defectsText: post.defects_text,
     defectMedia: defectsByPost.get(post.id) ?? [],
     defectImages: (defectsByPost.get(post.id) ?? []).filter((item) => item.type === "image").map((item) => item.url),
+    videoUrl: post.video_url,
     measurementsText: post.measurements_text,
     measurementPhotos: measurementsByPost.get(post.id) ?? [],
     saleStatus: post.sale_status,
@@ -1139,8 +1141,73 @@ export async function getCatalogProductsByPostIds(postIds: string[]): Promise<Pr
     defectsText: post.defects_text,
     defectMedia: defectsByPost.get(post.id) ?? [],
     defectImages: (defectsByPost.get(post.id) ?? []).filter((item) => item.type === "image").map((item) => item.url),
+    videoUrl: post.video_url,
     measurementsText: post.measurements_text,
     measurementPhotos: measurementsByPost.get(post.id) ?? [],
     saleStatus: post.sale_status,
   }));
+}
+
+export type AdminCatalogVideoItem = {
+  id: number;
+  postId: string;
+  title: string;
+  brand: string | null;
+  size: string | null;
+  previewUrl: string | null;
+  currentVideoUrl: string | null;
+};
+
+export async function listAdminCatalogVideoItems(): Promise<AdminCatalogVideoItem[]> {
+  const products = await getPublishedCatalogProducts();
+  return products.map((product) => {
+    return {
+      id: product.id,
+      postId: String(product.postId ?? "").trim(),
+      title: product.title,
+      brand: product.brand ?? null,
+      size: product.size ?? null,
+      previewUrl: product.images[0] ?? null,
+      currentVideoUrl: product.videoUrl ?? null,
+    };
+  }).filter((item) => Boolean(item.postId));
+}
+
+export async function saveCatalogPostVideoLink(postId: string, videoUrl: string | null): Promise<void> {
+  await ensureAdminRuntimeReady();
+  const adminToken = readAdminToken();
+  if (!adminToken) {
+    throw new Error("ADMIN_TOKEN_MISSING");
+  }
+  const normalizedPostId = String(postId ?? "").trim();
+  if (!normalizedPostId) {
+    throw new Error("POST_ID_REQUIRED");
+  }
+
+  const response = await fetch(`${cdekProxyBaseUrl}/api/admin/post-video/update`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${adminToken}`,
+    },
+    body: JSON.stringify({
+      post_id: normalizedPostId,
+      video_url: String(videoUrl ?? "").trim() || null,
+    }),
+  });
+
+  const text = await response.text().catch(() => "");
+  if (!response.ok) {
+    throw new Error(`POST_VIDEO_UPDATE_FAILED ${response.status} ${text}`.trim());
+  }
+
+  let parsed: { ok?: boolean } | null = null;
+  try {
+    parsed = text ? (JSON.parse(text) as { ok?: boolean }) : null;
+  } catch {
+    parsed = null;
+  }
+  if (!parsed?.ok) {
+    throw new Error("POST_VIDEO_UPDATE_INVALID_RESPONSE");
+  }
 }

@@ -96,6 +96,7 @@ export function ItemPage() {
   const [photoIndex, setPhotoIndex] = useState(0);
   const [isDescOpen, setIsDescOpen] = useState(true);
   const [isMeasurementsOpen, setIsMeasurementsOpen] = useState(false);
+  const [isVideoOpen, setIsVideoOpen] = useState(false);
   const [isDefectsOpen, setIsDefectsOpen] = useState(false);
   const [videoPosterByUrl, setVideoPosterByUrl] = useState<Record<string, string>>({});
   const defectsSectionRef = useRef<HTMLDivElement | null>(null);
@@ -150,6 +151,10 @@ export function ItemPage() {
     () => defectMedia.filter((item) => item.type === "video").map((item) => item.url),
     [defectMedia],
   );
+  const postVideoUrl = useMemo(() => {
+    const value = String(product?.videoUrl ?? "").trim();
+    return value || null;
+  }, [product?.videoUrl]);
   const total = images.length;
   const safeIndex = total ? photoIndex % total : 0;
   const currentImage = total ? images[safeIndex] : undefined;
@@ -158,6 +163,7 @@ export function ItemPage() {
   const viewerImage = viewerTotal ? viewerImages[viewerIndex] : undefined;
 
   const hasMeasurementsSection = Boolean(product?.measurementsText?.trim() || measurementPhotos.length);
+  const hasVideoSection = Boolean(postVideoUrl);
   const hasDefectsSection = Boolean(product?.hasDefects || product?.defectsText?.trim() || defectImages.length || defectVideos.length);
   const itemHeaderTitle = useMemo(() => {
     if (!product) return "";
@@ -388,6 +394,40 @@ export function ItemPage() {
                     ))}
                   </div>
                 ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {hasVideoSection ? (
+          <div className="item-accordion item-accordion--plain">
+            <button
+              type="button"
+              className="item-accordion__head"
+              onClick={() => setIsVideoOpen((v) => !v)}
+            >
+              <span>Видео</span>
+              <span className={`item-accordion__chevron ${isVideoOpen ? "is-open" : ""}`}>
+                <svg className="item-accordion__chevronIcon" viewBox="0 0 24 24" aria-hidden>
+                  <path d="M8 5L16 12L8 19" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
+            </button>
+            {isVideoOpen ? (
+              <div className="item-accordion__body">
+                <div className="item-defect-grid">
+                  <div className="item-defect-grid__btn">
+                    <ProductThumb
+                      src={postVideoUrl ?? undefined}
+                      mediaType="video"
+                      className="item-defect-grid__thumb"
+                      mediaClassName="item-defect-grid__img"
+                      controls
+                      preload="metadata"
+                      playsInline
+                    />
+                  </div>
+                </div>
               </div>
             ) : null}
           </div>

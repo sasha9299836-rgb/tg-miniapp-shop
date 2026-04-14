@@ -24,6 +24,7 @@ import { AdminHome } from "../../pages/Admin";
 import { AdminNewPostPage } from "../../pages/Admin/NewPost";
 import { AdminScheduledPostsPage } from "../../pages/Admin/ScheduledPosts";
 import { AdminOrdersPage } from "../../pages/Admin/Orders";
+import { AdminPostVideoPage } from "../../pages/Admin/PostVideo";
 import { useAccountStore } from "../../entities/account/model/useAccountStore";
 import { useAdminStore } from "../../entities/account/model/useAdminStore";
 import { canUseAdminSessionByContext, getAdminAccessDebugState } from "../../shared/auth/adminAccess";
@@ -69,6 +70,7 @@ const router = createBrowserRouter([
       { path: "/admin/posts/scheduled", element: <AdminGuard><AdminScheduledPostsPage /></AdminGuard> },
       { path: "/admin/posts/:id/edit", element: <AdminGuard><AdminNewPostPage /></AdminGuard> },
       { path: "/admin/orders", element: <AdminGuard><AdminOrdersPage /></AdminGuard> },
+      { path: "/admin/post-video", element: <AdminGuard><AdminPostVideoPage /></AdminGuard> },
 
       { path: "/item/:id", element: <ItemPage /> },
       { path: "/checkout", element: <CheckoutPage /> },
