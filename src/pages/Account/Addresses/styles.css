@@ -181,12 +181,16 @@
   background: color-mix(in srgb, var(--warning) 10%, transparent);
 }
 
-.address-selected-pvz {
-  color: var(--muted);
-  font-size: 13px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.address-selected-card {
+  display: grid;
+}
+
+.address-selected-card .ui-li {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .address-view-grid {

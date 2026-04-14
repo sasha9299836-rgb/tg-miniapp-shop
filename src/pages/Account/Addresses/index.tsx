@@ -170,6 +170,7 @@ export function AddressesPage() {
   const [cityQuery, setCityQuery] = useState("");
   const [cityOptions, setCityOptions] = useState<SearchCityOption[]>([]);
   const [selectedCityCode, setSelectedCityCode] = useState<string | null>(null);
+  const [selectedCityRegion, setSelectedCityRegion] = useState("");
   const [citySearchDone, setCitySearchDone] = useState(false);
 
   const [pvzValue, setPvzValue] = useState("");
@@ -177,6 +178,7 @@ export function AddressesPage() {
   const [pvzList, setPvzList] = useState<PickupPoint[]>([]);
   const [selectedPvzCode, setSelectedPvzCode] = useState<string | null>(null);
   const [pvzSearchDone, setPvzSearchDone] = useState(false);
+  const [isPvzExpanded, setIsPvzExpanded] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -193,10 +195,13 @@ export function AddressesPage() {
     setPvzList([]);
     setSelectedPvzCode(null);
     setPvzSearchDone(false);
+    setIsPvzExpanded(false);
   };
 
   const resetCityAndPvzSelection = () => {
+    setCityValue("");
     setSelectedCityCode(null);
+    setSelectedCityRegion("");
     setCitySearchDone(false);
     resetPvzSelection();
   };
@@ -210,7 +215,25 @@ export function AddressesPage() {
     setPvzSearchDone(false);
   };
 
-  const visiblePvz = useMemo(() => (Array.isArray(pvzList) ? pvzList : []), [pvzList]);
+  const filteredPvz = useMemo(() => {
+    const source = Array.isArray(pvzList) ? pvzList : [];
+    const q = pvzQuery.trim().toLowerCase();
+    if (!q) return source;
+    return source.filter((point) => `${point.name ?? ""} ${point.address ?? ""}`.toLowerCase().includes(q));
+  }, [pvzList, pvzQuery]);
+  const visiblePvz = useMemo(() => {
+    if (pvzQuery.trim()) return filteredPvz;
+    if (isPvzExpanded) return filteredPvz;
+    return filteredPvz.slice(0, 5);
+  }, [filteredPvz, isPvzExpanded, pvzQuery]);
+  const canExpandPvz = useMemo(
+    () => !pvzQuery.trim() && !isPvzExpanded && filteredPvz.length > 5,
+    [filteredPvz.length, isPvzExpanded, pvzQuery],
+  );
+  const selectedPvzPoint = useMemo(
+    () => (selectedPvzCode ? (Array.isArray(pvzList) ? pvzList : []).find((point) => point.code === selectedPvzCode) ?? null : null),
+    [pvzList, selectedPvzCode],
+  );
   const currentEditingAddress = useMemo(
     () => addresses.find((row) => row.id === editingAddressId) ?? null,
     [addresses, editingAddressId],
@@ -291,15 +314,9 @@ export function AddressesPage() {
 
   useEffect(() => {
     if (mode !== "details" || !isEditing) return;
-    if (pvzQuery.trim().length < 2) {
-      setPvzList([]);
-      setPvzSearchDone(false);
-      return;
-    }
     if (!selectedCityCode) {
       setPvzList([]);
       setPvzSearchDone(false);
-      setCdekWarningText("Сначала выберите город.");
       return;
     }
 
@@ -308,9 +325,7 @@ export function AddressesPage() {
         const cityParam = selectedCityCode;
         const raw = await shipping.getPickupPoints(cityParam);
         const all = normalizePvz(raw);
-        const q = pvzQuery.trim().toLowerCase();
-        const filtered = all.filter((point) => `${point.name ?? ""} ${point.address ?? ""}`.toLowerCase().includes(q));
-        setPvzList(filtered);
+        setPvzList(all);
         setPvzSearchDone(true);
         setCdekWarningText(null);
       } catch (error) {
@@ -322,7 +337,7 @@ export function AddressesPage() {
     }, 350);
 
     return () => window.clearTimeout(timer);
-  }, [mode, isEditing, pvzQuery, selectedCityCode, cityValue]);
+  }, [mode, isEditing, selectedCityCode]);
 
   const openDetails = (address: TgAddressPreset) => {
     const mapped = mapAddressToForm(address);
@@ -335,6 +350,7 @@ export function AddressesPage() {
     setCityQuery("");
     setCityOptions([]);
     setSelectedCityCode(address.city_code ?? null);
+    setSelectedCityRegion("");
     setCitySearchDone(false);
     setPvzValue(address.pvz ?? "");
     setPvzQuery("");
@@ -377,6 +393,7 @@ export function AddressesPage() {
     setCityQuery("");
     setCityOptions([]);
     setSelectedCityCode(currentEditingAddress?.city_code ?? null);
+    setSelectedCityRegion("");
     setCitySearchDone(false);
     setPvzQuery("");
     setPvzList([]);
@@ -392,6 +409,7 @@ export function AddressesPage() {
     if (editingAddressId) {
       const source = addresses.find((row) => row.id === editingAddressId);
       setCityValue(source?.city ?? "");
+      setSelectedCityRegion("");
       setPvzValue(source?.pvz ?? "");
       setIsEditing(false);
     } else {
@@ -470,6 +488,7 @@ export function AddressesPage() {
         setForm(mapped);
         setCityValue(savedAddress.city ?? "");
         setSelectedCityCode(savedAddress.city_code ?? null);
+        setSelectedCityRegion("");
         setPvzValue(savedAddress.pvz ?? "");
         setSelectedPvzCode(savedAddress.pvz_code ?? null);
       }
@@ -660,15 +679,24 @@ export function AddressesPage() {
               const nextValue = event.target.value;
               setCityQuery(nextValue);
               if (nextValue.trim()) {
-                setCityValue("");
+                setSelectedCityRegion("");
                 setCityOptions([]);
                 resetCityAndPvzSelection();
               }
             }}
           />
-          <div className="address-selected-pvz" title={cityValue || "Город не выбран"}>
-            {cityValue || "Город не выбран"}
-          </div>
+          {cityValue ? (
+            <div className="address-selected-card">
+              <ListItem
+                title={cityValue}
+                subtitle={selectedCityRegion || undefined}
+                right={<span className="address-badge">Выбран</span>}
+                chevron={false}
+                divider={false}
+                position="single"
+              />
+            </div>
+          ) : null}
           {(Array.isArray(cityOptions) ? cityOptions : []).length ? (
             <div className="address-list">
               {(Array.isArray(cityOptions) ? cityOptions : []).map((city, idx) => (
@@ -679,6 +707,7 @@ export function AddressesPage() {
                   onClick={() => {
                     setSelectedCityCode(city.code);
                     setCityValue(city.label);
+                    setSelectedCityRegion(city.region);
                     setCityQuery("");
                     setCityOptions([]);
                     setCitySearchDone(false);
@@ -705,17 +734,23 @@ export function AddressesPage() {
             onChange={(event) => {
               const nextValue = event.target.value;
               setPvzQuery(nextValue);
-              if (nextValue.trim()) {
-                setPvzValue("");
-                setPvzList([]);
-                setSelectedPvzCode(null);
-                setPvzSearchDone(false);
+              if (!nextValue.trim()) {
+                setIsPvzExpanded(false);
               }
             }}
           />
-          <div className="address-selected-pvz" title={pvzValue || "ПВЗ не выбран"}>
-            {pvzValue || "ПВЗ не выбран"}
-          </div>
+          {pvzValue ? (
+            <div className="address-selected-card">
+              <ListItem
+                title={selectedPvzPoint?.name ?? pvzValue}
+                subtitle={selectedPvzPoint?.address || undefined}
+                right={<span className="address-badge">Выбран</span>}
+                chevron={false}
+                divider={false}
+                position="single"
+              />
+            </div>
+          ) : null}
           {(Array.isArray(visiblePvz) ? visiblePvz : []).length ? (
             <div className="address-list">
               {(Array.isArray(visiblePvz) ? visiblePvz : []).map((point, idx) => {
@@ -740,7 +775,12 @@ export function AddressesPage() {
               })}
             </div>
           ) : null}
-          {pvzSearchDone && pvzQuery.trim().length >= 2 && visiblePvz.length === 0 ? (
+          {canExpandPvz ? (
+            <Button variant="secondary" onClick={() => setIsPvzExpanded(true)}>
+              Посмотреть все
+            </Button>
+          ) : null}
+          {pvzSearchDone && selectedCityCode && filteredPvz.length === 0 ? (
             <div className="address-muted">Ничего не найдено</div>
           ) : null}
         </Card>

@@ -36,9 +36,15 @@ type PaymentRequisiteAccount = {
   value: string;
 };
 
+type PaymentRequisiteSbp = {
+  display: string;
+  copyValue: string;
+};
+
 type PaymentRequisites = {
   recipient: string;
   accounts: PaymentRequisiteAccount[];
+  sbp: PaymentRequisiteSbp;
   note: string;
 };
 
@@ -51,6 +57,10 @@ const paymentRequisitesByOrigin: Record<ShippingOriginProfile, PaymentRequisites
         value: "2200 7010 7242 8243",
       },
     ],
+    sbp: {
+      display: "+7 (911) 715-59-60",
+      copyValue: "+79117155960",
+    },
     note: "перевод без комментария!",
   },
   ODN: {
@@ -65,6 +75,10 @@ const paymentRequisitesByOrigin: Record<ShippingOriginProfile, PaymentRequisites
         value: "2204320932362561",
       },
     ],
+    sbp: {
+      display: "+7 (900) 540-86-90",
+      copyValue: "+79005408690",
+    },
     note: "перевод без комментария!",
   },
 };
@@ -393,6 +407,19 @@ export function PaymentPage() {
                 </Button>
               </div>
             ))}
+            <div className="payment-requisites__account">
+              <div className="payment-requisites__account-main">
+                <div className="payment-requisites__bank">СБП</div>
+                <div className="payment-requisites__number">{requisites.sbp.display}</div>
+              </div>
+              <Button
+                variant="secondary"
+                className="payment-requisites__copy-btn"
+                onClick={() => void copyRequisiteValue(requisites.sbp.copyValue)}
+              >
+                {copiedRequisite === requisites.sbp.copyValue ? "Скопировано" : "Скопировать"}
+              </Button>
+            </div>
             <div className="payment-requisites__note">{requisites.note}</div>
           </div>
         </Card>
