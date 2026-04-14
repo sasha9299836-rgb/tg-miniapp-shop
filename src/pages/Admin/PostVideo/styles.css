@@ -65,7 +65,6 @@
 }
 
 .admin-post-video-page__info,
-.admin-post-video-page__current,
 .admin-post-video-page__muted {
   font-size: 12px;
   color: var(--muted);

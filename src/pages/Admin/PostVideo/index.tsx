@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../../shared/ui/Button";
 import { Page } from "../../../shared/ui/Page";
@@ -44,7 +44,7 @@ export function AdminPostVideoPage() {
         setVideoLinkInput("");
       }
     } catch (error) {
-      setErrorText(`Не удалось загрузить каталог: ${(error as Error).message}`);
+      setErrorText(`РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РєР°С‚Р°Р»РѕРі: ${(error as Error).message}`);
     } finally {
       setIsLoading(false);
     }
@@ -60,10 +60,10 @@ export function AdminPostVideoPage() {
     return items.filter((item) => {
       const haystack = [
         String(item.id),
-        item.postId,
         item.title,
         item.brand ?? "",
         item.size ?? "",
+        String(item.price ?? ""),
       ].join(" ").toLowerCase();
       return haystack.includes(normalized);
     });
@@ -76,20 +76,20 @@ export function AdminPostVideoPage() {
 
   const onSelectItem = (item: AdminCatalogVideoItem) => {
     setSelectedPostId(item.postId);
-    setVideoLinkInput(item.currentVideoUrl ?? "");
+    setVideoLinkInput("");
     setErrorText(null);
     setSuccessText(null);
   };
 
   const onSave = async () => {
     if (!selectedItem) {
-      setErrorText("Сначала выберите вещь из списка.");
+      setErrorText("РЎРЅР°С‡Р°Р»Р° РІС‹Р±РµСЂРёС‚Рµ РІРµС‰СЊ РёР· СЃРїРёСЃРєР°.");
       return;
     }
     const trimmed = videoLinkInput.trim();
     const normalized = normalizeVideoLink(trimmed);
     if (trimmed && !normalized) {
-      setErrorText("Укажите корректную https-ссылку на видео.");
+      setErrorText("РЈРєР°Р¶РёС‚Рµ РєРѕСЂСЂРµРєС‚РЅСѓСЋ https-СЃСЃС‹Р»РєСѓ РЅР° РІРёРґРµРѕ.");
       return;
     }
 
@@ -100,27 +100,27 @@ export function AdminPostVideoPage() {
       await saveCatalogPostVideoLink(selectedItem.postId, normalized);
       await loadItems();
       setVideoLinkInput(normalized ?? "");
-      setSuccessText(normalized ? "Ссылка на видео сохранена." : "Видео удалено из поста.");
+      setSuccessText(normalized ? "РЎСЃС‹Р»РєР° РЅР° РІРёРґРµРѕ СЃРѕС…СЂР°РЅРµРЅР°." : "Р’РёРґРµРѕ СѓРґР°Р»РµРЅРѕ РёР· РїРѕСЃС‚Р°.");
     } catch (error) {
-      setErrorText(`Не удалось сохранить ссылку: ${(error as Error).message}`);
+      setErrorText(`РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕС…СЂР°РЅРёС‚СЊ СЃСЃС‹Р»РєСѓ: ${(error as Error).message}`);
     } finally {
       setIsSaving(false);
     }
   };
 
   return (
-    <Page title="Добавить видео в пост" subtitle="Выберите вещь и сохраните ссылку на видео">
+    <Page title="Р”РѕР±Р°РІРёС‚СЊ РІРёРґРµРѕ РІ РїРѕСЃС‚" subtitle="Р’С‹Р±РµСЂРёС‚Рµ РІРµС‰СЊ Рё СЃРѕС…СЂР°РЅРёС‚Рµ СЃСЃС‹Р»РєСѓ РЅР° РІРёРґРµРѕ">
       <div className="admin-post-video-page">
         <input
           className="admin-post-video-page__search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Поиск по id / post_id / названию / бренду"
+          placeholder="Поиск"
         />
 
         <div className="admin-post-video-page__list">
-          {isLoading ? <div className="admin-post-video-page__muted">Загрузка каталога...</div> : null}
-          {!isLoading && !filteredItems.length ? <div className="admin-post-video-page__muted">Ничего не найдено.</div> : null}
+          {isLoading ? <div className="admin-post-video-page__muted">Р—Р°РіСЂСѓР·РєР° РєР°С‚Р°Р»РѕРіР°...</div> : null}
+          {!isLoading && !filteredItems.length ? <div className="admin-post-video-page__muted">РќРёС‡РµРіРѕ РЅРµ РЅР°Р№РґРµРЅРѕ.</div> : null}
           {filteredItems.map((item) => (
             <button
               key={item.postId}
@@ -136,8 +136,10 @@ export function AdminPostVideoPage() {
               />
               <div className="admin-post-video-page__meta">
                 <div className="admin-post-video-page__title">{item.title}</div>
-                <div className="admin-post-video-page__info">ID: {item.id} · post_id: {item.postId}</div>
-                <div className="admin-post-video-page__info">{item.brand ?? "Без бренда"} · {item.size ?? "Без размера"}</div>
+                {item.id != null ? <div className="admin-post-video-page__info">ID: {item.id}</div> : null}
+                <div className="admin-post-video-page__info">Бренд: {item.brand ?? "Без бренда"}</div>
+                <div className="admin-post-video-page__info">Размер: {item.size ?? "Без размера"}</div>
+                <div className="admin-post-video-page__info">Цена: {item.price.toLocaleString("ru-RU")} ₽</div>
               </div>
             </button>
           ))}
@@ -145,10 +147,7 @@ export function AdminPostVideoPage() {
 
         {selectedItem ? (
           <div className="glass admin-post-video-page__form">
-            <div className="admin-post-video-page__form-title">Выбрано: {selectedItem.title}</div>
-            <div className="admin-post-video-page__current">
-              Текущая ссылка: {selectedItem.currentVideoUrl ?? "не задана"}
-            </div>
+            <div className="admin-post-video-page__form-title">Р’С‹Р±СЂР°РЅРѕ: {selectedItem.title}</div>
             <input
               className="admin-post-video-page__input"
               value={videoLinkInput}
@@ -157,10 +156,10 @@ export function AdminPostVideoPage() {
             />
             <div className="admin-post-video-page__actions">
               <Button onClick={() => void onSave()} disabled={isSaving}>
-                {isSaving ? "Сохраняем..." : "Сохранить"}
+                {isSaving ? "РЎРѕС…СЂР°РЅСЏРµРј..." : "РЎРѕС…СЂР°РЅРёС‚СЊ"}
               </Button>
               <Button variant="secondary" onClick={() => nav("/admin")}>
-                Назад
+                РќР°Р·Р°Рґ
               </Button>
             </div>
           </div>
@@ -174,3 +173,4 @@ export function AdminPostVideoPage() {
 }
 
 export default AdminPostVideoPage;
+

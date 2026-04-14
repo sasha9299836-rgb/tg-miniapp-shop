@@ -109,15 +109,6 @@
   box-shadow: var(--shadow-sm);
 }
 
-.pcard__badge--video {
-  background: color-mix(in srgb, var(--accent) 14%, var(--surface) 86%);
-  border-color: color-mix(in srgb, var(--accent) 38%, var(--border) 62%);
-}
-
-.pcard__badge--video-with-new {
-  top: 44px;
-}
-
 .pcard__body {
   padding: 14px 14px 10px;
   background: var(--surface);

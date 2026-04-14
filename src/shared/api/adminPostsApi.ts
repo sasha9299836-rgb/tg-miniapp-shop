@@ -1154,6 +1154,7 @@ export type AdminCatalogVideoItem = {
   title: string;
   brand: string | null;
   size: string | null;
+  price: number;
   previewUrl: string | null;
   currentVideoUrl: string | null;
 };
@@ -1167,6 +1168,7 @@ export async function listAdminCatalogVideoItems(): Promise<AdminCatalogVideoIte
       title: product.title,
       brand: product.brand ?? null,
       size: product.size ?? null,
+      price: product.price,
       previewUrl: product.images[0] ?? null,
       currentVideoUrl: product.videoUrl ?? null,
     };

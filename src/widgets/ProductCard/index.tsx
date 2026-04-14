@@ -30,7 +30,6 @@ function ProductCardInner({
 
   const safeIndex = total ? index % total : 0;
   const current = total ? images[safeIndex] : undefined;
-  const hasVideo = Boolean(String(product.videoUrl ?? "").trim());
   const showOldPrice = typeof product.oldPrice === "number" && product.oldPrice > product.price;
   const cardTitle = useMemo(() => getProductDisplayTitle(product), [product.brand, product.title]);
 
@@ -141,11 +140,6 @@ function ProductCardInner({
         ) : null}
 
         {product.isNew ? <span className="pcard__badge">Новое</span> : null}
-        {hasVideo ? (
-          <span className={`pcard__badge pcard__badge--video ${product.isNew ? "pcard__badge--video-with-new" : ""}`}>
-            Есть видео
-          </span>
-        ) : null}
       </div>
 
       <div className="pcard__body" onClick={handleOpen} role="button" tabIndex={0}>

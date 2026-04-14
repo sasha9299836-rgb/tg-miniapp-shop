@@ -4,6 +4,11 @@
 }
 
 .admin-post-form-control::placeholder {
-  color: #9ca3af;
-  opacity: 1;
+  color: var(--muted);
+  opacity: 0.72;
+  transition: opacity 0.12s ease;
+}
+
+.admin-post-form-control:focus::placeholder {
+  opacity: 0;
 }
