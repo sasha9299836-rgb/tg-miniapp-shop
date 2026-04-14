@@ -538,14 +538,6 @@ export async function uploadDefectVideoViaProxy(input: {
   formData.append("mime_type", input.file.type || "video/mp4");
   formData.append("file", input.file);
 
-  console.log("DEFECT_VIDEO_BACKEND_UPLOAD_START", {
-    postId: input.post_id,
-    photoNo: input.photo_no,
-    fileName: input.file.name,
-    fileSize: input.file.size,
-    mimeType: input.file.type || "video/mp4",
-  });
-
   const maxAttempts = 3;
   let lastError: Error | null = null;
   let status = 0;
@@ -582,10 +574,6 @@ export async function uploadDefectVideoViaProxy(input: {
         };
 
         xhr.onload = () => {
-          console.log("DEFECT_VIDEO_BACKEND_UPLOAD_DONE", {
-            status: xhr.status,
-            responseText: xhr.responseText,
-          });
           input.onDebug?.({
             step: "DEFECT_VIDEO_BACKEND_UPLOAD_DONE",
             attempt,
@@ -601,10 +589,6 @@ export async function uploadDefectVideoViaProxy(input: {
 
         xhr.onerror = () => {
           const error = new Error("Network error during backend upload");
-          console.log("DEFECT_VIDEO_BACKEND_UPLOAD_ERROR", {
-            status: xhr.status,
-            readyState: xhr.readyState,
-          });
           input.onDebug?.({
             step: "DEFECT_VIDEO_BACKEND_UPLOAD_ERROR",
             attempt,
@@ -618,7 +602,6 @@ export async function uploadDefectVideoViaProxy(input: {
 
         xhr.ontimeout = () => {
           const error = new Error("Backend upload timeout");
-          console.log("DEFECT_VIDEO_BACKEND_UPLOAD_TIMEOUT");
           input.onDebug?.({
             step: "DEFECT_VIDEO_BACKEND_UPLOAD_TIMEOUT",
             attempt,
@@ -632,7 +615,6 @@ export async function uploadDefectVideoViaProxy(input: {
 
         xhr.onabort = () => {
           const error = new Error("Backend upload aborted");
-          console.log("DEFECT_VIDEO_BACKEND_UPLOAD_ABORT");
           input.onDebug?.({
             step: "DEFECT_VIDEO_BACKEND_UPLOAD_ABORT",
             attempt,

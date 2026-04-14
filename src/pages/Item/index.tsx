@@ -176,6 +176,10 @@ export function ItemPage() {
   }, [product]);
 
   useEffect(() => {
+    if (postVideoUrl) setIsVideoOpen(true);
+  }, [postVideoUrl]);
+
+  useEffect(() => {
     if (!isViewerOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setIsViewerOpen(false);
