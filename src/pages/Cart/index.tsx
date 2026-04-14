@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCartStore } from "../../entities/cart/model/useCartStore";
 import { useProductsStore } from "../../entities/product/model/useProductsStore";
@@ -84,7 +84,7 @@ export function CartPage() {
         saveSelectedPresetSelection(active?.id ?? null, manualSelected ? "manual" : "auto");
       } catch (error) {
         console.error("cart presets load failed", error);
-        setPresetError(isTgIdentityRequiredError(error) ? TG_IDENTITY_REQUIRED_MESSAGE : "Не удалось загрузить адрес получателя.");
+        setPresetError(isTgIdentityRequiredError(error) ? TG_IDENTITY_REQUIRED_MESSAGE : "РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ Р°РґСЂРµСЃ РїРѕР»СѓС‡Р°С‚РµР»СЏ.");
       }
     };
 
@@ -144,7 +144,7 @@ export function CartPage() {
       } catch (error) {
         console.error("cart delivery quote failed", error);
         setDeliveryQuote(null);
-        setDeliveryQuoteError("Не удалось рассчитать доставку. Проверьте адрес и попробуйте снова.");
+        setDeliveryQuoteError("РќРµ СѓРґР°Р»РѕСЃСЊ СЂР°СЃСЃС‡РёС‚Р°С‚СЊ РґРѕСЃС‚Р°РІРєСѓ. РџСЂРѕРІРµСЂСЊС‚Рµ Р°РґСЂРµСЃ Рё РїРѕРїСЂРѕР±СѓР№С‚Рµ СЃРЅРѕРІР°.");
       } finally {
         setIsDeliveryQuoteLoading(false);
       }
@@ -156,12 +156,13 @@ export function CartPage() {
   const deliveryTotalFee = deliveryQuote?.delivery_total_fee_rub ?? 0;
   const total = itemsSum + deliveryTotalFee;
   const totalQty = cart.totalQty();
+  const hasValidDeliveryAddress = Boolean(selectedPreset?.city_code && selectedPreset?.pvz_code);
 
   if (isChecking) {
     return (
       <Page>
         <div className="cart-page">
-          <div style={{ color: "var(--muted)" }}>Загрузка...</div>
+          <div style={{ color: "var(--muted)" }}>Р—Р°РіСЂСѓР·РєР°...</div>
         </div>
       </Page>
     );
@@ -173,7 +174,7 @@ export function CartPage() {
         <div className="cart-page">
           <div style={{ color: "#b42318" }}>{readinessErrorText}</div>
           <div className="cart-actions">
-            <Button onClick={() => nav("/catalog")}>В каталог</Button>
+            <Button onClick={() => nav("/catalog")}>Р’ РєР°С‚Р°Р»РѕРі</Button>
           </div>
         </div>
       </Page>
@@ -185,14 +186,14 @@ export function CartPage() {
       <Page>
         <div className="cart-page">
           <div className="cart-header">
-            <h1 className="cart-title">Корзина</h1>
+            <h1 className="cart-title">РљРѕСЂР·РёРЅР°</h1>
           </div>
           <EmptyState
-            title="Корзина пуста"
-            text="Добавьте товары из каталога, чтобы оформить заказ."
+            title="РљРѕСЂР·РёРЅР° РїСѓСЃС‚Р°"
+            text="Р”РѕР±Р°РІСЊС‚Рµ С‚РѕРІР°СЂС‹ РёР· РєР°С‚Р°Р»РѕРіР°, С‡С‚РѕР±С‹ РѕС„РѕСЂРјРёС‚СЊ Р·Р°РєР°Р·."
           />
           <div className="cart-actions">
-            <Button onClick={() => nav("/catalog")}>В каталог</Button>
+            <Button onClick={() => nav("/catalog")}>Р’ РєР°С‚Р°Р»РѕРі</Button>
           </div>
         </div>
       </Page>
@@ -203,9 +204,9 @@ export function CartPage() {
     <Page>
       <div className="cart-page">
         <div className="cart-header">
-          <h1 className="cart-title">Корзина</h1>
+          <h1 className="cart-title">РљРѕСЂР·РёРЅР°</h1>
           <Button variant="secondary" className="cart-clear" onClick={() => cart.clear()}>
-            Удалить все
+            РЈРґР°Р»РёС‚СЊ РІСЃРµ
           </Button>
         </div>
 
@@ -226,21 +227,21 @@ export function CartPage() {
                   ) : null}
                   <div className="cart-item__price">
                     {line.qty === 1
-                      ? `${line.product.price.toLocaleString("ru-RU")} ₽`
-                      : `${line.product.price.toLocaleString("ru-RU")} ₽ × ${line.qty} = ${line.lineSum.toLocaleString("ru-RU")} ₽`}
+                      ? `${line.product.price.toLocaleString("ru-RU")} в‚Ѕ`
+                      : `${line.product.price.toLocaleString("ru-RU")} в‚Ѕ Г— ${line.qty} = ${line.lineSum.toLocaleString("ru-RU")} в‚Ѕ`}
                   </div>
                 </div>
               </div>
 
               <div className="cart-item__actions">
-                <Button variant="secondary" onClick={() => void cart.remove({ id: line.productId, postId: line.product.postId })}>Удалить</Button>
+                <Button variant="secondary" onClick={() => void cart.remove({ id: line.productId, postId: line.product.postId })}>РЈРґР°Р»РёС‚СЊ</Button>
               </div>
             </Card>
           ))}
         </div>
 
         <Card className="ui-card--padded cart-recipient">
-          <div className="cart-section__title">Адрес доставки</div>
+          <div className="cart-section__title">РђРґСЂРµСЃ РґРѕСЃС‚Р°РІРєРё</div>
           {presets.length ? (
             <select
               className="cart-address-select"
@@ -266,29 +267,45 @@ export function CartPage() {
           ) : null}
 
           {presetError ? <div className="cart-muted">{presetError}</div> : null}
-          {!presets.length ? <div className="cart-muted">Адреса пока не добавлены.</div> : null}
+          {!presets.length ? (
+            <div className="cart-address-empty">
+              <div className="cart-muted">Адреса пока не добавлены.</div>
+              <Button variant="secondary" onClick={() => nav("/account/addresses")}>Добавить адрес доставки</Button>
+            </div>
+          ) : null}
         </Card>
 
         <Card className="ui-card--padded cart-total">
           <div className="cart-total__row">
-            <div className="cart-total__label">Товары ({totalQty})</div>
-            <div className="cart-total__value">{itemsSum.toLocaleString("ru-RU")} ₽</div>
+            <div className="cart-total__label">РўРѕРІР°СЂС‹ ({totalQty})</div>
+            <div className="cart-total__value">{itemsSum.toLocaleString("ru-RU")} в‚Ѕ</div>
           </div>
           <div className="cart-total__row">
-            <div className="cart-total__label">Доставка</div>
+            <div className="cart-total__label">Р”РѕСЃС‚Р°РІРєР°</div>
             <div className="cart-total__value">
-              {isDeliveryQuoteLoading ? "..." : `${deliveryTotalFee.toLocaleString("ru-RU")} ₽`}
+              {isDeliveryQuoteLoading ? "..." : `${deliveryTotalFee.toLocaleString("ru-RU")} в‚Ѕ`}
             </div>
           </div>
           <div className="cart-total__row cart-total__sum">
-            <div className="cart-total__label">Итого</div>
-            <div className="cart-total__value">{total.toLocaleString("ru-RU")} ₽</div>
+            <div className="cart-total__label">РС‚РѕРіРѕ</div>
+            <div className="cart-total__value">{total.toLocaleString("ru-RU")} в‚Ѕ</div>
           </div>
           {deliveryQuoteError ? <div className="cart-muted">{deliveryQuoteError}</div> : null}
           {!deliveryQuote && !isDeliveryQuoteLoading ? (
-            <div className="cart-muted">Стоимость доставки появится после выбора валидного адреса.</div>
+            <div className="cart-muted">РЎС‚РѕРёРјРѕСЃС‚СЊ РґРѕСЃС‚Р°РІРєРё РїРѕСЏРІРёС‚СЃСЏ РїРѕСЃР»Рµ РІС‹Р±РѕСЂР° РІР°Р»РёРґРЅРѕРіРѕ Р°РґСЂРµСЃР°.</div>
           ) : null}
-          <Button onClick={() => nav("/checkout")}>Перейти к оплате</Button>
+          {!hasValidDeliveryAddress ? (
+            <div className="cart-checkout-error">Нельзя перейти к оплате, пока не добавите адрес доставки.</div>
+          ) : null}
+          <Button
+            disabled={!hasValidDeliveryAddress}
+            onClick={() => {
+              if (!hasValidDeliveryAddress) return;
+              nav("/checkout");
+            }}
+          >
+            Перейти к оплате
+          </Button>
         </Card>
       </div>
     </Page>
@@ -296,3 +313,4 @@ export function CartPage() {
 }
 
 export default CartPage;
+

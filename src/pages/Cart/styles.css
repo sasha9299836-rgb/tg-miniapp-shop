@@ -109,6 +109,11 @@
   font-size: 13px;
 }
 
+.cart-address-empty {
+  display: grid;
+  gap: 8px;
+}
+
 .cart-recipient__content {
   display: grid;
   gap: 4px;
@@ -157,6 +162,11 @@
 .cart-total__sum .cart-total__label,
 .cart-total__sum .cart-total__value {
   font-weight: 700;
+}
+
+.cart-checkout-error {
+  color: #b42318;
+  font-size: 13px;
 }
 
 .cart-actions {

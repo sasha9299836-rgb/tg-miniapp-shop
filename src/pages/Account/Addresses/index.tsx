@@ -651,149 +651,154 @@ export function AddressesPage() {
 
     return (
       <Page title="Адрес">
-        <Card className="ui-card--padded address-section">
-          <div className="address-section__title">Параметры адреса</div>
-          <Input
-            placeholder="Название адреса"
-            value={form.name}
-            onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-          />
-          <FioInput
-            placeholder="Введите ФИО"
-            value={form.recipientFio}
-            onChange={(value) => setForm((prev) => ({ ...prev, recipientFio: value }))}
-          />
-          <PhoneInput
-            placeholder="+7(XXX) XXX-XX-XX"
-            value={form.recipientPhone}
-            onChange={(value) => setForm((prev) => ({ ...prev, recipientPhone: value }))}
-          />
-        </Card>
+        <div className="address-edit-content">
+          <Card className="ui-card--padded address-section">
+            <div className="address-section__title">Параметры адреса</div>
+            <Input
+              placeholder="Название адреса"
+              value={form.name}
+              onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+            />
+            <FioInput
+              placeholder="Введите ФИО"
+              value={form.recipientFio}
+              onChange={(value) => setForm((prev) => ({ ...prev, recipientFio: value }))}
+            />
+            <PhoneInput
+              placeholder="+7(XXX) XXX-XX-XX"
+              value={form.recipientPhone}
+              onChange={(value) => setForm((prev) => ({ ...prev, recipientPhone: value }))}
+            />
+          </Card>
 
-        <Card className="ui-card--padded address-section">
-          <div className="address-section__title">Город</div>
-          <Input
-            placeholder="Поиск города..."
-            value={cityQuery}
-            onChange={(event) => {
-              const nextValue = event.target.value;
-              setCityQuery(nextValue);
-              if (nextValue.trim()) {
-                setSelectedCityRegion("");
-                setCityOptions([]);
-                resetCityAndPvzSelection();
-              }
-            }}
-          />
-          {cityValue ? (
-            <div className="address-selected-card">
-              <ListItem
-                title={cityValue}
-                subtitle={selectedCityRegion || undefined}
-                right={<span className="address-badge">Выбран</span>}
-                chevron={false}
-                divider={false}
-                position="single"
-              />
-            </div>
-          ) : null}
-          {(Array.isArray(cityOptions) ? cityOptions : []).length ? (
-            <div className="address-list">
-              {(Array.isArray(cityOptions) ? cityOptions : []).map((city, idx) => (
+          <Card className="ui-card--padded address-section">
+            <div className="address-section__title">Город</div>
+            <Input
+              placeholder="Поиск города..."
+              value={cityQuery}
+              onChange={(event) => {
+                const nextValue = event.target.value;
+                setCityQuery(nextValue);
+                if (nextValue.trim()) {
+                  setSelectedCityRegion("");
+                  setCityOptions([]);
+                  resetCityAndPvzSelection();
+                }
+              }}
+            />
+            {cityValue ? (
+              <div className="address-selected-card">
                 <ListItem
-                  key={`${city.code ?? "none"}-${city.label}-${idx}`}
-                  title={city.label}
-                  subtitle={city.region}
-                  onClick={() => {
-                    setSelectedCityCode(city.code);
-                    setCityValue(city.label);
-                    setSelectedCityRegion(city.region);
-                    setCityQuery("");
-                    setCityOptions([]);
-                    setCitySearchDone(false);
-                    resetPvzSelection();
-                  }}
-                  right={cityValue === city.label ? <span className="address-badge">Выбран</span> : null}
+                  title={cityValue}
+                  subtitle={selectedCityRegion || undefined}
+                  right={<span className="address-badge">Выбран</span>}
                   chevron={false}
-                  divider={idx !== cityOptions.length - 1}
-                  position={idx === 0 ? "first" : idx === cityOptions.length - 1 ? "last" : "middle"}
+                  divider={false}
+                  position="single"
                 />
-              ))}
-            </div>
-          ) : null}
-          {citySearchDone && cityQuery.trim().length >= 2 && cityOptions.length === 0 ? (
-            <div className="address-muted">Ничего не найдено</div>
-          ) : null}
-        </Card>
-
-        <Card className="ui-card--padded address-section">
-          <div className="address-section__title">Пункт выдачи СДЭК</div>
-          <Input
-            placeholder="Поиск ПВЗ..."
-            value={pvzQuery}
-            onChange={(event) => {
-              const nextValue = event.target.value;
-              setPvzQuery(nextValue);
-              if (!nextValue.trim()) {
-                setIsPvzExpanded(false);
-              }
-            }}
-          />
-          {pvzValue ? (
-            <div className="address-selected-card">
-              <ListItem
-                title={selectedPvzPoint?.name ?? pvzValue}
-                subtitle={selectedPvzPoint?.address || undefined}
-                right={<span className="address-badge">Выбран</span>}
-                chevron={false}
-                divider={false}
-                position="single"
-              />
-            </div>
-          ) : null}
-          {(Array.isArray(visiblePvz) ? visiblePvz : []).length ? (
-            <div className="address-list">
-              {(Array.isArray(visiblePvz) ? visiblePvz : []).map((point, idx) => {
-                const label = [point.name, point.address].filter(Boolean).join(", ");
-                const isSelected = selectedPvzCode === point.code;
-                return (
+              </div>
+            ) : null}
+            {(Array.isArray(cityOptions) ? cityOptions : []).length ? (
+              <div className="address-list">
+                {(Array.isArray(cityOptions) ? cityOptions : []).map((city, idx) => (
                   <ListItem
-                    key={point.code}
-                    title={point.name}
-                    subtitle={point.address}
+                    key={`${city.code ?? "none"}-${city.label}-${idx}`}
+                    title={city.label}
+                    subtitle={city.region}
                     onClick={() => {
-                      setSelectedPvzCode(point.code);
-                      setPvzValue(label);
-                      setNoticeText("Пункт выдачи выбран.");
+                      setSelectedCityCode(city.code);
+                      setCityValue(city.label);
+                      setSelectedCityRegion(city.region);
+                      setCityQuery("");
+                      setCityOptions([]);
+                      setCitySearchDone(false);
+                      resetPvzSelection();
                     }}
-                    right={isSelected ? <span className="address-badge">Выбран</span> : null}
+                    right={cityValue === city.label ? <span className="address-badge">Выбран</span> : null}
                     chevron={false}
-                    divider={idx !== visiblePvz.length - 1}
-                    position={idx === 0 ? "first" : idx === visiblePvz.length - 1 ? "last" : "middle"}
+                    divider={idx !== cityOptions.length - 1}
+                    position={idx === 0 ? "first" : idx === cityOptions.length - 1 ? "last" : "middle"}
                   />
-                );
-              })}
-            </div>
-          ) : null}
-          {canExpandPvz ? (
-            <Button variant="secondary" onClick={() => setIsPvzExpanded(true)}>
-              Посмотреть все
-            </Button>
-          ) : null}
-          {pvzSearchDone && selectedCityCode && filteredPvz.length === 0 ? (
-            <div className="address-muted">Ничего не найдено</div>
-          ) : null}
-        </Card>
+                ))}
+              </div>
+            ) : null}
+            {citySearchDone && cityQuery.trim().length >= 2 && cityOptions.length === 0 ? (
+              <div className="address-muted">Ничего не найдено</div>
+            ) : null}
+          </Card>
 
-        <div className="address-actions">
+          <Card className="ui-card--padded address-section">
+            <div className="address-section__title">Пункт выдачи СДЭК</div>
+            <Input
+              placeholder="Поиск ПВЗ..."
+              value={pvzQuery}
+              onChange={(event) => {
+                const nextValue = event.target.value;
+                setPvzQuery(nextValue);
+                if (!nextValue.trim()) {
+                  setIsPvzExpanded(false);
+                }
+              }}
+            />
+            {pvzValue ? (
+              <div className="address-selected-card">
+                <ListItem
+                  title={selectedPvzPoint?.name ?? pvzValue}
+                  subtitle={selectedPvzPoint?.address || undefined}
+                  right={<span className="address-badge">Выбран</span>}
+                  chevron={false}
+                  divider={false}
+                  position="single"
+                />
+              </div>
+            ) : null}
+            {(Array.isArray(visiblePvz) ? visiblePvz : []).length ? (
+              <div className="address-list">
+                {(Array.isArray(visiblePvz) ? visiblePvz : []).map((point, idx) => {
+                  const label = [point.name, point.address].filter(Boolean).join(", ");
+                  const isSelected = selectedPvzCode === point.code;
+                  return (
+                    <ListItem
+                      key={point.code}
+                      title={point.name}
+                      subtitle={point.address}
+                      onClick={() => {
+                        setSelectedPvzCode(point.code);
+                        setPvzValue(label);
+                        setNoticeText("Пункт выдачи выбран.");
+                      }}
+                      right={isSelected ? <span className="address-badge">Выбран</span> : null}
+                      chevron={false}
+                      divider={idx !== visiblePvz.length - 1}
+                      position={idx === 0 ? "first" : idx === visiblePvz.length - 1 ? "last" : "middle"}
+                    />
+                  );
+                })}
+              </div>
+            ) : null}
+            {canExpandPvz ? (
+              <Button variant="secondary" onClick={() => setIsPvzExpanded(true)}>
+                Посмотреть все
+              </Button>
+            ) : null}
+            {pvzSearchDone && selectedCityCode && filteredPvz.length === 0 ? (
+              <div className="address-muted">Ничего не найдено</div>
+            ) : null}
+          </Card>
+
+          <div className="address-actions address-actions--edit">
+            <Button variant="secondary" onClick={cancelEdit}>Отмена</Button>
+          </div>
+
+          {errorText ? <div className="address-error">{errorText}</div> : null}
+          {cdekWarningText ? <div className="address-warning">{cdekWarningText}</div> : null}
+        </div>
+
+        <div className="address-save-sticky">
           <Button onClick={() => void onSaveAddress()} disabled={isSaving}>
             {isSaving ? "Сохраняем..." : "Сохранить"}
           </Button>
-          <Button variant="secondary" onClick={cancelEdit}>Отмена</Button>
         </div>
-
-        {errorText ? <div className="address-error">{errorText}</div> : null}
-        {cdekWarningText ? <div className="address-warning">{cdekWarningText}</div> : null}
       </Page>
     );
   }

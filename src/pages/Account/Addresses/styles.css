@@ -143,6 +143,31 @@
   gap: 8px;
 }
 
+.address-actions--edit {
+  margin-bottom: 4px;
+}
+
+.address-edit-content {
+  display: grid;
+  gap: 18px;
+  padding-bottom: calc(var(--tabbar-h, 70px) + var(--safe-bottom, 0px) + 92px);
+}
+
+.address-save-sticky {
+  position: fixed;
+  left: var(--page-pad-x, 16px);
+  right: var(--page-pad-x, 16px);
+  bottom: calc(var(--tabbar-h, 70px) + var(--safe-bottom, 0px) + 8px);
+  z-index: 40;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
 .address-checkbox {
   display: flex;
   align-items: center;
