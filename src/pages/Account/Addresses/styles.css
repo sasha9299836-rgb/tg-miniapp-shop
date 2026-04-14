@@ -150,7 +150,7 @@
 .address-edit-content {
   display: grid;
   gap: 18px;
-  padding-bottom: calc(var(--tabbar-h, 70px) + var(--safe-bottom, 0px) + 120px);
+  padding-bottom: calc(var(--tabbar-h, 70px) + var(--safe-bottom, 0px) + 140px);
 }
 
 .address-save-sticky {
@@ -161,8 +161,8 @@
     calc(430px - (var(--page-pad-x, 16px) * 2))
   );
   transform: translateX(-50%);
-  bottom: calc(var(--tabbar-h, 70px) + var(--safe-bottom, 0px) + 16px);
-  z-index: 40;
+  bottom: calc(var(--tabbar-h, 70px) + var(--safe-bottom, 0px) + 28px);
+  z-index: 60;
   padding: 10px 12px;
   border-radius: 14px;
   border: 1px solid var(--border);

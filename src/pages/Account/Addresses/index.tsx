@@ -230,10 +230,6 @@ export function AddressesPage() {
     () => !pvzQuery.trim() && !isPvzExpanded && filteredPvz.length > 5,
     [filteredPvz.length, isPvzExpanded, pvzQuery],
   );
-  const selectedPvzPoint = useMemo(
-    () => (selectedPvzCode ? (Array.isArray(pvzList) ? pvzList : []).find((point) => point.code === selectedPvzCode) ?? null : null),
-    [pvzList, selectedPvzCode],
-  );
   const currentEditingAddress = useMemo(
     () => addresses.find((row) => row.id === editingAddressId) ?? null,
     [addresses, editingAddressId],
@@ -740,18 +736,6 @@ export function AddressesPage() {
                 }
               }}
             />
-            {pvzValue ? (
-              <div className="address-selected-card">
-                <ListItem
-                  title={selectedPvzPoint?.name ?? pvzValue}
-                  subtitle={selectedPvzPoint?.address || undefined}
-                  right={<span className="address-badge">Выбран</span>}
-                  chevron={false}
-                  divider={false}
-                  position="single"
-                />
-              </div>
-            ) : null}
             {(Array.isArray(visiblePvz) ? visiblePvz : []).length ? (
               <div className="address-list">
                 {(Array.isArray(visiblePvz) ? visiblePvz : []).map((point, idx) => {
