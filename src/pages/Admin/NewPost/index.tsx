@@ -216,6 +216,9 @@ const UPLOAD_MAX_ATTEMPTS = 3;
 const CONSIGNMENT_PUBLISH_COOLDOWN_MS = 600;
 const MAIN_UPLOAD_RETRY_DELAYS_MS = [0, 500, 1000] as const;
 const MAIN_UPLOAD_INTER_FILE_DELAY_MS = 300;
+const DEFECT_VIDEO_PART_UPLOAD_TIMEOUT_MS = 120_000;
+const DEFECT_VIDEO_PART_UPLOAD_MAX_ATTEMPTS = 3;
+const DEFECT_VIDEO_PART_UPLOAD_RETRY_DELAY_MS = 600;
 
 function inferMediaTypeFromUrl(url: string): "image" | "video" {
   return /\.(mp4|mov)(?:$|\?)/i.test(url) ? "video" : "image";
@@ -316,7 +319,9 @@ function uploadPartToPresignedUrl(
     });
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url);
+    xhr.timeout = DEFECT_VIDEO_PART_UPLOAD_TIMEOUT_MS;
     xhr.onload = () => {
+      const etag = xhr.getResponseHeader("ETag") || xhr.getResponseHeader("etag");
       console.log("DEFECT_VIDEO_PART_UPLOAD_DONE", {
         partNumber: meta.partNumber,
         chunkSize: meta.chunkSize,
@@ -324,10 +329,11 @@ function uploadPartToPresignedUrl(
         status: xhr.status,
         readyState: xhr.readyState,
         responseText: xhr.responseText,
+        responseHeaders: xhr.getAllResponseHeaders(),
+        etag,
         durationMs: Date.now() - startedAt,
       });
       if (xhr.status >= 200 && xhr.status < 300) {
-        const etag = xhr.getResponseHeader("ETag") || xhr.getResponseHeader("etag");
         if (!etag) {
           reject(new Error("Upload failed: missing ETag"));
           return;
@@ -345,6 +351,7 @@ function uploadPartToPresignedUrl(
         status: xhr.status,
         readyState: xhr.readyState,
         responseText: xhr.responseText,
+        responseHeaders: xhr.getAllResponseHeaders(),
         durationMs: Date.now() - startedAt,
       });
       reject(new Error("Network error during upload"));
@@ -357,6 +364,7 @@ function uploadPartToPresignedUrl(
         status: xhr.status,
         readyState: xhr.readyState,
         responseText: xhr.responseText,
+        responseHeaders: xhr.getAllResponseHeaders(),
         durationMs: Date.now() - startedAt,
       });
       reject(new Error("Upload aborted"));
@@ -369,6 +377,7 @@ function uploadPartToPresignedUrl(
         status: xhr.status,
         readyState: xhr.readyState,
         responseText: xhr.responseText,
+        responseHeaders: xhr.getAllResponseHeaders(),
         durationMs: Date.now() - startedAt,
       });
       reject(new Error("Upload timeout"));
@@ -1431,10 +1440,30 @@ export function AdminNewPostPage() {
               start,
               end,
             });
-            const etag = await uploadPartToPresignedUrl(part.url, chunk, {
-              partNumber,
-              chunkSize: chunk.size,
-            });
+            let etag = "";
+            for (let attempt = 1; attempt <= DEFECT_VIDEO_PART_UPLOAD_MAX_ATTEMPTS; attempt += 1) {
+              try {
+                etag = await uploadPartToPresignedUrl(part.url, chunk, {
+                  partNumber,
+                  chunkSize: chunk.size,
+                });
+                break;
+              } catch (error) {
+                const message = error instanceof Error ? error.message : String(error ?? "");
+                const canRetry = attempt < DEFECT_VIDEO_PART_UPLOAD_MAX_ATTEMPTS
+                  && (message.includes("Network error") || message.includes("timeout") || message.includes("aborted"));
+                console.log("DEFECT_VIDEO_PART_UPLOAD_RETRY", {
+                  partNumber,
+                  attempt,
+                  canRetry,
+                  error: message,
+                });
+                if (!canRetry) {
+                  throw error;
+                }
+                await delay(DEFECT_VIDEO_PART_UPLOAD_RETRY_DELAY_MS);
+              }
+            }
             uploadedParts.push({ PartNumber: partNumber, ETag: etag });
           }
           logUploadStep(item.localId, "defect video parts upload finish", { parts: uploadedParts.length });
