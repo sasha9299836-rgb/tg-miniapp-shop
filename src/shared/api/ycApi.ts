@@ -75,6 +75,45 @@ type DefectVideoMultipartCompleteResponse = {
   details?: unknown;
 };
 
+type DefectVideoRelayStartResponse = {
+  ok?: boolean;
+  session_id?: string;
+  post_id?: string;
+  photo_no?: number;
+  storage_key?: string;
+  public_url?: string;
+  part_size?: number;
+  error?: string;
+  message?: string;
+  details?: unknown;
+};
+
+type DefectVideoRelayPartResponse = {
+  ok?: boolean;
+  session_id?: string;
+  part_number?: number;
+  etag?: string;
+  chunk_size?: number;
+  already_uploaded?: boolean;
+  error?: string;
+  message?: string;
+  details?: unknown;
+};
+
+type DefectVideoRelayCompleteResponse = {
+  ok?: boolean;
+  session_id?: string;
+  id?: number | null;
+  post_id?: string;
+  photo_no?: number;
+  storage_key?: string;
+  public_url?: string;
+  media_type?: "video";
+  error?: string;
+  message?: string;
+  details?: unknown;
+};
+
 export type MainUploadDebugEvent = {
   step:
     | "prepare"
@@ -805,4 +844,214 @@ export async function completeDefectVideoMultipartViaProxy(input: {
   return {
     storage_key: data.storage_key,
   };
+}
+
+export async function startDefectVideoRelayViaProxy(input: {
+  post_id: string;
+  photo_no: number;
+  mime: string;
+  file_size: number;
+}): Promise<{ session_id: string; storage_key: string; public_url: string; part_size: number; photo_no: number }> {
+  await ensureAdminRuntimeReady();
+  const token = readAdminToken();
+  if (!token) {
+    throw new Error("ADMIN_TOKEN_MISSING");
+  }
+
+  const base = getCdekProxyBaseUrl();
+  const endpoint = `${base}/api/admin/defect-video/relay/start`;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      post_id: input.post_id,
+      photo_no: input.photo_no,
+      mime: input.mime,
+      file_size: input.file_size,
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`DEFECT_VIDEO_RELAY_START_FAILED ${response.status} ${text}`.trim());
+  }
+
+  const data = (await response.json().catch(() => null)) as DefectVideoRelayStartResponse | null;
+  if (!data?.ok || !data.session_id || !data.storage_key || !data.public_url || !Number.isFinite(Number(data.part_size))) {
+    throw new Error("DEFECT_VIDEO_RELAY_START_INVALID_RESPONSE");
+  }
+
+  return {
+    session_id: data.session_id,
+    storage_key: data.storage_key,
+    public_url: data.public_url,
+    part_size: Number(data.part_size),
+    photo_no: Number(data.photo_no),
+  };
+}
+
+export async function uploadDefectVideoRelayPartViaProxy(input: {
+  session_id: string;
+  part_number: number;
+  chunk: Blob;
+  onProgress?: (event: { loaded: number; total: number }) => void;
+  onDebug?: (event: {
+    step: string;
+    status?: number;
+    readyState?: number;
+    responseText?: string;
+    loaded?: number;
+    total?: number;
+  }) => void;
+}): Promise<{ etag: string; part_number: number; chunk_size: number; already_uploaded: boolean }> {
+  await ensureAdminRuntimeReady();
+  const token = readAdminToken();
+  if (!token) {
+    throw new Error("ADMIN_TOKEN_MISSING");
+  }
+
+  const base = getCdekProxyBaseUrl();
+  const endpoint = `${base}/api/admin/defect-video/relay/part`;
+  const formData = new FormData();
+  formData.append("session_id", input.session_id);
+  formData.append("part_number", String(input.part_number));
+  formData.append("file", input.chunk, `part-${input.part_number}.chunk`);
+
+  const result = await new Promise<{ status: number; responseText: string }>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", endpoint);
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.timeout = 120_000;
+
+    input.onDebug?.({ step: "RELAY_PART_REQUEST_START" });
+
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable) return;
+      input.onProgress?.({ loaded: event.loaded, total: event.total });
+      input.onDebug?.({
+        step: "RELAY_PART_REQUEST_PROGRESS",
+        loaded: event.loaded,
+        total: event.total,
+      });
+    };
+
+    xhr.onload = () => {
+      input.onDebug?.({
+        step: "RELAY_PART_REQUEST_DONE",
+        status: xhr.status,
+        readyState: xhr.readyState,
+        responseText: xhr.responseText,
+      });
+      resolve({ status: xhr.status, responseText: xhr.responseText ?? "" });
+    };
+
+    xhr.onerror = () => {
+      input.onDebug?.({
+        step: "RELAY_PART_REQUEST_ERROR",
+        status: xhr.status,
+        readyState: xhr.readyState,
+        responseText: xhr.responseText,
+      });
+      reject(new Error("Network error during relay part upload"));
+    };
+
+    xhr.ontimeout = () => {
+      input.onDebug?.({
+        step: "RELAY_PART_REQUEST_TIMEOUT",
+        status: xhr.status,
+        readyState: xhr.readyState,
+        responseText: xhr.responseText,
+      });
+      reject(new Error("Relay part upload timeout"));
+    };
+
+    xhr.onabort = () => {
+      input.onDebug?.({
+        step: "RELAY_PART_REQUEST_ABORT",
+        status: xhr.status,
+        readyState: xhr.readyState,
+        responseText: xhr.responseText,
+      });
+      reject(new Error("Relay part upload aborted"));
+    };
+
+    xhr.send(formData);
+  });
+
+  if (result.status < 200 || result.status >= 300) {
+    throw new Error(`DEFECT_VIDEO_RELAY_PART_FAILED ${result.status} ${result.responseText}`.trim());
+  }
+
+  const data = (result.responseText ? JSON.parse(result.responseText) : null) as DefectVideoRelayPartResponse | null;
+  if (!data?.ok || !data.etag || !Number.isFinite(Number(data.part_number))) {
+    throw new Error("DEFECT_VIDEO_RELAY_PART_INVALID_RESPONSE");
+  }
+
+  return {
+    etag: data.etag,
+    part_number: Number(data.part_number),
+    chunk_size: Number(data.chunk_size ?? 0),
+    already_uploaded: Boolean(data.already_uploaded),
+  };
+}
+
+export async function completeDefectVideoRelayViaProxy(input: {
+  session_id: string;
+}): Promise<{ id: number | null; storage_key: string; public_url: string; photo_no: number }> {
+  await ensureAdminRuntimeReady();
+  const token = readAdminToken();
+  if (!token) {
+    throw new Error("ADMIN_TOKEN_MISSING");
+  }
+
+  const base = getCdekProxyBaseUrl();
+  const endpoint = `${base}/api/admin/defect-video/relay/complete`;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      session_id: input.session_id,
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`DEFECT_VIDEO_RELAY_COMPLETE_FAILED ${response.status} ${text}`.trim());
+  }
+
+  const data = (await response.json().catch(() => null)) as DefectVideoRelayCompleteResponse | null;
+  if (!data?.ok || !data.storage_key || !data.public_url || !Number.isFinite(Number(data.photo_no))) {
+    throw new Error("DEFECT_VIDEO_RELAY_COMPLETE_INVALID_RESPONSE");
+  }
+
+  return {
+    id: data.id ?? null,
+    storage_key: data.storage_key,
+    public_url: data.public_url,
+    photo_no: Number(data.photo_no),
+  };
+}
+
+export async function abortDefectVideoRelayViaProxy(input: { session_id: string }): Promise<void> {
+  await ensureAdminRuntimeReady();
+  const token = readAdminToken();
+  if (!token) {
+    throw new Error("ADMIN_TOKEN_MISSING");
+  }
+  const base = getCdekProxyBaseUrl();
+  const endpoint = `${base}/api/admin/defect-video/relay/abort`;
+  await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ session_id: input.session_id }),
+  });
 }
