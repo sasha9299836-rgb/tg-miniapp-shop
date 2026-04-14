@@ -468,6 +468,52 @@ export async function uploadDefectMediaViaProxy(input: {
   };
 }
 
+export async function uploadDefectVideoViaProxy(input: {
+  post_id: string;
+  photo_no: number;
+  file: File;
+}): Promise<{ id: number | null; key: string; url: string; photo_no: number; media_type: "video" }> {
+  await ensureAdminRuntimeReady();
+  const token = readAdminToken();
+  if (!token) {
+    throw new Error("ADMIN_TOKEN_MISSING");
+  }
+
+  const base = getCdekProxyBaseUrl();
+  const endpoint = `${base}/api/admin/defect-video/upload`;
+  const formData = new FormData();
+  formData.append("post_id", input.post_id);
+  formData.append("photo_no", String(input.photo_no));
+  formData.append("mime_type", input.file.type || "video/mp4");
+  formData.append("file", input.file);
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`DEFECT_VIDEO_UPLOAD_FAILED ${response.status} ${text}`.trim());
+  }
+
+  const data = (await response.json().catch(() => null)) as DefectUploadViaProxyResponse | null;
+  if (!data?.ok || !data.storage_key || !data.public_url || !Number.isFinite(Number(data.photo_no))) {
+    throw new Error("DEFECT_VIDEO_UPLOAD_INVALID_RESPONSE");
+  }
+
+  return {
+    id: data.id ?? null,
+    key: data.storage_key,
+    url: data.public_url,
+    photo_no: Number(data.photo_no),
+    media_type: "video",
+  };
+}
+
 export async function presignDefectVideoViaProxy(input: {
   post_id: string;
   item_id: number | null;
