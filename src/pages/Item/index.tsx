@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useProductsStore } from "../../entities/product/model/useProductsStore";
 import { useFavoritesStore } from "../../entities/favorites/model/useFavoritesStore";
@@ -11,6 +11,107 @@ import { FavoriteButton } from "../../shared/ui/FavoriteButton";
 import { Page } from "../../shared/ui/Page";
 import { ProductThumb } from "../../shared/ui/ProductThumb";
 import "./styles.css";
+
+type PinchZoomImageProps = {
+  src?: string;
+  alt: string;
+  wrapperClassName: string;
+  imageClassName: string;
+  onInteraction?: () => void;
+};
+
+function getTouchDistance(a: { clientX: number; clientY: number }, b: { clientX: number; clientY: number }) {
+  const dx = b.clientX - a.clientX;
+  const dy = b.clientY - a.clientY;
+  return Math.hypot(dx, dy);
+}
+
+function PinchZoomImage({ src, alt, wrapperClassName, imageClassName, onInteraction }: PinchZoomImageProps) {
+  const [scale, setScale] = useState(1);
+  const [translate, setTranslate] = useState({ x: 0, y: 0 });
+  const pinchStartDistanceRef = useRef<number | null>(null);
+  const pinchStartScaleRef = useRef(1);
+  const panStartRef = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
+
+  const resetZoom = () => {
+    setScale(1);
+    setTranslate({ x: 0, y: 0 });
+  };
+
+  const handleTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+    if (event.touches.length === 2) {
+      pinchStartDistanceRef.current = getTouchDistance(event.touches[0], event.touches[1]);
+      pinchStartScaleRef.current = scale;
+      panStartRef.current = null;
+      return;
+    }
+    if (event.touches.length === 1 && scale > 1) {
+      const touch = event.touches[0];
+      panStartRef.current = { x: touch.clientX, y: touch.clientY, tx: translate.x, ty: translate.y };
+    }
+  };
+
+  const handleTouchMove = (event: TouchEvent<HTMLDivElement>) => {
+    if (event.touches.length === 2 && pinchStartDistanceRef.current) {
+      const distance = getTouchDistance(event.touches[0], event.touches[1]);
+      if (distance > 0) {
+        const nextScale = Math.min(4, Math.max(1, pinchStartScaleRef.current * (distance / pinchStartDistanceRef.current)));
+        setScale(nextScale);
+        onInteraction?.();
+      }
+      return;
+    }
+
+    if (event.touches.length === 1 && panStartRef.current && scale > 1) {
+      const touch = event.touches[0];
+      const nextX = panStartRef.current.tx + (touch.clientX - panStartRef.current.x);
+      const nextY = panStartRef.current.ty + (touch.clientY - panStartRef.current.y);
+      const maxShift = ((scale - 1) * 100) / 2;
+      setTranslate({
+        x: Math.min(maxShift, Math.max(-maxShift, nextX)),
+        y: Math.min(maxShift, Math.max(-maxShift, nextY)),
+      });
+      onInteraction?.();
+    }
+  };
+
+  const handleTouchEnd = (event: TouchEvent<HTMLDivElement>) => {
+    if (event.touches.length < 2) pinchStartDistanceRef.current = null;
+    if (event.touches.length === 0) panStartRef.current = null;
+    if (scale <= 1.01) {
+      setScale(1);
+      setTranslate({ x: 0, y: 0 });
+    }
+  };
+
+  const handleDoubleClick = () => {
+    if (scale > 1) {
+      resetZoom();
+      return;
+    }
+    setScale(2);
+  };
+
+  return (
+    <div
+      className={`${wrapperClassName} ${scale > 1 ? "is-zoomed" : ""}`.trim()}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onDoubleClick={handleDoubleClick}
+    >
+      {src ? (
+        <img
+          className={imageClassName}
+          src={src}
+          alt={alt}
+          draggable={false}
+          style={{ transform: `translate(${translate.x}px, ${translate.y}px) scale(${scale})` }}
+        />
+      ) : null}
+    </div>
+  );
+}
 
 function buildVideoPosterFromFirstFrame(url: string): Promise<string | null> {
   return new Promise((resolve) => {
@@ -100,6 +201,7 @@ export function ItemPage() {
   const [isDefectsOpen, setIsDefectsOpen] = useState(false);
   const [videoPosterByUrl, setVideoPosterByUrl] = useState<Record<string, string>>({});
   const defectsSectionRef = useRef<HTMLDivElement | null>(null);
+  const suppressViewerOpenRef = useRef(false);
 
   useEffect(() => {
     if (!products.length) void load();
@@ -242,7 +344,15 @@ export function ItemPage() {
     nav(location.pathname, { replace: true, state: null });
   }, [location.pathname, location.state, markReviewed, nav, product]);
 
+  const markGalleryInteraction = () => {
+    suppressViewerOpenRef.current = true;
+    window.setTimeout(() => {
+      suppressViewerOpenRef.current = false;
+    }, 120);
+  };
+
   const openViewer = (list: string[], index: number) => {
+    if (suppressViewerOpenRef.current) return;
     setViewerImages(list);
     setPhotoIndex(index);
     setIsViewerOpen(true);
@@ -319,11 +429,12 @@ export function ItemPage() {
         <button type="button" className="item-back-top" onClick={goBack}>Назад</button>
 
         <div className="item-photo" role="button" tabIndex={0} onClick={() => openViewer(images, safeIndex)}>
-          <ProductThumb
+          <PinchZoomImage
             src={currentImage}
             alt={product.title}
-            className="item-photo__thumb"
-            mediaClassName="item-photo__img"
+            wrapperClassName="item-photo__thumb"
+            imageClassName="item-photo__img"
+            onInteraction={markGalleryInteraction}
           />
           {total > 1 ? (
             <>
@@ -552,11 +663,11 @@ export function ItemPage() {
               </svg>
             </button>
             {viewerTotal > 1 ? <div className="item-viewer__count">{viewerIndex + 1} / {viewerTotal}</div> : null}
-            <ProductThumb
+            <PinchZoomImage
               src={viewerImage}
               alt={product.title}
-              className="item-viewer__thumb"
-              mediaClassName="item-viewer__img"
+              wrapperClassName="item-viewer__thumb"
+              imageClassName="item-viewer__img"
             />
             {viewerTotal > 1 ? (
               <>

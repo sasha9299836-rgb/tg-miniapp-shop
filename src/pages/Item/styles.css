@@ -34,11 +34,17 @@
   object-fit: cover;
   object-position: center;
   display: block;
+  transform-origin: center center;
+  transition: transform 0.12s ease-out;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .item-photo__thumb {
   width: 100%;
   height: 100%;
+  overflow: hidden;
 }
 
 .item-photo__count {
@@ -305,17 +311,23 @@
   object-fit: contain;
   border-radius: 18px;
   display: block;
+  transform-origin: center center;
+  transition: transform 0.12s ease-out;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .item-viewer__thumb {
   width: 100%;
   height: 100%;
   border-radius: 18px;
+  overflow: hidden;
 }
 
 .item-viewer__close {
   position: absolute;
-  top: 12px;
+  top: calc(var(--safe-top, 0px) + 18px);
   right: 12px;
   width: 34px;
   height: 34px;
@@ -350,8 +362,9 @@
 
 .item-viewer__count {
   position: absolute;
-  top: 12px;
-  right: 12px;
+  top: calc(var(--safe-top, 0px) + 18px);
+  left: 50%;
+  transform: translateX(-50%);
   padding: 6px 10px;
   border-radius: 999px;
   font-size: 12px;
