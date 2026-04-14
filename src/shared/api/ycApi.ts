@@ -487,20 +487,62 @@ export async function uploadDefectVideoViaProxy(input: {
   formData.append("mime_type", input.file.type || "video/mp4");
   formData.append("file", input.file);
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    body: formData,
+  console.log("DEFECT_VIDEO_BACKEND_UPLOAD_START", {
+    postId: input.post_id,
+    photoNo: input.photo_no,
+    fileName: input.file.name,
+    fileSize: input.file.size,
+    mimeType: input.file.type || "video/mp4",
   });
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(`DEFECT_VIDEO_UPLOAD_FAILED ${response.status} ${text}`.trim());
+  const { status, responseText } = await new Promise<{ status: number; responseText: string }>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", endpoint);
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.timeout = 120_000;
+
+    xhr.onload = () => {
+      console.log("DEFECT_VIDEO_BACKEND_UPLOAD_DONE", {
+        status: xhr.status,
+        responseText: xhr.responseText,
+      });
+      resolve({
+        status: xhr.status,
+        responseText: xhr.responseText ?? "",
+      });
+    };
+
+    xhr.onerror = () => {
+      console.log("DEFECT_VIDEO_BACKEND_UPLOAD_ERROR", {
+        status: xhr.status,
+        readyState: xhr.readyState,
+      });
+      reject(new Error("Network error during backend upload"));
+    };
+
+    xhr.ontimeout = () => {
+      console.log("DEFECT_VIDEO_BACKEND_UPLOAD_TIMEOUT");
+      reject(new Error("Network error during backend upload"));
+    };
+
+    xhr.onabort = () => {
+      console.log("DEFECT_VIDEO_BACKEND_UPLOAD_ABORT");
+      reject(new Error("Network error during backend upload"));
+    };
+
+    xhr.send(formData);
+  });
+
+  if (status < 200 || status >= 300) {
+    throw new Error(`DEFECT_VIDEO_UPLOAD_FAILED ${status} ${responseText}`.trim());
   }
 
-  const data = (await response.json().catch(() => null)) as DefectUploadViaProxyResponse | null;
+  let data: DefectUploadViaProxyResponse | null = null;
+  try {
+    data = responseText ? (JSON.parse(responseText) as DefectUploadViaProxyResponse) : null;
+  } catch {
+    data = null;
+  }
   if (!data?.ok || !data.storage_key || !data.public_url || !Number.isFinite(Number(data.photo_no))) {
     throw new Error("DEFECT_VIDEO_UPLOAD_INVALID_RESPONSE");
   }
