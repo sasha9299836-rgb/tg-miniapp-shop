@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
+﻿import { useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useProductsStore } from "../../entities/product/model/useProductsStore";
 import { useFavoritesStore } from "../../entities/favorites/model/useFavoritesStore";
@@ -18,6 +18,7 @@ type PinchZoomImageProps = {
   wrapperClassName: string;
   imageClassName: string;
   onInteraction?: () => void;
+  onZoomStateChange?: (isZoomed: boolean) => void;
 };
 
 function getTouchDistance(a: { clientX: number; clientY: number }, b: { clientX: number; clientY: number }) {
@@ -26,62 +27,115 @@ function getTouchDistance(a: { clientX: number; clientY: number }, b: { clientX:
   return Math.hypot(dx, dy);
 }
 
-function PinchZoomImage({ src, alt, wrapperClassName, imageClassName, onInteraction }: PinchZoomImageProps) {
+function PinchZoomImage({
+  src,
+  alt,
+  wrapperClassName,
+  imageClassName,
+  onInteraction,
+  onZoomStateChange,
+}: PinchZoomImageProps) {
   const [scale, setScale] = useState(1);
-  const [translate, setTranslate] = useState({ x: 0, y: 0 });
-  const pinchStartDistanceRef = useRef<number | null>(null);
-  const pinchStartScaleRef = useRef(1);
-  const panStartRef = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [origin, setOrigin] = useState({ x: 50, y: 50 });
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const pinchStateRef = useRef<{
+    startDistance: number;
+    startScale: number;
+    startMidpointX: number;
+    startMidpointY: number;
+    startOffsetX: number;
+    startOffsetY: number;
+  } | null>(null);
+  const panStartRef = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
+
+  const clampOffset = (next: { x: number; y: number }, targetScale: number) => {
+    const container = containerRef.current;
+    if (!container || targetScale <= 1) return { x: 0, y: 0 };
+    const maxX = (container.clientWidth * (targetScale - 1)) / 2;
+    const maxY = (container.clientHeight * (targetScale - 1)) / 2;
+    return {
+      x: Math.min(maxX, Math.max(-maxX, next.x)),
+      y: Math.min(maxY, Math.max(-maxY, next.y)),
+    };
+  };
 
   const resetZoom = () => {
     setScale(1);
-    setTranslate({ x: 0, y: 0 });
+    setOffset({ x: 0, y: 0 });
+    setOrigin({ x: 50, y: 50 });
   };
 
   const handleTouchStart = (event: TouchEvent<HTMLDivElement>) => {
     if (event.touches.length === 2) {
-      pinchStartDistanceRef.current = getTouchDistance(event.touches[0], event.touches[1]);
-      pinchStartScaleRef.current = scale;
+      const touchA = event.touches[0];
+      const touchB = event.touches[1];
+      const midpointX = (touchA.clientX + touchB.clientX) / 2;
+      const midpointY = (touchA.clientY + touchB.clientY) / 2;
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (rect && rect.width > 0 && rect.height > 0) {
+        const originX = ((midpointX - rect.left) / rect.width) * 100;
+        const originY = ((midpointY - rect.top) / rect.height) * 100;
+        setOrigin({
+          x: Math.min(100, Math.max(0, originX)),
+          y: Math.min(100, Math.max(0, originY)),
+        });
+      }
+      pinchStateRef.current = {
+        startDistance: getTouchDistance(touchA, touchB),
+        startScale: scale,
+        startMidpointX: midpointX,
+        startMidpointY: midpointY,
+        startOffsetX: offset.x,
+        startOffsetY: offset.y,
+      };
       panStartRef.current = null;
+      onInteraction?.();
       return;
     }
+
     if (event.touches.length === 1 && scale > 1) {
       const touch = event.touches[0];
-      panStartRef.current = { x: touch.clientX, y: touch.clientY, tx: translate.x, ty: translate.y };
+      panStartRef.current = { x: touch.clientX, y: touch.clientY, offsetX: offset.x, offsetY: offset.y };
+      onInteraction?.();
     }
   };
 
   const handleTouchMove = (event: TouchEvent<HTMLDivElement>) => {
-    if (event.touches.length === 2 && pinchStartDistanceRef.current) {
-      const distance = getTouchDistance(event.touches[0], event.touches[1]);
-      if (distance > 0) {
-        const nextScale = Math.min(4, Math.max(1, pinchStartScaleRef.current * (distance / pinchStartDistanceRef.current)));
+    if (event.touches.length === 2 && pinchStateRef.current) {
+      event.preventDefault();
+      const touchA = event.touches[0];
+      const touchB = event.touches[1];
+      const currentDistance = getTouchDistance(touchA, touchB);
+      const currentMidpointX = (touchA.clientX + touchB.clientX) / 2;
+      const currentMidpointY = (touchA.clientY + touchB.clientY) / 2;
+      if (currentDistance > 0) {
+        const nextScale = Math.min(4, Math.max(1, pinchStateRef.current.startScale * (currentDistance / pinchStateRef.current.startDistance)));
+        const shiftedOffset = {
+          x: pinchStateRef.current.startOffsetX + (currentMidpointX - pinchStateRef.current.startMidpointX),
+          y: pinchStateRef.current.startOffsetY + (currentMidpointY - pinchStateRef.current.startMidpointY),
+        };
         setScale(nextScale);
+        setOffset(clampOffset(shiftedOffset, nextScale));
         onInteraction?.();
       }
       return;
     }
 
     if (event.touches.length === 1 && panStartRef.current && scale > 1) {
+      event.preventDefault();
       const touch = event.touches[0];
-      const nextX = panStartRef.current.tx + (touch.clientX - panStartRef.current.x);
-      const nextY = panStartRef.current.ty + (touch.clientY - panStartRef.current.y);
-      const maxShift = ((scale - 1) * 100) / 2;
-      setTranslate({
-        x: Math.min(maxShift, Math.max(-maxShift, nextX)),
-        y: Math.min(maxShift, Math.max(-maxShift, nextY)),
-      });
+      const nextX = panStartRef.current.offsetX + (touch.clientX - panStartRef.current.x);
+      const nextY = panStartRef.current.offsetY + (touch.clientY - panStartRef.current.y);
+      setOffset(clampOffset({ x: nextX, y: nextY }, scale));
       onInteraction?.();
     }
   };
 
   const handleTouchEnd = (event: TouchEvent<HTMLDivElement>) => {
-    if (event.touches.length < 2) pinchStartDistanceRef.current = null;
+    if (event.touches.length < 2) pinchStateRef.current = null;
     if (event.touches.length === 0) panStartRef.current = null;
-    if (scale <= 1.01) {
-      setScale(1);
-      setTranslate({ x: 0, y: 0 });
-    }
+    if (scale <= 1.01) resetZoom();
   };
 
   const handleDoubleClick = () => {
@@ -92,23 +146,37 @@ function PinchZoomImage({ src, alt, wrapperClassName, imageClassName, onInteract
     setScale(2);
   };
 
+  useEffect(() => {
+    onZoomStateChange?.(scale > 1.01);
+  }, [onZoomStateChange, scale]);
+
+  useEffect(() => () => onZoomStateChange?.(false), [onZoomStateChange]);
+
   return (
     <div
+      ref={containerRef}
       className={`${wrapperClassName} ${scale > 1 ? "is-zoomed" : ""}`.trim()}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       onDoubleClick={handleDoubleClick}
     >
-      {src ? (
-        <img
-          className={imageClassName}
-          src={src}
-          alt={alt}
-          draggable={false}
-          style={{ transform: `translate(${translate.x}px, ${translate.y}px) scale(${scale})` }}
-        />
-      ) : null}
+      <div
+        className="item-zoom-content"
+        style={{
+          transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${scale})`,
+          transformOrigin: `${origin.x}% ${origin.y}%`,
+        }}
+      >
+        {src ? (
+          <img
+            className={imageClassName}
+            src={src}
+            alt={alt}
+            draggable={false}
+          />
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -200,6 +268,8 @@ export function ItemPage() {
   const [isVideoOpen, setIsVideoOpen] = useState(false);
   const [isDefectsOpen, setIsDefectsOpen] = useState(false);
   const [videoPosterByUrl, setVideoPosterByUrl] = useState<Record<string, string>>({});
+  const [isMainPhotoZoomed, setIsMainPhotoZoomed] = useState(false);
+  const [isViewerPhotoZoomed, setIsViewerPhotoZoomed] = useState(false);
   const defectsSectionRef = useRef<HTMLDivElement | null>(null);
   const suppressViewerOpenRef = useRef(false);
 
@@ -353,10 +423,15 @@ export function ItemPage() {
 
   const openViewer = (list: string[], index: number) => {
     if (suppressViewerOpenRef.current) return;
+    if (isMainPhotoZoomed) return;
     setViewerImages(list);
     setPhotoIndex(index);
     setIsViewerOpen(true);
   };
+
+  useEffect(() => {
+    if (!isViewerOpen) setIsViewerPhotoZoomed(false);
+  }, [isViewerOpen]);
 
   const handlePrev = () => {
     if (!viewerTotal) return;
@@ -381,8 +456,8 @@ export function ItemPage() {
   const onShare = async () => {
     if (!product) return;
 
-    const productTitle = getProductDisplayTitle(product).trim() || String(product.title ?? "").trim() || "Товар";
-    const priceText = `${product.price.toLocaleString("ru-RU")} рублей`;
+    const productTitle = getProductDisplayTitle(product).trim() || String(product.title ?? "").trim() || "РўРѕРІР°СЂ";
+    const priceText = `${product.price.toLocaleString("ru-RU")} СЂСѓР±Р»РµР№`;
     const shareText = `${productTitle} ${priceText}`.trim();
     const appLink = buildTelegramMiniAppLink();
     const shareLink = appLink
@@ -416,9 +491,9 @@ export function ItemPage() {
 
   if (!product) {
     return (
-      <Page title="Товар">
-        <div style={{ color: "var(--muted)" }}>Товар не найден или уже удалён.</div>
-        <Button variant="secondary" onClick={goBack}>Назад</Button>
+      <Page title="РўРѕРІР°СЂ">
+        <div style={{ color: "var(--muted)" }}>РўРѕРІР°СЂ РЅРµ РЅР°Р№РґРµРЅ РёР»Рё СѓР¶Рµ СѓРґР°Р»С‘РЅ.</div>
+        <Button variant="secondary" onClick={goBack}>РќР°Р·Р°Рґ</Button>
       </Page>
     );
   }
@@ -426,23 +501,24 @@ export function ItemPage() {
   return (
     <Page>
       <div className="item-page">
-        <button type="button" className="item-back-top" onClick={goBack}>Назад</button>
+        <button type="button" className="item-back-top" onClick={goBack}>РќР°Р·Р°Рґ</button>
 
-        <div className="item-photo" role="button" tabIndex={0} onClick={() => openViewer(images, safeIndex)}>
+        <div className={`item-photo ${isMainPhotoZoomed ? "is-zoomed" : ""}`.trim()} role="button" tabIndex={0} onClick={() => openViewer(images, safeIndex)}>
           <PinchZoomImage
             src={currentImage}
             alt={product.title}
             wrapperClassName="item-photo__thumb"
             imageClassName="item-photo__img"
             onInteraction={markGalleryInteraction}
+            onZoomStateChange={setIsMainPhotoZoomed}
           />
           {total > 1 ? (
             <>
               <div className="item-photo__count">{safeIndex + 1} / {total}</div>
-              <button type="button" className="item-photo__nav item-photo__nav--prev" onClick={(e) => { e.stopPropagation(); setPhotoIndex((i) => (i - 1 + total) % total); }} aria-label="Предыдущее фото">
+              <button type="button" className="item-photo__nav item-photo__nav--prev" disabled={isMainPhotoZoomed} onClick={(e) => { e.stopPropagation(); setPhotoIndex((i) => (i - 1 + total) % total); }} aria-label="РџСЂРµРґС‹РґСѓС‰РµРµ С„РѕС‚Рѕ">
                 {"<"}
               </button>
-              <button type="button" className="item-photo__nav item-photo__nav--next" onClick={(e) => { e.stopPropagation(); setPhotoIndex((i) => (i + 1) % total); }} aria-label="Следующее фото">
+              <button type="button" className="item-photo__nav item-photo__nav--next" disabled={isMainPhotoZoomed} onClick={(e) => { e.stopPropagation(); setPhotoIndex((i) => (i + 1) % total); }} aria-label="РЎР»РµРґСѓСЋС‰РµРµ С„РѕС‚Рѕ">
                 {">"}
               </button>
               <div className="item-photo__dots">
@@ -454,24 +530,24 @@ export function ItemPage() {
           ) : null}
         </div>
 
-        <div className="item-brand">{itemHeaderTitle || "Без названия"}</div>
-        <div className="item-subtitle">{product.subtitle || product.description || "Описание будет добавлено."}</div>
-        <div className="item-price item-price--big">{product.price.toLocaleString("ru-RU")} ₽</div>
+        <div className="item-brand">{itemHeaderTitle || "Р‘РµР· РЅР°Р·РІР°РЅРёСЏ"}</div>
+        <div className="item-subtitle">{product.subtitle || product.description || "РћРїРёСЃР°РЅРёРµ Р±СѓРґРµС‚ РґРѕР±Р°РІР»РµРЅРѕ."}</div>
+        <div className="item-price item-price--big">{product.price.toLocaleString("ru-RU")} в‚Ѕ</div>
 
         <div className="item-accordion item-accordion--plain">
           <button type="button" className="item-accordion__head" onClick={() => setIsDescOpen((v) => !v)}>
-            <span>Описание</span>
+            <span>РћРїРёСЃР°РЅРёРµ</span>
             <span className={`item-accordion__chevron ${isDescOpen ? "is-open" : ""}`}>
               <svg className="item-accordion__chevronIcon" viewBox="0 0 24 24" aria-hidden>
                 <path d="M8 5L16 12L8 19" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </span>
           </button>
-          {isDescOpen ? <div className="item-accordion__body">{product.description || "Описание отсутствует."}</div> : null}
+          {isDescOpen ? <div className="item-accordion__body">{product.description || "РћРїРёСЃР°РЅРёРµ РѕС‚СЃСѓС‚СЃС‚РІСѓРµС‚."}</div> : null}
         </div>
 
-        <div className="item-meta"><span>Состояние</span><span>{product.condition || "Не указано"}</span></div>
-        <div className="item-meta"><span>Размер</span><span>{product.size || "Не указан"}</span></div>
+        <div className="item-meta"><span>РЎРѕСЃС‚РѕСЏРЅРёРµ</span><span>{product.condition || "РќРµ СѓРєР°Р·Р°РЅРѕ"}</span></div>
+        <div className="item-meta"><span>Р Р°Р·РјРµСЂ</span><span>{product.size || "РќРµ СѓРєР°Р·Р°РЅ"}</span></div>
 
         {hasMeasurementsSection ? (
           <div className="item-accordion item-accordion--plain item-measurements-section">
@@ -480,7 +556,7 @@ export function ItemPage() {
               className="item-accordion__head"
               onClick={() => setIsMeasurementsOpen((v) => !v)}
             >
-              <span>Замеры</span>
+              <span>Р—Р°РјРµСЂС‹</span>
               <span className={`item-accordion__chevron ${isMeasurementsOpen ? "is-open" : ""}`}>
                 <svg className="item-accordion__chevronIcon" viewBox="0 0 24 24" aria-hidden>
                   <path d="M8 5L16 12L8 19" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
@@ -501,7 +577,7 @@ export function ItemPage() {
                       >
                         <ProductThumb
                           src={url}
-                          alt={`Замеры ${index + 1}`}
+                          alt={`Р—Р°РјРµСЂС‹ ${index + 1}`}
                           className="item-defect-grid__thumb"
                           mediaClassName="item-defect-grid__img"
                         />
@@ -521,7 +597,7 @@ export function ItemPage() {
               className="item-accordion__head"
               onClick={() => setIsVideoOpen((v) => !v)}
             >
-              <span>Видео</span>
+              <span>Р’РёРґРµРѕ</span>
               <span className={`item-accordion__chevron ${isVideoOpen ? "is-open" : ""}`}>
                 <svg className="item-accordion__chevronIcon" viewBox="0 0 24 24" aria-hidden>
                   <path d="M8 5L16 12L8 19" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
@@ -561,7 +637,7 @@ export function ItemPage() {
                 return next;
               })}
             >
-              <span>Дефекты</span>
+              <span>Р”РµС„РµРєС‚С‹</span>
               <span className={`item-accordion__chevron ${isDefectsOpen ? "is-open" : ""}`}>
                 <svg className="item-accordion__chevronIcon" viewBox="0 0 24 24" aria-hidden>
                   <path d="M8 5L16 12L8 19" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
@@ -585,7 +661,7 @@ export function ItemPage() {
                           >
                             <ProductThumb
                               src={entry.url}
-                              alt={`Дефект ${imageIndex + 1}`}
+                              alt={`Р”РµС„РµРєС‚ ${imageIndex + 1}`}
                               className="item-defect-grid__thumb"
                               mediaClassName="item-defect-grid__img"
                             />
@@ -636,8 +712,8 @@ export function ItemPage() {
             isActive={isFav}
             onToggle={() => void fav.toggle({ id: product.id, postId: product.postId })}
             className="item-action-icon"
-            ariaLabel={"Избранное"}
-            title={"Избранное"}
+            ariaLabel={"РР·Р±СЂР°РЅРЅРѕРµ"}
+            title={"РР·Р±СЂР°РЅРЅРѕРµ"}
           />
           <button
             type="button"
@@ -657,22 +733,24 @@ export function ItemPage() {
       {isViewerOpen ? (
         <div className="item-viewer" onClick={() => setIsViewerOpen(false)}>
           <div className="item-viewer__content" onClick={(e) => e.stopPropagation()}>
-            <button type="button" className="item-viewer__close" onClick={() => setIsViewerOpen(false)} aria-label="Закрыть просмотр">
+            <button type="button" className="item-viewer__close" onClick={() => setIsViewerOpen(false)} aria-label="Р—Р°РєСЂС‹С‚СЊ РїСЂРѕСЃРјРѕС‚СЂ">
               <svg className="item-viewer__closeIcon" viewBox="0 0 24 24" aria-hidden>
                 <path d="M6 6L18 18M18 6L6 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
             </button>
             {viewerTotal > 1 ? <div className="item-viewer__count">{viewerIndex + 1} / {viewerTotal}</div> : null}
             <PinchZoomImage
+              key={viewerImage ?? "viewer-empty"}
               src={viewerImage}
               alt={product.title}
               wrapperClassName="item-viewer__thumb"
               imageClassName="item-viewer__img"
+              onZoomStateChange={setIsViewerPhotoZoomed}
             />
             {viewerTotal > 1 ? (
               <>
-                <button type="button" className="item-viewer__nav item-viewer__nav--prev" onClick={handlePrev} aria-label="Предыдущее фото">{"<"}</button>
-                <button type="button" className="item-viewer__nav item-viewer__nav--next" onClick={handleNext} aria-label="Следующее фото">{">"}</button>
+                <button type="button" className="item-viewer__nav item-viewer__nav--prev" disabled={isViewerPhotoZoomed} onClick={handlePrev} aria-label="РџСЂРµРґС‹РґСѓС‰РµРµ С„РѕС‚Рѕ">{"<"}</button>
+                <button type="button" className="item-viewer__nav item-viewer__nav--next" disabled={isViewerPhotoZoomed} onClick={handleNext} aria-label="РЎР»РµРґСѓСЋС‰РµРµ С„РѕС‚Рѕ">{">"}</button>
               </>
             ) : null}
           </div>
@@ -683,3 +761,5 @@ export function ItemPage() {
 }
 
 export default ItemPage;
+
+
