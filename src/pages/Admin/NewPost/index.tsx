@@ -200,6 +200,27 @@ type DraftDebugEntry = {
   photoNo?: number | null;
 };
 
+type MultipartDebugEvent = {
+  time: string;
+  step: string;
+  partNumber?: number;
+  attempt?: number;
+  status?: number;
+  readyState?: number;
+  responseText?: string;
+  etag?: string | null;
+  chunkSize?: number;
+  durationMs?: number;
+  shortUrl?: string;
+  uploadId?: string;
+  totalParts?: number;
+  partSize?: number;
+  error?: string;
+  fileName?: string;
+  fileSize?: number;
+  postId?: string;
+};
+
 type PendingUpload = {
   localId: string;
   file: File;
@@ -306,13 +327,26 @@ function readVideoDurationSeconds(previewUrl: string): Promise<number> {
 function uploadPartToPresignedUrl(
   url: string,
   part: Blob,
-  meta: { partNumber: number; chunkSize: number },
+  meta: {
+    partNumber: number;
+    chunkSize: number;
+    attempt: number;
+    onDebug?: (event: Omit<MultipartDebugEvent, "time">) => void;
+  },
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const startedAt = Date.now();
     const shortUrl = url.length > 120 ? `${url.slice(0, 120)}...` : url;
+    meta.onDebug?.({
+      step: "PART_START",
+      partNumber: meta.partNumber,
+      attempt: meta.attempt,
+      chunkSize: meta.chunkSize,
+      shortUrl,
+    });
     console.log("DEFECT_VIDEO_PART_UPLOAD_START", {
       partNumber: meta.partNumber,
+      attempt: meta.attempt,
       chunkSize: meta.chunkSize,
       url: shortUrl,
       startedAt,
@@ -322,8 +356,21 @@ function uploadPartToPresignedUrl(
     xhr.timeout = DEFECT_VIDEO_PART_UPLOAD_TIMEOUT_MS;
     xhr.onload = () => {
       const etag = xhr.getResponseHeader("ETag") || xhr.getResponseHeader("etag");
+      meta.onDebug?.({
+        step: "PART_DONE",
+        partNumber: meta.partNumber,
+        attempt: meta.attempt,
+        chunkSize: meta.chunkSize,
+        shortUrl,
+        status: xhr.status,
+        readyState: xhr.readyState,
+        responseText: xhr.responseText,
+        etag,
+        durationMs: Date.now() - startedAt,
+      });
       console.log("DEFECT_VIDEO_PART_UPLOAD_DONE", {
         partNumber: meta.partNumber,
+        attempt: meta.attempt,
         chunkSize: meta.chunkSize,
         url: shortUrl,
         status: xhr.status,
@@ -344,8 +391,21 @@ function uploadPartToPresignedUrl(
       reject(new Error(`Upload failed: ${xhr.status}`));
     };
     xhr.onerror = () => {
+      meta.onDebug?.({
+        step: "PART_ERROR",
+        partNumber: meta.partNumber,
+        attempt: meta.attempt,
+        chunkSize: meta.chunkSize,
+        shortUrl,
+        status: xhr.status,
+        readyState: xhr.readyState,
+        responseText: xhr.responseText,
+        durationMs: Date.now() - startedAt,
+        error: "Network error during upload",
+      });
       console.log("DEFECT_VIDEO_PART_UPLOAD_ERROR", {
         partNumber: meta.partNumber,
+        attempt: meta.attempt,
         chunkSize: meta.chunkSize,
         url: shortUrl,
         status: xhr.status,
@@ -357,8 +417,20 @@ function uploadPartToPresignedUrl(
       reject(new Error("Network error during upload"));
     };
     xhr.onabort = () => {
+      meta.onDebug?.({
+        step: "PART_ABORT",
+        partNumber: meta.partNumber,
+        attempt: meta.attempt,
+        chunkSize: meta.chunkSize,
+        shortUrl,
+        status: xhr.status,
+        readyState: xhr.readyState,
+        responseText: xhr.responseText,
+        durationMs: Date.now() - startedAt,
+      });
       console.log("DEFECT_VIDEO_PART_UPLOAD_ABORT", {
         partNumber: meta.partNumber,
+        attempt: meta.attempt,
         chunkSize: meta.chunkSize,
         url: shortUrl,
         status: xhr.status,
@@ -370,8 +442,20 @@ function uploadPartToPresignedUrl(
       reject(new Error("Upload aborted"));
     };
     xhr.ontimeout = () => {
+      meta.onDebug?.({
+        step: "PART_TIMEOUT",
+        partNumber: meta.partNumber,
+        attempt: meta.attempt,
+        chunkSize: meta.chunkSize,
+        shortUrl,
+        status: xhr.status,
+        readyState: xhr.readyState,
+        responseText: xhr.responseText,
+        durationMs: Date.now() - startedAt,
+      });
       console.log("DEFECT_VIDEO_PART_UPLOAD_TIMEOUT", {
         partNumber: meta.partNumber,
+        attempt: meta.attempt,
         chunkSize: meta.chunkSize,
         url: shortUrl,
         status: xhr.status,
@@ -496,6 +580,7 @@ export function AdminNewPostPage() {
   const currentPostRef = useRef<TgPost | null>(null);
   const stablePostIdRef = useRef<string | null>(null);
   const [draftDebugEntries, setDraftDebugEntries] = useState<DraftDebugEntry[]>([]);
+  const [multipartDebugEvents, setMultipartDebugEvents] = useState<MultipartDebugEvent[]>([]);
   const [manualPackagingOverrideTypeKey, setManualPackagingOverrideTypeKey] = useState<string | null>(null);
   const [isTypeSuggestionsOpen, setIsTypeSuggestionsOpen] = useState(false);
   const [isBrandSuggestionsOpen, setIsBrandSuggestionsOpen] = useState(false);
@@ -594,6 +679,13 @@ export function AdminNewPostPage() {
       ...entry,
       time: new Date().toISOString(),
     }, ...prev].slice(0, 30));
+  };
+
+  const pushMultipartDebug = (event: Omit<MultipartDebugEvent, "time">) => {
+    setMultipartDebugEvents((prev) => [{
+      ...event,
+      time: new Date().toISOString(),
+    }, ...prev].slice(0, 100));
   };
 
   const mainPreview: PhotoPreviewItem[] = useMemo(
@@ -1420,6 +1512,15 @@ export function AdminNewPostPage() {
             mime: item.file.type || "video/mp4",
             file_size: item.file.size,
           });
+          pushMultipartDebug({
+            step: "MULTIPART_START",
+            uploadId: multipart.upload_id,
+            totalParts: multipart.parts.length,
+            partSize: multipart.part_size,
+            postId: frozenUploadContext.postId,
+            fileName: item.file.name,
+            fileSize: item.file.size,
+          });
           logUploadStep(item.localId, "defect video multipart prepared", {
             key: multipart.storage_key,
             publicUrl: multipart.public_url,
@@ -1446,12 +1547,21 @@ export function AdminNewPostPage() {
                 etag = await uploadPartToPresignedUrl(part.url, chunk, {
                   partNumber,
                   chunkSize: chunk.size,
+                  attempt,
+                  onDebug: pushMultipartDebug,
                 });
                 break;
               } catch (error) {
                 const message = error instanceof Error ? error.message : String(error ?? "");
                 const canRetry = attempt < DEFECT_VIDEO_PART_UPLOAD_MAX_ATTEMPTS
                   && (message.includes("Network error") || message.includes("timeout") || message.includes("aborted"));
+                pushMultipartDebug({
+                  step: "PART_RETRY",
+                  partNumber,
+                  attempt,
+                  chunkSize: chunk.size,
+                  error: message,
+                });
                 console.log("DEFECT_VIDEO_PART_UPLOAD_RETRY", {
                   partNumber,
                   attempt,
@@ -2318,6 +2428,18 @@ export function AdminNewPostPage() {
               <div style={{ display: "grid", gap: 8, fontSize: 12 }}>
                 {draftDebugEntries.map((entry, index) => (
                   <pre key={`${entry.time}-${index}`} style={{ margin: 0, whiteSpace: "pre-wrap" }}>
+                    {JSON.stringify(entry, null, 2)}
+                  </pre>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {multipartDebugEvents.length ? (
+            <div className="glass" style={{ padding: 12 }}>
+              <div style={{ fontWeight: 700, marginBottom: 8 }}>{"Multipart Debug"}</div>
+              <div style={{ display: "grid", gap: 8, fontSize: 12 }}>
+                {multipartDebugEvents.map((entry, index) => (
+                  <pre key={`${entry.time}-${entry.step}-${index}`} style={{ margin: 0, whiteSpace: "pre-wrap" }}>
                     {JSON.stringify(entry, null, 2)}
                   </pre>
                 ))}
