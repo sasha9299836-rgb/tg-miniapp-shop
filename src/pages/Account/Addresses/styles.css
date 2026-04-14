@@ -150,14 +150,18 @@
 .address-edit-content {
   display: grid;
   gap: 18px;
-  padding-bottom: calc(var(--tabbar-h, 70px) + var(--safe-bottom, 0px) + 92px);
+  padding-bottom: calc(var(--tabbar-h, 70px) + var(--safe-bottom, 0px) + 120px);
 }
 
 .address-save-sticky {
   position: fixed;
-  left: var(--page-pad-x, 16px);
-  right: var(--page-pad-x, 16px);
-  bottom: calc(var(--tabbar-h, 70px) + var(--safe-bottom, 0px) + 8px);
+  left: 50%;
+  width: min(
+    calc(100vw - (var(--page-pad-x, 16px) * 2)),
+    calc(430px - (var(--page-pad-x, 16px) * 2))
+  );
+  transform: translateX(-50%);
+  bottom: calc(var(--tabbar-h, 70px) + var(--safe-bottom, 0px) + 16px);
   z-index: 40;
   padding: 10px 12px;
   border-radius: 14px;
