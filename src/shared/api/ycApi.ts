@@ -472,6 +472,18 @@ export async function uploadDefectVideoViaProxy(input: {
   post_id: string;
   photo_no: number;
   file: File;
+  onProgress?: (progress: { loaded: number; total: number; percent: number }) => void;
+  onDebug?: (event: {
+    step: string;
+    attempt: number;
+    status?: number;
+    readyState?: number;
+    responseText?: string;
+    error?: string;
+    loaded?: number;
+    total?: number;
+    percent?: number;
+  }) => void;
 }): Promise<{ id: number | null; key: string; url: string; photo_no: number; media_type: "video" }> {
   await ensureAdminRuntimeReady();
   const token = readAdminToken();
@@ -495,43 +507,132 @@ export async function uploadDefectVideoViaProxy(input: {
     mimeType: input.file.type || "video/mp4",
   });
 
-  const { status, responseText } = await new Promise<{ status: number; responseText: string }>((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", endpoint);
-    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-    xhr.timeout = 120_000;
+  const maxAttempts = 3;
+  let lastError: Error | null = null;
+  let status = 0;
+  let responseText = "";
 
-    xhr.onload = () => {
-      console.log("DEFECT_VIDEO_BACKEND_UPLOAD_DONE", {
-        status: xhr.status,
-        responseText: xhr.responseText,
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const result = await new Promise<{ status: number; responseText: string }>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", endpoint);
+        xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+        xhr.timeout = 180_000;
+
+        input.onDebug?.({
+          step: "DEFECT_VIDEO_BACKEND_UPLOAD_START",
+          attempt,
+        });
+
+        xhr.upload.onprogress = (event) => {
+          if (!event.lengthComputable) return;
+          const percent = event.total > 0 ? Math.round((event.loaded / event.total) * 100) : 0;
+          input.onProgress?.({
+            loaded: event.loaded,
+            total: event.total,
+            percent,
+          });
+          input.onDebug?.({
+            step: "DEFECT_VIDEO_BACKEND_UPLOAD_PROGRESS",
+            attempt,
+            loaded: event.loaded,
+            total: event.total,
+            percent,
+          });
+        };
+
+        xhr.onload = () => {
+          console.log("DEFECT_VIDEO_BACKEND_UPLOAD_DONE", {
+            status: xhr.status,
+            responseText: xhr.responseText,
+          });
+          input.onDebug?.({
+            step: "DEFECT_VIDEO_BACKEND_UPLOAD_DONE",
+            attempt,
+            status: xhr.status,
+            readyState: xhr.readyState,
+            responseText: xhr.responseText,
+          });
+          resolve({
+            status: xhr.status,
+            responseText: xhr.responseText ?? "",
+          });
+        };
+
+        xhr.onerror = () => {
+          const error = new Error("Network error during backend upload");
+          console.log("DEFECT_VIDEO_BACKEND_UPLOAD_ERROR", {
+            status: xhr.status,
+            readyState: xhr.readyState,
+          });
+          input.onDebug?.({
+            step: "DEFECT_VIDEO_BACKEND_UPLOAD_ERROR",
+            attempt,
+            status: xhr.status,
+            readyState: xhr.readyState,
+            responseText: xhr.responseText,
+            error: error.message,
+          });
+          reject(error);
+        };
+
+        xhr.ontimeout = () => {
+          const error = new Error("Backend upload timeout");
+          console.log("DEFECT_VIDEO_BACKEND_UPLOAD_TIMEOUT");
+          input.onDebug?.({
+            step: "DEFECT_VIDEO_BACKEND_UPLOAD_TIMEOUT",
+            attempt,
+            status: xhr.status,
+            readyState: xhr.readyState,
+            responseText: xhr.responseText,
+            error: error.message,
+          });
+          reject(error);
+        };
+
+        xhr.onabort = () => {
+          const error = new Error("Backend upload aborted");
+          console.log("DEFECT_VIDEO_BACKEND_UPLOAD_ABORT");
+          input.onDebug?.({
+            step: "DEFECT_VIDEO_BACKEND_UPLOAD_ABORT",
+            attempt,
+            status: xhr.status,
+            readyState: xhr.readyState,
+            responseText: xhr.responseText,
+            error: error.message,
+          });
+          reject(error);
+        };
+
+        xhr.send(formData);
       });
-      resolve({
-        status: xhr.status,
-        responseText: xhr.responseText ?? "",
+      status = result.status;
+      responseText = result.responseText;
+      lastError = null;
+      break;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error ?? "Upload failed"));
+      const retryable = attempt < maxAttempts && (
+        lastError.message.includes("Network error")
+        || lastError.message.includes("timeout")
+        || lastError.message.includes("aborted")
+      );
+      input.onDebug?.({
+        step: "DEFECT_VIDEO_BACKEND_UPLOAD_RETRY",
+        attempt,
+        error: lastError.message,
       });
-    };
+      if (!retryable) {
+        throw lastError;
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 700));
+    }
+  }
 
-    xhr.onerror = () => {
-      console.log("DEFECT_VIDEO_BACKEND_UPLOAD_ERROR", {
-        status: xhr.status,
-        readyState: xhr.readyState,
-      });
-      reject(new Error("Network error during backend upload"));
-    };
-
-    xhr.ontimeout = () => {
-      console.log("DEFECT_VIDEO_BACKEND_UPLOAD_TIMEOUT");
-      reject(new Error("Network error during backend upload"));
-    };
-
-    xhr.onabort = () => {
-      console.log("DEFECT_VIDEO_BACKEND_UPLOAD_ABORT");
-      reject(new Error("Network error during backend upload"));
-    };
-
-    xhr.send(formData);
-  });
+  if (lastError) {
+    throw lastError;
+  }
 
   if (status < 200 || status >= 300) {
     throw new Error(`DEFECT_VIDEO_UPLOAD_FAILED ${status} ${responseText}`.trim());
