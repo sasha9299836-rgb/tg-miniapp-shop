@@ -145,9 +145,9 @@ function ProductCardInner({
       <div className="pcard__body" onClick={handleOpen} role="button" tabIndex={0}>
         <div className="pcard__title">{cardTitle}</div>
         <div className="pcard__priceRow">
-          <div className="pcard__price">{product.price.toLocaleString("ru-RU")}?</div>
+          <div className="pcard__price">{product.price.toLocaleString("ru-RU")} ₽</div>
           {showOldPrice ? (
-            <div className="pcard__priceOld">{product.oldPrice?.toLocaleString("ru-RU")}?</div>
+            <div className="pcard__priceOld">{product.oldPrice?.toLocaleString("ru-RU")} ₽</div>
           ) : null}
         </div>
       </div>
