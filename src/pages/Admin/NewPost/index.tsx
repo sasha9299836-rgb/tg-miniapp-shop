@@ -500,6 +500,7 @@ export function AdminNewPostPage() {
   const pendingDefectActivationRef = useRef<string | null>(null);
   const pendingMeasurementActivationRef = useRef<string | null>(null);
   const uploadWorkerLockRef = useRef(false);
+  const defectVideoChainActiveRef = useRef(false);
   const publishAttemptRef = useRef(0);
   const parsedNalichieId = useMemo(() => Number(nalichieIdInput), [nalichieIdInput]);
   const normalizedNalichieId = Number.isInteger(parsedNalichieId) && parsedNalichieId > 0 ? parsedNalichieId : null;
@@ -562,6 +563,7 @@ export function AdminNewPostPage() {
       || isUploadingMeasurements
       || isPublishingNow
       || isScheduling
+      || defectVideoChainActiveRef.current
       || hasPendingUploads
     );
     if (!force && hasProtectedLifecycle) {
@@ -821,6 +823,15 @@ export function AdminNewPostPage() {
 
   const applyFetchedItem = async (nalichieIdValue: number, requestId: number) => {
     if (postType !== "warehouse") return;
+    if (defectVideoChainActiveRef.current) {
+      console.log("WAREHOUSE_FETCH_BLOCKED_DURING_DEFECT_VIDEO_CHAIN", {
+        source: "applyFetchedItem",
+        nalichieIdValue,
+        requestId,
+        stablePostId: stablePostIdRef.current,
+      });
+      return;
+    }
     try {
       const foundItem = await fetchNalichieByIdViaRpc(nalichieIdValue) ?? await fetchNalichieById(nalichieIdValue);
       if (requestId !== fetchRequestId.current) return;
@@ -883,6 +894,14 @@ export function AdminNewPostPage() {
   const startFetchById = (force = false) => {
     if (isEditMode) return;
     if (postType !== "warehouse") return;
+    if (defectVideoChainActiveRef.current) {
+      console.log("WAREHOUSE_FETCH_BLOCKED_DURING_DEFECT_VIDEO_CHAIN", {
+        source: "startFetchById",
+        force,
+        stablePostId: stablePostIdRef.current,
+      });
+      return;
+    }
 
     if (!nalichieIdInput.trim()) {
       fetchRequestId.current += 1;
@@ -937,6 +956,14 @@ export function AdminNewPostPage() {
   };
 
   const onPostTypeChange = (nextType: TgPostType) => {
+    if (defectVideoChainActiveRef.current) {
+      console.log("POST_TYPE_CHANGE_BLOCKED_DURING_DEFECT_VIDEO_CHAIN", {
+        nextType,
+        stablePostId: stablePostIdRef.current,
+      });
+      setErrorText("Дождитесь завершения загрузки видео дефекта.");
+      return;
+    }
     setPostType(nextType);
     if (nextType === "consignment") {
       pendingMainUploads.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
@@ -1358,16 +1385,28 @@ export function AdminNewPostPage() {
           photoNo: item.photoNo,
         });
         if (item.mediaType === "video") {
+          const frozenUploadContext = {
+            postId: postIdForUpload,
+            itemId: itemIdForStorage,
+          };
+          defectVideoChainActiveRef.current = true;
+          console.log("DEFECT_VIDEO_CHAIN_STARTED", {
+            stablePostId: stablePostIdRef.current,
+            postId: frozenUploadContext.postId,
+            itemId: frozenUploadContext.itemId,
+            photoNo: item.photoNo,
+          });
+          try {
           logUploadStep(item.localId, "defect video multipart start", {
             fileName: item.file.name,
             mimeType: item.file.type,
             photoNo: item.photoNo,
-            postIdForUpload,
-            itemIdForStorage,
+            postIdForUpload: frozenUploadContext.postId,
+            itemIdForStorage: frozenUploadContext.itemId,
           });
           const multipart = await startDefectVideoMultipartViaProxy({
-            post_id: postIdForUpload,
-            item_id: itemIdForStorage,
+            post_id: frozenUploadContext.postId,
+            item_id: frozenUploadContext.itemId,
             photo_no: item.photoNo,
             mime: item.file.type || "video/mp4",
             file_size: item.file.size,
@@ -1401,14 +1440,14 @@ export function AdminNewPostPage() {
           logUploadStep(item.localId, "defect video parts upload finish", { parts: uploadedParts.length });
           logUploadStep(item.localId, "defect video multipart complete start");
           await completeDefectVideoMultipartViaProxy({
-            post_id: postIdForUpload,
+            post_id: frozenUploadContext.postId,
             storage_key: multipart.storage_key,
             upload_id: multipart.upload_id,
             parts: uploadedParts,
           });
           logUploadStep(item.localId, "defect video multipart complete finish", { status: 200 });
           const created = await createPostDefectPhoto({
-            post_id: postIdForUpload,
+            post_id: frozenUploadContext.postId,
             photo_no: item.photoNo,
             storage_key: multipart.storage_key,
             public_url: multipart.public_url,
@@ -1423,6 +1462,15 @@ export function AdminNewPostPage() {
             key,
             publicUrl,
           });
+          } finally {
+            defectVideoChainActiveRef.current = false;
+            console.log("DEFECT_VIDEO_CHAIN_FINISHED", {
+              stablePostId: stablePostIdRef.current,
+              postId: frozenUploadContext.postId,
+              itemId: frozenUploadContext.itemId,
+              photoNo: item.photoNo,
+            });
+          }
         } else {
           logUploadStep(item.localId, "defect proxy upload start", {
             kind,
