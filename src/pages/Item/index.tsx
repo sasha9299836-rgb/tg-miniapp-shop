@@ -503,10 +503,14 @@ export function ItemPage() {
             <>
               <div className="item-photo__count">{safeIndex + 1} / {total}</div>
               <button type="button" className="item-photo__nav item-photo__nav--prev" onClick={(e) => { e.stopPropagation(); setPhotoIndex((i) => (i - 1 + total) % total); }} aria-label="Предыдущее фото">
-                {"<"}
+                <svg viewBox="0 0 24 24" aria-hidden style={{ width: 14, height: 14, transform: "rotate(180deg)" }}>
+                  <path d="M8 5L16 12L8 19" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
               </button>
               <button type="button" className="item-photo__nav item-photo__nav--next" onClick={(e) => { e.stopPropagation(); setPhotoIndex((i) => (i + 1) % total); }} aria-label="Следующее фото">
-                {">"}
+                <svg viewBox="0 0 24 24" aria-hidden style={{ width: 14, height: 14 }}>
+                  <path d="M8 5L16 12L8 19" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
               </button>
               <div className="item-photo__dots">
                 {images.map((_, i) => (
@@ -739,8 +743,16 @@ export function ItemPage() {
             />
             {viewerTotal > 1 ? (
               <>
-                <button type="button" className="item-viewer__nav item-viewer__nav--prev" disabled={isViewerPhotoZoomed} onClick={handlePrev} aria-label="Предыдущее фото">{"<"}</button>
-                <button type="button" className="item-viewer__nav item-viewer__nav--next" disabled={isViewerPhotoZoomed} onClick={handleNext} aria-label="Следующее фото">{">"}</button>
+                <button type="button" className="item-viewer__nav item-viewer__nav--prev" disabled={isViewerPhotoZoomed} onClick={handlePrev} aria-label="Предыдущее фото">
+                  <svg viewBox="0 0 24 24" aria-hidden style={{ width: 14, height: 14, transform: "rotate(180deg)" }}>
+                    <path d="M8 5L16 12L8 19" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <button type="button" className="item-viewer__nav item-viewer__nav--next" disabled={isViewerPhotoZoomed} onClick={handleNext} aria-label="Следующее фото">
+                  <svg viewBox="0 0 24 24" aria-hidden style={{ width: 14, height: 14 }}>
+                    <path d="M8 5L16 12L8 19" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
               </>
             ) : null}
           </div>
