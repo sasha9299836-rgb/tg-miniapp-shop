@@ -3,6 +3,11 @@
   gap: 16px;
 }
 
+.item-main-block {
+  display: grid;
+  gap: 8px;
+}
+
 .item-back-top {
   justify-self: end;
   border: 1px solid var(--border);
@@ -203,7 +208,8 @@
 
 .item-meta-group {
   display: grid;
-  gap: 8px;
+  gap: 10px;
+  margin-top: 20px;
 }
 
 .item-meta {
@@ -211,6 +217,10 @@
   color: var(--muted);
   font-size: 14px;
   line-height: 1.45;
+}
+
+.item-description-section {
+  margin-top: 20px;
 }
 
 .item-defects-text {
@@ -222,10 +232,16 @@
 }
 
 .item-measurements-section {
+  margin-top: 20px;
   scroll-margin-top: calc(var(--safe-top, 0px) + 72px);
 }
 
+.item-video-section {
+  margin-top: 20px;
+}
+
 .item-defects-section {
+  margin-top: 20px;
   scroll-margin-top: calc(var(--safe-top, 0px) + 72px);
 }
 
@@ -419,6 +435,7 @@
 
 .item-viewer__nav--prev { left: -14px; }
 .item-viewer__nav--next { right: -14px; }
+
 
 
 

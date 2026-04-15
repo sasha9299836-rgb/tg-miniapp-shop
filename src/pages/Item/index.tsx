@@ -517,11 +517,17 @@ export function ItemPage() {
           ) : null}
         </div>
 
-        <div className="item-brand">{itemHeaderTitle || "Без названия"}</div>
-        {product.subtitle?.trim() ? <div className="item-subtitle">{product.subtitle}</div> : null}
-        <div className="item-price item-price--big">{product.price.toLocaleString("ru-RU")} ₽</div>
+        <div className="item-main-block">
+          <div className="item-brand">{itemHeaderTitle || "Без названия"}</div>
+          <div className="item-price item-price--big">{product.price.toLocaleString("ru-RU")} ₽</div>
+        </div>
 
-        <div className="item-accordion item-accordion--plain">
+        <div className="item-meta-group">
+          <div className="item-meta">Состояние: {product.condition || "Не указано"}</div>
+          <div className="item-meta">Размер: {product.size || "Не указан"}</div>
+        </div>
+
+        <div className="item-accordion item-accordion--plain item-description-section">
           <button type="button" className="item-accordion__head" onClick={() => setIsDescOpen((v) => !v)}>
             <span>Описание</span>
             <span className={`item-accordion__chevron ${isDescOpen ? "is-open" : ""}`}>
@@ -531,11 +537,6 @@ export function ItemPage() {
             </span>
           </button>
           {isDescOpen ? <div className="item-accordion__body">{product.description || "Описание отсутствует."}</div> : null}
-        </div>
-
-        <div className="item-meta-group">
-          <div className="item-meta">Состояние: {product.condition || "Не указано"}</div>
-          <div className="item-meta">Размер: {product.size || "Не указан"}</div>
         </div>
 
         {hasMeasurementsSection ? (
@@ -580,7 +581,7 @@ export function ItemPage() {
         ) : null}
 
         {hasVideoSection ? (
-          <div className="item-accordion item-accordion--plain">
+          <div className="item-accordion item-accordion--plain item-video-section">
             <button
               type="button"
               className="item-accordion__head"
