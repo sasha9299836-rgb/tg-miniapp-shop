@@ -181,6 +181,7 @@
   color: var(--muted);
   font-size: 14px;
   font-weight: 400;
+  cursor: pointer;
 }
 
 .item-accordion--plain .item-accordion__body {
@@ -188,17 +189,18 @@
 }
 
 .item-accordion__chevron {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   transition: transform 0.2s ease;
+  color: #222;
 }
 
 .item-accordion__chevronIcon {
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
   display: block;
 }
 
@@ -214,7 +216,8 @@
 
 .item-meta {
   display: block;
-  color: var(--muted);
+  color: #333;
+  font-weight: 500;
   font-size: 14px;
   line-height: 1.45;
 }
