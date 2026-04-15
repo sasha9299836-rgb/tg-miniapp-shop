@@ -1,5 +1,6 @@
 ﻿import { memo, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
+import type { TouchEvent as ReactTouchEvent } from "react";
 import type { Product } from "../../shared/types/product";
 import { FavoriteButton } from "../../shared/ui/FavoriteButton";
 import { ProductThumb } from "../../shared/ui/ProductThumb";
@@ -27,6 +28,12 @@ function ProductCardInner({
   const [isActive, setIsActive] = useState(false);
   const [cartPulse, setCartPulse] = useState(false);
   const dragRef = useRef({ down: false, startX: 0, moved: false });
+  const touchRef = useRef({
+    active: false,
+    startX: 0,
+    startY: 0,
+    horizontal: false,
+  });
 
   const safeIndex = total ? index % total : 0;
   const current = total ? images[safeIndex] : undefined;
@@ -59,6 +66,7 @@ function ProductCardInner({
   };
 
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === "touch") return;
     if (!total) return;
     dragRef.current.down = true;
     dragRef.current.startX = e.clientX;
@@ -68,12 +76,14 @@ function ProductCardInner({
   };
 
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === "touch") return;
     if (!dragRef.current.down) return;
     const dx = e.clientX - dragRef.current.startX;
     if (Math.abs(dx) > 6) dragRef.current.moved = true;
   };
 
   const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === "touch") return;
     if (!dragRef.current.down) return;
     dragRef.current.down = false;
     setIsActive(false);
@@ -86,6 +96,46 @@ function ProductCardInner({
 
   const onPointerCancel = () => {
     dragRef.current.down = false;
+    setIsActive(false);
+  };
+
+  const onTouchStart = (e: ReactTouchEvent<HTMLDivElement>) => {
+    if (!total || e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    touchRef.current = {
+      active: true,
+      startX: touch.clientX,
+      startY: touch.clientY,
+      horizontal: false,
+    };
+    setIsActive(true);
+  };
+
+  const onTouchMove = (e: ReactTouchEvent<HTMLDivElement>) => {
+    if (!touchRef.current.active || e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - touchRef.current.startX;
+    const dy = touch.clientY - touchRef.current.startY;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 6) {
+      touchRef.current.horizontal = true;
+    }
+  };
+
+  const onTouchEnd = (e: ReactTouchEvent<HTMLDivElement>) => {
+    if (!touchRef.current.active) return;
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - touchRef.current.startX;
+    const shouldSwipe = touchRef.current.horizontal && Math.abs(dx) > 32;
+    touchRef.current.active = false;
+    setIsActive(false);
+    if (!shouldSwipe) return;
+    dragRef.current.moved = true;
+    if (dx > 0) handlePrev();
+    else handleNext();
+  };
+
+  const onTouchCancel = () => {
+    touchRef.current.active = false;
     setIsActive(false);
   };
 
@@ -105,6 +155,10 @@ function ProductCardInner({
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
         onPointerLeave={onPointerCancel}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onTouchCancel={onTouchCancel}
         role="button"
         tabIndex={0}
       >
@@ -191,4 +245,3 @@ export const ProductCard = memo(
 );
 
 export default ProductCard;
-
