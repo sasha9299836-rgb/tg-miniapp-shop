@@ -73,7 +73,7 @@ function PinchZoomImage({
       const midpointX = (touchA.clientX + touchB.clientX) / 2;
       const midpointY = (touchA.clientY + touchB.clientY) / 2;
       const rect = containerRef.current?.getBoundingClientRect();
-      if (rect && rect.width > 0 && rect.height > 0) {
+      if (scale <= 1.01 && rect && rect.width > 0 && rect.height > 0) {
         const originX = ((midpointX - rect.left) / rect.width) * 100;
         const originY = ((midpointY - rect.top) / rect.height) * 100;
         setOrigin({
