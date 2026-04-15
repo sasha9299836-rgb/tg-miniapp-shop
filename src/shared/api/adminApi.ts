@@ -14,6 +14,8 @@ type AdminMeResponse = {
   ok?: boolean;
 };
 
+const ADMIN_ME_TIMEOUT_MS = 8000;
+
 function parseErrorStatus(error: unknown): number | null {
   if (!error || typeof error !== "object") return null;
   const maybeStatus = (error as { context?: { status?: number }; status?: number }).context?.status ??
@@ -44,11 +46,28 @@ export async function adminLogin(code: string): Promise<{ session_token: string;
 }
 
 export async function adminMe(session_token: string): Promise<{ is_admin: boolean }> {
-  const { data, error } = await supabase.functions.invoke<AdminMeResponse>("me", {
+  const invokePromise = supabase.functions.invoke<AdminMeResponse>("me", {
     headers: {
       "x-admin-token": session_token,
     },
   });
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    window.setTimeout(() => reject(new Error("ADMIN_ME_TIMEOUT")), ADMIN_ME_TIMEOUT_MS);
+  });
+
+  let data: AdminMeResponse | null = null;
+  let error: unknown = null;
+  try {
+    const result = await Promise.race([invokePromise, timeoutPromise]) as {
+      data: AdminMeResponse | null;
+      error: unknown;
+    };
+    data = result.data;
+    error = result.error;
+  } catch {
+    return { is_admin: false };
+  }
 
   if (error) {
     return { is_admin: false };
