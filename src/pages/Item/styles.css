@@ -1,6 +1,6 @@
 ﻿.item-page {
   display: grid;
-  gap: 12px;
+  gap: 16px;
 }
 
 .item-back-top {
@@ -201,12 +201,16 @@
   transform: rotate(90deg);
 }
 
-.item-meta {
-  display: flex;
-  justify-content: space-between;
+.item-meta-group {
+  display: grid;
   gap: 8px;
+}
+
+.item-meta {
+  display: block;
   color: var(--muted);
   font-size: 14px;
+  line-height: 1.45;
 }
 
 .item-defects-text {
@@ -415,3 +419,6 @@
 
 .item-viewer__nav--prev { left: -14px; }
 .item-viewer__nav--next { right: -14px; }
+
+
+

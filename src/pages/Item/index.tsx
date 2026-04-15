@@ -518,7 +518,7 @@ export function ItemPage() {
         </div>
 
         <div className="item-brand">{itemHeaderTitle || "Без названия"}</div>
-        <div className="item-subtitle">{product.subtitle || product.description || "Описание будет добавлено."}</div>
+        {product.subtitle?.trim() ? <div className="item-subtitle">{product.subtitle}</div> : null}
         <div className="item-price item-price--big">{product.price.toLocaleString("ru-RU")} ₽</div>
 
         <div className="item-accordion item-accordion--plain">
@@ -533,8 +533,10 @@ export function ItemPage() {
           {isDescOpen ? <div className="item-accordion__body">{product.description || "Описание отсутствует."}</div> : null}
         </div>
 
-        <div className="item-meta"><span>Состояние</span><span>{product.condition || "Не указано"}</span></div>
-        <div className="item-meta"><span>Размер</span><span>{product.size || "Не указан"}</span></div>
+        <div className="item-meta-group">
+          <div className="item-meta">Состояние: {product.condition || "Не указано"}</div>
+          <div className="item-meta">Размер: {product.size || "Не указан"}</div>
+        </div>
 
         {hasMeasurementsSection ? (
           <div className="item-accordion item-accordion--plain item-measurements-section">
