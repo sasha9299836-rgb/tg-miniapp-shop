@@ -268,10 +268,8 @@ export function ItemPage() {
   const [isVideoOpen, setIsVideoOpen] = useState(false);
   const [isDefectsOpen, setIsDefectsOpen] = useState(false);
   const [videoPosterByUrl, setVideoPosterByUrl] = useState<Record<string, string>>({});
-  const [isMainPhotoZoomed, setIsMainPhotoZoomed] = useState(false);
   const [isViewerPhotoZoomed, setIsViewerPhotoZoomed] = useState(false);
   const defectsSectionRef = useRef<HTMLDivElement | null>(null);
-  const suppressViewerOpenRef = useRef(false);
 
   useEffect(() => {
     if (!products.length) void load();
@@ -414,16 +412,7 @@ export function ItemPage() {
     nav(location.pathname, { replace: true, state: null });
   }, [location.pathname, location.state, markReviewed, nav, product]);
 
-  const markGalleryInteraction = () => {
-    suppressViewerOpenRef.current = true;
-    window.setTimeout(() => {
-      suppressViewerOpenRef.current = false;
-    }, 120);
-  };
-
   const openViewer = (list: string[], index: number) => {
-    if (suppressViewerOpenRef.current) return;
-    if (isMainPhotoZoomed) return;
     setViewerImages(list);
     setPhotoIndex(index);
     setIsViewerOpen(true);
@@ -456,8 +445,8 @@ export function ItemPage() {
   const onShare = async () => {
     if (!product) return;
 
-    const productTitle = getProductDisplayTitle(product).trim() || String(product.title ?? "").trim() || "РўРѕРІР°СЂ";
-    const priceText = `${product.price.toLocaleString("ru-RU")} СЂСѓР±Р»РµР№`;
+    const productTitle = getProductDisplayTitle(product).trim() || String(product.title ?? "").trim() || "Товар";
+    const priceText = `${product.price.toLocaleString("ru-RU")} ₽`;
     const shareText = `${productTitle} ${priceText}`.trim();
     const appLink = buildTelegramMiniAppLink();
     const shareLink = appLink
@@ -491,9 +480,9 @@ export function ItemPage() {
 
   if (!product) {
     return (
-      <Page title="РўРѕРІР°СЂ">
-        <div style={{ color: "var(--muted)" }}>РўРѕРІР°СЂ РЅРµ РЅР°Р№РґРµРЅ РёР»Рё СѓР¶Рµ СѓРґР°Р»С‘РЅ.</div>
-        <Button variant="secondary" onClick={goBack}>РќР°Р·Р°Рґ</Button>
+      <Page title="Товар">
+        <div style={{ color: "var(--muted)" }}>Товар не найден или уже удален.</div>
+        <Button variant="secondary" onClick={goBack}>Назад</Button>
       </Page>
     );
   }
@@ -501,24 +490,22 @@ export function ItemPage() {
   return (
     <Page>
       <div className="item-page">
-        <button type="button" className="item-back-top" onClick={goBack}>РќР°Р·Р°Рґ</button>
+        <button type="button" className="item-back-top" onClick={goBack}>Назад</button>
 
-        <div className={`item-photo ${isMainPhotoZoomed ? "is-zoomed" : ""}`.trim()} role="button" tabIndex={0} onClick={() => openViewer(images, safeIndex)}>
-          <PinchZoomImage
+        <div className="item-photo" role="button" tabIndex={0} onClick={() => openViewer(images, safeIndex)}>
+          <ProductThumb
             src={currentImage}
             alt={product.title}
-            wrapperClassName="item-photo__thumb"
-            imageClassName="item-photo__img"
-            onInteraction={markGalleryInteraction}
-            onZoomStateChange={setIsMainPhotoZoomed}
+            className="item-photo__thumb"
+            mediaClassName="item-photo__img"
           />
           {total > 1 ? (
             <>
               <div className="item-photo__count">{safeIndex + 1} / {total}</div>
-              <button type="button" className="item-photo__nav item-photo__nav--prev" disabled={isMainPhotoZoomed} onClick={(e) => { e.stopPropagation(); setPhotoIndex((i) => (i - 1 + total) % total); }} aria-label="РџСЂРµРґС‹РґСѓС‰РµРµ С„РѕС‚Рѕ">
+              <button type="button" className="item-photo__nav item-photo__nav--prev" onClick={(e) => { e.stopPropagation(); setPhotoIndex((i) => (i - 1 + total) % total); }} aria-label="Предыдущее фото">
                 {"<"}
               </button>
-              <button type="button" className="item-photo__nav item-photo__nav--next" disabled={isMainPhotoZoomed} onClick={(e) => { e.stopPropagation(); setPhotoIndex((i) => (i + 1) % total); }} aria-label="РЎР»РµРґСѓСЋС‰РµРµ С„РѕС‚Рѕ">
+              <button type="button" className="item-photo__nav item-photo__nav--next" onClick={(e) => { e.stopPropagation(); setPhotoIndex((i) => (i + 1) % total); }} aria-label="Следующее фото">
                 {">"}
               </button>
               <div className="item-photo__dots">
@@ -530,24 +517,24 @@ export function ItemPage() {
           ) : null}
         </div>
 
-        <div className="item-brand">{itemHeaderTitle || "Р‘РµР· РЅР°Р·РІР°РЅРёСЏ"}</div>
-        <div className="item-subtitle">{product.subtitle || product.description || "РћРїРёСЃР°РЅРёРµ Р±СѓРґРµС‚ РґРѕР±Р°РІР»РµРЅРѕ."}</div>
-        <div className="item-price item-price--big">{product.price.toLocaleString("ru-RU")} в‚Ѕ</div>
+        <div className="item-brand">{itemHeaderTitle || "Без названия"}</div>
+        <div className="item-subtitle">{product.subtitle || product.description || "Описание будет добавлено."}</div>
+        <div className="item-price item-price--big">{product.price.toLocaleString("ru-RU")} ₽</div>
 
         <div className="item-accordion item-accordion--plain">
           <button type="button" className="item-accordion__head" onClick={() => setIsDescOpen((v) => !v)}>
-            <span>РћРїРёСЃР°РЅРёРµ</span>
+            <span>Описание</span>
             <span className={`item-accordion__chevron ${isDescOpen ? "is-open" : ""}`}>
               <svg className="item-accordion__chevronIcon" viewBox="0 0 24 24" aria-hidden>
                 <path d="M8 5L16 12L8 19" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </span>
           </button>
-          {isDescOpen ? <div className="item-accordion__body">{product.description || "РћРїРёСЃР°РЅРёРµ РѕС‚СЃСѓС‚СЃС‚РІСѓРµС‚."}</div> : null}
+          {isDescOpen ? <div className="item-accordion__body">{product.description || "Описание отсутствует."}</div> : null}
         </div>
 
-        <div className="item-meta"><span>РЎРѕСЃС‚РѕСЏРЅРёРµ</span><span>{product.condition || "РќРµ СѓРєР°Р·Р°РЅРѕ"}</span></div>
-        <div className="item-meta"><span>Р Р°Р·РјРµСЂ</span><span>{product.size || "РќРµ СѓРєР°Р·Р°РЅ"}</span></div>
+        <div className="item-meta"><span>Состояние</span><span>{product.condition || "Не указано"}</span></div>
+        <div className="item-meta"><span>Размер</span><span>{product.size || "Не указан"}</span></div>
 
         {hasMeasurementsSection ? (
           <div className="item-accordion item-accordion--plain item-measurements-section">
@@ -556,7 +543,7 @@ export function ItemPage() {
               className="item-accordion__head"
               onClick={() => setIsMeasurementsOpen((v) => !v)}
             >
-              <span>Р—Р°РјРµСЂС‹</span>
+              <span>Замеры</span>
               <span className={`item-accordion__chevron ${isMeasurementsOpen ? "is-open" : ""}`}>
                 <svg className="item-accordion__chevronIcon" viewBox="0 0 24 24" aria-hidden>
                   <path d="M8 5L16 12L8 19" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
@@ -577,7 +564,7 @@ export function ItemPage() {
                       >
                         <ProductThumb
                           src={url}
-                          alt={`Р—Р°РјРµСЂС‹ ${index + 1}`}
+                          alt={`Замеры ${index + 1}`}
                           className="item-defect-grid__thumb"
                           mediaClassName="item-defect-grid__img"
                         />
@@ -597,7 +584,7 @@ export function ItemPage() {
               className="item-accordion__head"
               onClick={() => setIsVideoOpen((v) => !v)}
             >
-              <span>Р’РёРґРµРѕ</span>
+              <span>Видео</span>
               <span className={`item-accordion__chevron ${isVideoOpen ? "is-open" : ""}`}>
                 <svg className="item-accordion__chevronIcon" viewBox="0 0 24 24" aria-hidden>
                   <path d="M8 5L16 12L8 19" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
@@ -637,7 +624,7 @@ export function ItemPage() {
                 return next;
               })}
             >
-              <span>Р”РµС„РµРєС‚С‹</span>
+              <span>Дефекты</span>
               <span className={`item-accordion__chevron ${isDefectsOpen ? "is-open" : ""}`}>
                 <svg className="item-accordion__chevronIcon" viewBox="0 0 24 24" aria-hidden>
                   <path d="M8 5L16 12L8 19" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
@@ -661,7 +648,7 @@ export function ItemPage() {
                           >
                             <ProductThumb
                               src={entry.url}
-                              alt={`Р”РµС„РµРєС‚ ${imageIndex + 1}`}
+                              alt={`Дефект ${imageIndex + 1}`}
                               className="item-defect-grid__thumb"
                               mediaClassName="item-defect-grid__img"
                             />
@@ -712,8 +699,8 @@ export function ItemPage() {
             isActive={isFav}
             onToggle={() => void fav.toggle({ id: product.id, postId: product.postId })}
             className="item-action-icon"
-            ariaLabel={"РР·Р±СЂР°РЅРЅРѕРµ"}
-            title={"РР·Р±СЂР°РЅРЅРѕРµ"}
+            ariaLabel={"Избранное"}
+            title={"Избранное"}
           />
           <button
             type="button"
@@ -733,7 +720,7 @@ export function ItemPage() {
       {isViewerOpen ? (
         <div className="item-viewer" onClick={() => setIsViewerOpen(false)}>
           <div className="item-viewer__content" onClick={(e) => e.stopPropagation()}>
-            <button type="button" className="item-viewer__close" onClick={() => setIsViewerOpen(false)} aria-label="Р—Р°РєСЂС‹С‚СЊ РїСЂРѕСЃРјРѕС‚СЂ">
+            <button type="button" className="item-viewer__close" onClick={() => setIsViewerOpen(false)} aria-label="Закрыть просмотр">
               <svg className="item-viewer__closeIcon" viewBox="0 0 24 24" aria-hidden>
                 <path d="M6 6L18 18M18 6L6 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
@@ -749,8 +736,8 @@ export function ItemPage() {
             />
             {viewerTotal > 1 ? (
               <>
-                <button type="button" className="item-viewer__nav item-viewer__nav--prev" disabled={isViewerPhotoZoomed} onClick={handlePrev} aria-label="РџСЂРµРґС‹РґСѓС‰РµРµ С„РѕС‚Рѕ">{"<"}</button>
-                <button type="button" className="item-viewer__nav item-viewer__nav--next" disabled={isViewerPhotoZoomed} onClick={handleNext} aria-label="РЎР»РµРґСѓСЋС‰РµРµ С„РѕС‚Рѕ">{">"}</button>
+                <button type="button" className="item-viewer__nav item-viewer__nav--prev" disabled={isViewerPhotoZoomed} onClick={handlePrev} aria-label="Предыдущее фото">{"<"}</button>
+                <button type="button" className="item-viewer__nav item-viewer__nav--next" disabled={isViewerPhotoZoomed} onClick={handleNext} aria-label="Следующее фото">{">"}</button>
               </>
             ) : null}
           </div>
