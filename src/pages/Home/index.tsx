@@ -95,12 +95,11 @@ export function HomePage() {
         <section className="home-drop-teaser">
           <div className="home-drop-teaser__head">
             <div className="home-drop-teaser__badge">Скоро новое поступление</div>
-            <div className="home-drop-teaser__title">{dropTeaser.title}</div>
             <div className="home-drop-teaser__text">{dropTeaser.shortText}</div>
           </div>
           <div className="home-drop-teaser__body">
             {dropTeaser.previewImages.length ? (
-              <div className="home-drop-teaser__images">
+              <div className={`home-drop-teaser__images home-drop-teaser__images--${Math.min(dropTeaser.previewImages.length, 4)}`}>
                 {dropTeaser.previewImages.slice(0, 4).map((image, idx) => (
                   <img key={`${dropTeaser.id}-${idx}`} src={image} alt={`Анонс ${idx + 1}`} className="home-drop-teaser__image" />
                 ))}
