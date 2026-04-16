@@ -112,6 +112,8 @@ function isAllowedStorageKey(key: string): boolean {
   const itemDefectLegacy = /^\d+\/defects\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
   const itemDefectImage = /^\d+\/defects\/images\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
   const itemDefectVideo = /^\d+\/defects\/videos\/([1-9]|[1-4]\d|50)\.(mp4|mov)$/i;
+  const measurementImage = /^measurements\/[0-9a-f-]{36}\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
+  const measurementVideo = /^measurements\/[0-9a-f-]{36}\/videos\/([1-9]|[1-4]\d|50)\.(mp4|mov)$/i;
   const noItemMain = /^no-item\/[0-9a-f-]{36}\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
   const noItemDefectLegacy = /^no-item\/[0-9a-f-]{36}\/defects\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
   const noItemDefectImage = /^no-item\/[0-9a-f-]{36}\/defects\/images\/([1-9]|[1-4]\d|50)\.(jpg|png|webp)$/i;
@@ -120,6 +122,8 @@ function isAllowedStorageKey(key: string): boolean {
     || itemDefectLegacy.test(key)
     || itemDefectImage.test(key)
     || itemDefectVideo.test(key)
+    || measurementImage.test(key)
+    || measurementVideo.test(key)
     || noItemMain.test(key)
     || noItemDefectLegacy.test(key)
     || noItemDefectImage.test(key)
