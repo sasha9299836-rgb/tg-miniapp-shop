@@ -32,11 +32,30 @@ export async function verifyTelegramIdentity(initData: string) {
   );
 
   if (error) {
+    const context = (error as { context?: unknown }).context;
+    let responseErrorCode: string | null = null;
+    let responseReason: string | null = null;
+
+    if (context && typeof context === "object" && "json" in context && typeof (context as { json?: () => Promise<unknown> }).json === "function") {
+      try {
+        const parsed = await (context as { json: () => Promise<unknown> }).json();
+        if (parsed && typeof parsed === "object") {
+          const payload = parsed as { error?: unknown; reason?: unknown };
+          responseErrorCode = typeof payload.error === "string" ? payload.error : null;
+          responseReason = typeof payload.reason === "string" ? payload.reason : null;
+        }
+      } catch {
+        // no-op
+      }
+    }
+
     console.log("[tg-identity-verify] failed", {
       message: error.message ?? null,
       status: (error as { context?: { status?: number } }).context?.status ?? null,
+      responseErrorCode,
+      responseReason,
     });
-    throw new Error(error.message || "TELEGRAM_IDENTITY_VERIFY_FAILED");
+    throw new Error(responseErrorCode || responseReason || error.message || "TELEGRAM_IDENTITY_VERIFY_FAILED");
   }
 
   const sessionToken = String(data?.session_token ?? "").trim();

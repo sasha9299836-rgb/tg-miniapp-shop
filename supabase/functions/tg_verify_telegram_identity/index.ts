@@ -11,6 +11,12 @@ type VerifyTelegramIdentityBody = {
   initData?: string;
 };
 
+function resolveBetaWhitelistEnabled(rawValue: string | undefined): boolean {
+  const normalized = String(rawValue ?? "").trim().toLowerCase();
+  if (!normalized) return true;
+  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+}
+
 function resolveInitDataMaxAgeSeconds(rawValue: string | undefined): number {
   const parsed = Number(rawValue ?? "");
   if (!Number.isInteger(parsed) || parsed <= 0) return 86400;
@@ -81,6 +87,31 @@ Deno.serve(async (req) => {
     }));
 
     const supabase = createSupabaseAdminClient();
+    const betaWhitelistEnabled = resolveBetaWhitelistEnabled(Deno.env.get("TG_BETA_WHITELIST_ENABLED"));
+    if (betaWhitelistEnabled) {
+      const { data: whitelistRow, error: whitelistError } = await supabase
+        .from("tg_beta_access_whitelist")
+        .select("telegram_id, expires_at")
+        .eq("telegram_id", verification.user.id)
+        .maybeSingle();
+
+      if (whitelistError) {
+        return json({ error: "BETA_ACCESS_CHECK_FAILED", details: whitelistError.message }, 500);
+      }
+      const expiresAtMs = whitelistRow?.expires_at ? new Date(whitelistRow.expires_at).getTime() : Number.POSITIVE_INFINITY;
+      const hasActiveAccess = Boolean(whitelistRow) && Number.isFinite(expiresAtMs) && expiresAtMs > Date.now();
+      const hasPermanentAccess = Boolean(whitelistRow) && !whitelistRow.expires_at;
+      if (!hasActiveAccess && !hasPermanentAccess) {
+        console.log(JSON.stringify({
+          scope: "tg_verify_telegram_identity",
+          event: "beta_access_denied",
+          debugId: debugId || null,
+          telegramIdResolved: true,
+        }));
+        return json({ error: "BETA_ACCESS_DENIED" }, 403);
+      }
+    }
+
     const session = await createTelegramUserSession(supabase, verification.user.id);
     if (!session.ok) {
       console.log(JSON.stringify({
