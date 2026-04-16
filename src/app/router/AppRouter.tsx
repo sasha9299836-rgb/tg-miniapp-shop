@@ -11,6 +11,7 @@ import { PaymentPage } from "../../pages/Payment";
 import { PaymentSuccessPage } from "../../pages/PaymentSuccess";
 import { ItemPage } from "../../pages/Item";
 import { InfoPage } from "../../pages/Info";
+import { DropPreviewPage } from "../../pages/DropPreview";
 
 import { AccountPage } from "../../pages/Account";
 import { ProfilePage } from "../../pages/Account/Profile";
@@ -73,6 +74,7 @@ const router = createBrowserRouter([
       { path: "/admin/post-video", element: <AdminGuard><AdminPostVideoPage /></AdminGuard> },
 
       { path: "/item/:id", element: <ItemPage /> },
+      { path: "/drop-preview", element: <DropPreviewPage /> },
       { path: "/checkout", element: <CheckoutPage /> },
       { path: "/payment", element: <PaymentPage /> },
       { path: "/payment/success", element: <PaymentSuccessPage /> },

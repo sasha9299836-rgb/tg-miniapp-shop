@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useProductsStore } from "../../entities/product/model/useProductsStore";
 import { useFavoritesStore } from "../../entities/favorites/model/useFavoritesStore";
@@ -6,6 +6,7 @@ import { useCartStore } from "../../entities/cart/model/useCartStore";
 import { useDefectReviewStore } from "../../entities/cart/model/useDefectReviewStore";
 import { Page } from "../../shared/ui/Page";
 import { ProductCard } from "../../widgets/ProductCard";
+import { getActiveDropTeaser, type DropTeaser } from "../../shared/api/dropTeaserApi";
 import "./styles.css";
 
 export function HomePage() {
@@ -21,10 +22,26 @@ export function HomePage() {
   const registerCartCatalogItems = useCartStore((s) => s.registerCatalogItems);
   const hasInCart = useCartStore((s) => s.has);
   const requestAddWithDefectGuard = useDefectReviewStore((s) => s.requestAddWithDefectGuard);
+  const [dropTeaser, setDropTeaser] = useState<DropTeaser | null>(null);
 
   useEffect(() => {
     if (!products.length) load();
   }, [products.length, load]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const teaser = await getActiveDropTeaser();
+        if (!cancelled) setDropTeaser(teaser);
+      } catch {
+        if (!cancelled) setDropTeaser(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     void loadFavorites();
@@ -74,6 +91,28 @@ export function HomePage() {
         <div className="home-hero__orb" />
       </section>
 
+      {dropTeaser ? (
+        <section className="home-drop-teaser">
+          <div className="home-drop-teaser__head">
+            <div className="home-drop-teaser__badge">Скоро новое поступление</div>
+            <div className="home-drop-teaser__title">{dropTeaser.title}</div>
+            <div className="home-drop-teaser__text">{dropTeaser.shortText}</div>
+          </div>
+          <div className="home-drop-teaser__body">
+            {dropTeaser.previewImages.length ? (
+              <div className="home-drop-teaser__images">
+                {dropTeaser.previewImages.slice(0, 4).map((image, idx) => (
+                  <img key={`${dropTeaser.id}-${idx}`} src={image} alt={`Анонс ${idx + 1}`} className="home-drop-teaser__image" />
+                ))}
+              </div>
+            ) : null}
+            <button type="button" className="home-drop-teaser__cta" onClick={() => nav("/drop-preview")}>
+              Смотреть анонс
+            </button>
+          </div>
+        </section>
+      ) : null}
+
       <section className="home-section">
         <div className="home-section__head">
           <div className="home-section__title">Каталог</div>
@@ -106,3 +145,4 @@ export function HomePage() {
 }
 
 export default HomePage;
+
