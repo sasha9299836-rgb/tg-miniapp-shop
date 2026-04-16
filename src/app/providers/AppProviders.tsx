@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+﻿import { useEffect, type ReactNode } from "react";
 import { useAccountStore } from "../../entities/account/model/useAccountStore";
 import { useAdminStore } from "../../entities/account/model/useAdminStore";
 import { useCartStore } from "../../entities/cart/model/useCartStore";
@@ -27,26 +27,10 @@ let bootstrapInFlight = false;
 let lastVerifiedTelegramId: number | null = null;
 let verifyInFlight = false;
 
-function BetaAccessDeniedStub() {
-  return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px", background: "#ffffff" }}>
-      <div style={{ width: "100%", maxWidth: "420px", borderRadius: "16px", border: "1px solid #e5e7eb", padding: "24px", textAlign: "center", background: "#ffffff" }}>
-        <div style={{ fontSize: "18px", fontWeight: 700, color: "#111827", marginBottom: "10px" }}>Бета-доступ закрыт</div>
-        <div style={{ fontSize: "14px", lineHeight: 1.45, color: "#4b5563" }}>
-          Доступ к бета-тесту пока закрыт.
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function AppProviders({ children }: { children: ReactNode }) {
-  const [isBetaAccessDenied, setIsBetaAccessDenied] = useState(false);
-
   useEffect(() => {
     let isCancelled = false;
     let attempts = 0;
-    let isBetaDenied = false;
 
     try {
       initTelegramWebApp();
@@ -67,7 +51,6 @@ export function AppProviders({ children }: { children: ReactNode }) {
     const tryBootstrap = async () => {
       try {
         if (isCancelled) return;
-        if (isBetaDenied) return;
         if (bootstrapInFlight) return;
         attempts += 1;
 
@@ -106,10 +89,6 @@ export function AppProviders({ children }: { children: ReactNode }) {
               console.log(`[tg-user-bootstrap] verify failed: ${message}`);
               setTgDebugState({ verifySuccess: false });
               setLastAuthErrorCode(message);
-              if (message === "BETA_ACCESS_DENIED") {
-                isBetaDenied = true;
-                setIsBetaAccessDenied(true);
-              }
               if (!isCancelled) {
                 clearTelegramUserSessionToken();
                 refreshTgDebugSessionFlags();
@@ -196,10 +175,6 @@ export function AppProviders({ children }: { children: ReactNode }) {
     };
 
     const timer = window.setInterval(() => {
-      if (isBetaDenied) {
-        window.clearInterval(timer);
-        return;
-      }
       if (attempts >= TELEGRAM_USER_BOOTSTRAP_MAX_ATTEMPTS) {
         console.log("[tg-user-bootstrap] stop: max attempts reached (user not resolved)");
         window.clearInterval(timer);
@@ -220,10 +195,6 @@ export function AppProviders({ children }: { children: ReactNode }) {
       window.clearInterval(timer);
     };
   }, []);
-
-  if (isBetaAccessDenied) {
-    return <BetaAccessDeniedStub />;
-  }
 
   return (
     <>
