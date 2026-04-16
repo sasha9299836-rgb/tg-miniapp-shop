@@ -38,10 +38,12 @@ export async function uploadDropTeaserImage(file: File, slotNo: number): Promise
   ensureValidImage(file);
 
   const formData = new FormData();
-  formData.append("file", file);
+  // NOTE: fastify multipart parsing is sensitive to field order for request.file()
+  // and must receive scalar fields before binary part.
   formData.append("post_id", crypto.randomUUID());
-  formData.append("photo_no", String(Math.max(1, slotNo)));
+  formData.append("photo_no", String(Math.max(1, Math.floor(slotNo))));
   formData.append("kind", "measurement");
+  formData.append("file", file);
 
   const response = await fetch(`${cdekProxyBaseUrl}/api/admin/media/main/upload`, {
     method: "POST",
@@ -66,6 +68,35 @@ export async function uploadDropTeaserImage(file: File, slotNo: number): Promise
     throw new Error("TEASER_IMAGE_UPLOAD_INVALID_RESPONSE");
   }
   return parsed.url;
+}
+
+export async function clearActiveDropTeaser(): Promise<void> {
+  await ensureAdminRuntimeReady();
+  const adminToken = ensureAdminToken();
+
+  const response = await fetch(`${cdekProxyBaseUrl}/api/admin/drop-teaser/clear`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${adminToken}`,
+    },
+    body: JSON.stringify({}),
+  });
+
+  const text = await response.text().catch(() => "");
+  if (!response.ok) {
+    throw new Error(`DROP_TEASER_CLEAR_FAILED ${response.status} ${text}`.trim());
+  }
+
+  let parsed: { ok?: boolean } | null = null;
+  try {
+    parsed = text ? (JSON.parse(text) as { ok?: boolean }) : null;
+  } catch {
+    parsed = null;
+  }
+  if (!parsed?.ok) {
+    throw new Error("DROP_TEASER_CLEAR_INVALID_RESPONSE");
+  }
 }
 
 export async function saveActiveDropTeaser(payload: SaveDropTeaserPayload): Promise<void> {
@@ -96,4 +127,3 @@ export async function saveActiveDropTeaser(payload: SaveDropTeaserPayload): Prom
     throw new Error("DROP_TEASER_SAVE_INVALID_RESPONSE");
   }
 }
-

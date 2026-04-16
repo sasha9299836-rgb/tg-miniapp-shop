@@ -4,7 +4,11 @@ import { Page } from "../../../shared/ui/Page";
 import { Button } from "../../../shared/ui/Button";
 import { ProductThumb } from "../../../shared/ui/ProductThumb";
 import { getActiveDropTeaser } from "../../../shared/api/dropTeaserApi";
-import { saveActiveDropTeaser, uploadDropTeaserImage } from "../../../shared/api/adminDropTeaserApi";
+import {
+  clearActiveDropTeaser,
+  saveActiveDropTeaser,
+  uploadDropTeaserImage,
+} from "../../../shared/api/adminDropTeaserApi";
 import "./styles.css";
 
 const MAX_IMAGES = 4;
@@ -18,6 +22,7 @@ export function AdminDropTeaserPage() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [successText, setSuccessText] = useState<string | null>(null);
 
@@ -112,9 +117,32 @@ export function AdminDropTeaserPage() {
     }
   };
 
+  const onClearActive = async () => {
+    setIsClearing(true);
+    setErrorText(null);
+    setSuccessText(null);
+    try {
+      await clearActiveDropTeaser();
+      setTitle("");
+      setShortText("");
+      setDetails("");
+      setCurrentImages([]);
+      setSelectedFiles([]);
+      setSuccessText("Текущее активное превью удалено.");
+    } catch (error) {
+      setErrorText(`Не удалось удалить текущее превью: ${(error as Error).message}`);
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
   return (
     <Page title="Добавить превью" subtitle="Загрузите до 4 фото и короткий анонс будущего дропа">
       <section className="admin-drop-teaser">
+        {currentImages.length || title.trim() || shortText.trim() || details.trim() ? (
+          <div className="admin-drop-teaser__active-note">Текущее активное превью загружено. Вы можете обновить или удалить его.</div>
+        ) : null}
+
         <label className="admin-drop-teaser__label">
           Заголовок
           <input
@@ -173,8 +201,15 @@ export function AdminDropTeaserPage() {
         ) : null}
 
         <div className="admin-drop-teaser__actions">
-          <Button onClick={() => void onSave()} disabled={isSaving || isLoading}>
+          <Button onClick={() => void onSave()} disabled={isSaving || isLoading || isClearing}>
             {isSaving ? "Сохраняем..." : "Сохранить"}
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => void onClearActive()}
+            disabled={isSaving || isLoading || isClearing || (!currentImages.length && !title.trim() && !shortText.trim() && !details.trim())}
+          >
+            {isClearing ? "Удаляем..." : "Удалить текущее превью"}
           </Button>
           <Button variant="secondary" onClick={() => nav("/admin")}>
             Назад

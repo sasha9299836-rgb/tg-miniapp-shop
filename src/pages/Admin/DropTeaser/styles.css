@@ -11,6 +11,11 @@
   color: var(--text);
 }
 
+.admin-drop-teaser__active-note {
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .admin-drop-teaser__input,
 .admin-drop-teaser__textarea {
   width: 100%;
@@ -87,4 +92,3 @@
 .admin-drop-teaser__success {
   color: #067647;
 }
-
