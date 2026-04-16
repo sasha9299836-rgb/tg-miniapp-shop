@@ -198,6 +198,11 @@ const UPLOAD_MAX_ATTEMPTS = 3;
 const CONSIGNMENT_PUBLISH_COOLDOWN_MS = 600;
 const MAIN_UPLOAD_RETRY_DELAYS_MS = [0, 500, 1000] as const;
 const MAIN_UPLOAD_INTER_FILE_DELAY_MS = 300;
+const MEDIA_DRAFT_FALLBACK_TITLE = "Черновик";
+const MEDIA_DRAFT_FALLBACK_DESCRIPTION = "Черновик медиа";
+const MEDIA_DRAFT_FALLBACK_CONDITION = "10/10 Идеальное";
+const MEDIA_DRAFT_FALLBACK_SIZE = "ONE SIZE";
+const MEDIA_DRAFT_FALLBACK_PRICE = 1;
 
 function inferMediaTypeFromFile(file: File): "image" | "video" | null {
   const mime = String(file.type ?? "").toLowerCase();
@@ -866,9 +871,14 @@ export function AdminNewPostPage() {
     logPublishStep("syncUploadedMeasurementPhotos finish", { postId });
   };
 
-  const persistDraft = async (): Promise<TgPost> => {
-    const validationError = validateDraftForm();
-    if (validationError) throw new Error(validationError);
+  const persistDraft = async (
+    options?: { allowIncompleteForMedia?: boolean },
+  ): Promise<TgPost> => {
+    const allowIncompleteForMedia = Boolean(options?.allowIncompleteForMedia);
+    if (!allowIncompleteForMedia) {
+      const validationError = validateDraftForm();
+      if (validationError) throw new Error(validationError);
+    }
     if (postType === "warehouse") {
       const itemStatus = String(itemData?.status ?? "").trim();
       if (!itemData || !ALLOWED_NALICHIE_STATUSES.has(itemStatus)) {
@@ -882,10 +892,25 @@ export function AdminNewPostPage() {
 
     const effectivePost = currentPostRef.current ?? currentPost;
     const stablePostId = stablePostIdRef.current ?? effectivePost?.id ?? null;
+    const normalizedTitle = title.trim();
+    const normalizedDescription = description.trim();
+    const normalizedCondition = condition.trim();
+    const normalizedSize = size.trim();
+    const parsedPrice = Number(price);
+    const resolvedTitle = normalizedTitle || (allowIncompleteForMedia ? MEDIA_DRAFT_FALLBACK_TITLE : "");
+    const resolvedDescription = normalizedDescription || (allowIncompleteForMedia ? MEDIA_DRAFT_FALLBACK_DESCRIPTION : "");
+    const resolvedCondition = normalizedCondition || (allowIncompleteForMedia ? MEDIA_DRAFT_FALLBACK_CONDITION : "");
+    const resolvedSize = normalizedSize || (allowIncompleteForMedia ? MEDIA_DRAFT_FALLBACK_SIZE : null);
+    const resolvedPrice = Number.isFinite(parsedPrice) && parsedPrice > 0
+      ? parsedPrice
+      : allowIncompleteForMedia
+      ? MEDIA_DRAFT_FALLBACK_PRICE
+      : Number.NaN;
     logPublishStep("createOrUpdateDraftPost start", {
       currentPostId: stablePostId,
       postType,
       normalizedNalichieId,
+      allowIncompleteForMedia,
       hasDefects,
       mainPhotos: mainPhotos.map((photo) => ({ localId: photo.localId, dbId: photo.dbId ?? null, photoNo: photo.photoNo })),
       defectPhotos: defectPhotos.map((photo) => ({ localId: photo.localId, dbId: photo.dbId ?? null, photoNo: photo.photoNo, mediaType: photo.mediaType })),
@@ -897,12 +922,12 @@ export function AdminNewPostPage() {
       post_type: postType,
       origin_profile: getOriginProfileByPostType(postType),
       packaging_preset: packagingPreset,
-      title: title.trim(),
+      title: resolvedTitle,
       brand: brand.trim() || null,
-      size: size.trim() || null,
-      price: Number(price),
-      description: description.trim(),
-      condition: condition.trim(),
+      size: resolvedSize,
+      price: resolvedPrice,
+      description: resolvedDescription,
+      condition: resolvedCondition,
       has_defects: hasDefects,
       defects_text: hasDefects ? defectsText.trim() : null,
       measurements_text: measurementsText.trim() || null,
@@ -1080,10 +1105,10 @@ export function AdminNewPostPage() {
       let defectMediaType: "image" | "video" | null = null;
 
       const ensureStablePostId = async () => {
-        const existing = stablePostIdRef.current ?? currentPostRef.current?.id ?? null;
-        if (existing) return existing;
+      const existing = stablePostIdRef.current ?? currentPostRef.current?.id ?? null;
+      if (existing) return existing;
         logUploadStep(item.localId, "upload requires draft", { kind });
-        const saved = await persistDraft();
+        const saved = await persistDraft({ allowIncompleteForMedia: true });
         return saved.id;
       };
 
