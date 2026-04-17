@@ -82,9 +82,9 @@ export function HomePage() {
             >
               Добавить адресс доставки
             </button>
-            <button type="button" className="home-hero__btn" onClick={() => {}}
+            <button type="button" className="home-hero__btn" onClick={() => nav("/info/channel-rules")}
             >
-              Правила магазина
+              Правила канала
             </button>
           </div>
         </div>

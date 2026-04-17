@@ -23,7 +23,7 @@
 }
 
 .admin-promos-page__item {
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 8px;
   display: grid;
@@ -50,19 +50,18 @@
   font-size: 12px;
   padding: 2px 8px;
   border-radius: 999px;
-  text-transform: lowercase;
 }
 
 .admin-promos-page__status--active {
-  background: rgba(22, 163, 74, 0.2);
-  color: #4ade80;
+  background: color-mix(in srgb, var(--success) 14%, var(--surface) 86%);
+  color: color-mix(in srgb, var(--success) 80%, var(--text) 20%);
 }
 
 .admin-promos-page__status--disabled,
 .admin-promos-page__status--exhausted,
 .admin-promos-page__status--expired {
-  background: rgba(255, 255, 255, 0.12);
-  color: #d1d5db;
+  background: color-mix(in srgb, var(--surface-alt) 78%, var(--surface) 22%);
+  color: var(--muted);
 }
 
 .admin-promos-page__item-meta {
@@ -88,17 +87,34 @@
 .admin-promos-page__input {
   width: 100%;
   border-radius: 10px;
-  border: 1px solid var(--line);
-  background: rgba(16, 20, 32, 0.9);
+  border: 1px solid var(--border);
+  background: var(--surface);
   color: var(--text);
   padding: 10px 12px;
   font-size: 16px;
 }
 
+.admin-promos-page__input::placeholder {
+  color: color-mix(in srgb, var(--muted) 88%, transparent);
+}
+
+.admin-promos-page__input:focus::placeholder {
+  color: transparent;
+}
+
+.admin-promos-page__datetime {
+  appearance: none;
+}
+
+.admin-promos-page__datetime::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.85;
+}
+
 .admin-promos-page__actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 8px;
-  flex-wrap: wrap;
 }
 
 .admin-promos-page__stats-grid {
@@ -112,7 +128,7 @@
 }
 
 .admin-promos-page__order-row {
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 8px;
   display: grid;
@@ -136,5 +152,9 @@
   .admin-promos-page__layout {
     grid-template-columns: 1fr 1fr;
     align-items: start;
+  }
+
+  .admin-promos-page__actions {
+    grid-template-columns: 1fr 1fr;
   }
 }

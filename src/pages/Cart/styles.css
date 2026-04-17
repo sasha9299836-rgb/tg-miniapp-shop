@@ -147,6 +147,7 @@
 .cart-promo {
   display: grid;
   gap: 8px;
+  margin-bottom: 4px;
 }
 
 .cart-promo__row {
@@ -165,6 +166,14 @@
   background: var(--surface);
   color: var(--text);
   font-size: 16px;
+}
+
+.cart-promo__input::placeholder {
+  color: color-mix(in srgb, var(--muted) 88%, transparent);
+}
+
+.cart-promo__input:focus::placeholder {
+  color: transparent;
 }
 
 .cart-total__row {

@@ -354,7 +354,7 @@ export function CartPage() {
                 className="cart-promo__input"
                 value={promoCodeInput}
                 onChange={(event) => setPromoCodeInput(event.target.value.toUpperCase())}
-                placeholder="Введите код"
+                placeholder="Введите промокод"
               />
               <Button variant="secondary" onClick={() => void onApplyPromo()} disabled={isPromoApplying}>
                 {isPromoApplying ? "..." : "Применить"}

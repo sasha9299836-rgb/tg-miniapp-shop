@@ -10,6 +10,7 @@ import {
   upsertAdminPromo,
   type AdminPromoDetail,
   type AdminPromoListItem,
+  type PromoEffectiveStatus,
   type PromoStatus,
   type PromoType,
 } from "../../../shared/api/adminPromoApi";
@@ -38,6 +39,25 @@ function fromLocalDatetimeValue(value: string): string | null {
   const date = new Date(normalized);
   if (!Number.isFinite(date.getTime())) return null;
   return date.toISOString();
+}
+
+function promoTypeLabel(type: PromoType): string {
+  return type === "single_use" ? "Одноразовый" : "Многоразовый";
+}
+
+function promoStatusLabel(status: PromoStatus | PromoEffectiveStatus): string {
+  switch (status) {
+    case "active":
+      return "Активен";
+    case "disabled":
+      return "Неактивен";
+    case "exhausted":
+      return "Исчерпан";
+    case "expired":
+      return "Истёк";
+    default:
+      return String(status);
+  }
 }
 
 export function AdminPromosPage() {
@@ -221,13 +241,13 @@ export function AdminPromosPage() {
                 <div className="admin-promos-page__item-top">
                   <div className="admin-promos-page__code">{item.code}</div>
                   <div className={`admin-promos-page__status admin-promos-page__status--${item.effective_status}`}>
-                    {item.effective_status}
+                    {promoStatusLabel(item.effective_status)}
                   </div>
                 </div>
                 <div className="admin-promos-page__item-meta">
-                  <span>{item.type === "single_use" ? "одноразовый" : "многоразовый"}</span>
+                  <span>{promoTypeLabel(item.type)}</span>
                   <span>{item.discount_percent}%</span>
-                  <span>заказов: {item.stats.confirmed_orders_count}</span>
+                  <span>Заказов: {item.stats.confirmed_orders_count}</span>
                 </div>
                 <div className="admin-promos-page__item-actions">
                   <Button variant="secondary" onClick={(event) => { event.stopPropagation(); void onQuickStatus(item.id, "active"); }}>
@@ -259,8 +279,8 @@ export function AdminPromosPage() {
             <label className="admin-promos-page__label">
               Тип
               <select className="admin-promos-page__input" value={type} onChange={(event) => setType(event.target.value as PromoType)}>
-                <option value="single_use">одноразовый</option>
-                <option value="multi_use">многоразовый</option>
+                <option value="single_use">Одноразовый</option>
+                <option value="multi_use">Многоразовый</option>
               </select>
             </label>
 
@@ -279,16 +299,16 @@ export function AdminPromosPage() {
             <label className="admin-promos-page__label">
               Статус
               <select className="admin-promos-page__input" value={status} onChange={(event) => setStatus(event.target.value as PromoStatus)}>
-                <option value="active">active</option>
-                <option value="disabled">disabled</option>
-                <option value="exhausted">exhausted</option>
+                <option value="active">Активен</option>
+                <option value="disabled">Неактивен</option>
+                <option value="exhausted">Исчерпан</option>
               </select>
             </label>
 
             <label className="admin-promos-page__label">
               Срок действия (опционально)
               <input
-                className="admin-promos-page__input"
+                className="admin-promos-page__input admin-promos-page__datetime"
                 type="datetime-local"
                 value={expiresAt}
                 onChange={(event) => setExpiresAt(event.target.value)}
