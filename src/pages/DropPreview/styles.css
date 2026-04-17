@@ -98,7 +98,7 @@
 
 .drop-preview__error {
   font-size: 14px;
-  color: #b42318;
+  color: var(--error);
   margin-bottom: 12px;
 }
 
@@ -109,7 +109,7 @@
 .drop-preview-viewer {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.64);
+  background: var(--overlay-backdrop);
   display: grid;
   place-items: center;
   z-index: 80;
@@ -160,8 +160,8 @@
   height: 34px;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--surface) 82%, transparent);
-  background: color-mix(in srgb, var(--surface) 34%, rgba(17, 24, 39, 0.66) 66%);
-  color: #fff;
+  background: color-mix(in srgb, var(--surface) 34%, var(--overlay-control-bg) 66%);
+  color: var(--overlay-control-text);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -184,9 +184,9 @@
   border-radius: 999px;
   font-size: 12px;
   font-weight: 700;
-  color: #fff;
-  background: rgba(17, 24, 39, 0.68);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--overlay-control-text);
+  background: var(--overlay-control-bg);
+  border: 1px solid var(--overlay-control-border);
   z-index: 2;
 }
 
@@ -197,8 +197,8 @@
   height: 38px;
   border-radius: 999px;
   border: 0;
-  background: rgba(17, 24, 39, 0.68);
-  color: #fff;
+  background: var(--overlay-control-bg);
+  color: var(--overlay-control-text);
   transform: translateY(-50%);
   display: grid;
   place-items: center;

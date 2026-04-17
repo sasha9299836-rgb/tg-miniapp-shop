@@ -31,9 +31,9 @@
   border-radius: 999px;
   font-size: 12px;
   font-weight: 700;
-  color: #fff;
-  background: rgba(17, 24, 39, 0.68);
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: var(--overlay-control-text);
+  background: var(--overlay-control-bg);
+  border: 1px solid var(--overlay-control-border);
   z-index: 3;
   opacity: 0;
   transform: translateY(-4px);
@@ -47,8 +47,8 @@
   height: 32px;
   border-radius: 999px;
   border: 0;
-  background: rgba(17, 24, 39, 0.68);
-  color: #fff;
+  background: var(--overlay-control-bg);
+  color: var(--overlay-control-text);
   transform: translateY(-50%);
   display: grid;
   place-items: center;
@@ -76,12 +76,12 @@
   width: 6px;
   height: 6px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.45);
+  background: var(--overlay-dot);
   transition: transform 0.2s ease, background 0.2s ease;
 }
 
 .pcard__dot.is-on {
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--overlay-dot-active);
   transform: scale(1.2);
 }
 
