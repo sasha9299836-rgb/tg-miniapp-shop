@@ -254,7 +254,7 @@ export function ItemPage() {
   const productRef = String(id ?? "").trim();
   const numericProductId = Number(productRef);
   const hasNumericProductId = Number.isFinite(numericProductId);
-  const { products, load, getById } = useProductsStore();
+  const { products, isLoading, load, getById } = useProductsStore();
   const fav = useFavoritesStore();
   const cart = useCartStore();
   const requestAddWithDefectGuard = useDefectReviewStore((s) => s.requestAddWithDefectGuard);
@@ -477,6 +477,15 @@ export function ItemPage() {
 
     window.open(shareLink, "_blank", "noopener,noreferrer");
   };
+
+  if (!product && isLoading) {
+    return (
+      <Page title="Товар">
+        <div style={{ color: "var(--muted)" }}>Загрузка товара...</div>
+        <Button variant="secondary" onClick={goBack}>Назад</Button>
+      </Page>
+    );
+  }
 
   if (!product) {
     return (
