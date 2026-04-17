@@ -482,7 +482,6 @@ export function ItemPage() {
     return (
       <Page title="Товар">
         <div style={{ color: "var(--muted)" }}>Загрузка товара...</div>
-        <Button variant="secondary" onClick={goBack}>Назад</Button>
       </Page>
     );
   }
