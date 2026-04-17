@@ -440,5 +440,10 @@
 .item-viewer__nav--prev { left: -14px; }
 .item-viewer__nav--next { right: -14px; }
 
+:root:not([data-theme="dark"]) .item-description-section .item-accordion--plain .item-accordion__head,
+:root:not([data-theme="dark"]) .item-measurements-section .item-accordion--plain .item-accordion__head {
+  color: var(--text-secondary);
+}
+
 
 
