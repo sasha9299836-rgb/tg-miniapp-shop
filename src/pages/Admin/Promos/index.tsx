@@ -7,11 +7,9 @@ import {
   deleteAdminPromo,
   getAdminPromoDetail,
   listAdminPromos,
-  setAdminPromoStatus,
   upsertAdminPromo,
   type AdminPromoDetail,
   type AdminPromoListItem,
-  type PromoEffectiveStatus,
   type PromoStatus,
   type PromoType,
 } from "../../../shared/api/adminPromoApi";
@@ -54,23 +52,40 @@ function nowLocalDatetimeValue(): string {
   return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
 }
 
+function formatShortDateTime(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (!Number.isFinite(date.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(date.getDate())}.${pad(date.getMonth() + 1)} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function formatPromoPeriod(
+  activeFromIso: string | null | undefined,
+  activeToIso: string | null | undefined,
+): string {
+  const from = formatShortDateTime(activeFromIso);
+  const to = formatShortDateTime(activeToIso);
+  if (from && to) return `${from} — ${to}`;
+  if (to) return to;
+  if (from) return from;
+  return "Без срока";
+}
+
 function promoTypeLabel(type: PromoType): string {
   return type === "single_use" ? "Одноразовый" : "Многоразовый";
 }
 
-function promoStatusLabel(status: PromoStatus | PromoEffectiveStatus): string {
-  switch (status) {
-    case "active":
-      return "Активен";
-    case "disabled":
-      return "Неактивен";
-    case "exhausted":
-      return "Исчерпан";
-    case "expired":
-      return "Истёк";
-    default:
-      return String(status);
-  }
+function generatePromoCode(): string {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ0123456789";
+  const group = (len: number) => {
+    let value = "";
+    for (let i = 0; i < len; i += 1) {
+      value += alphabet[Math.floor(Math.random() * alphabet.length)];
+    }
+    return value;
+  };
+  return `${group(4)}-${group(4)}-${group(4)}`;
 }
 
 export function AdminPromosPage() {
@@ -81,9 +96,9 @@ export function AdminPromosPage() {
   const [code, setCode] = useState("");
   const [type, setType] = useState<PromoType>("single_use");
   const [discountPercent, setDiscountPercent] = useState("10");
-  const [status, setStatus] = useState<PromoStatus>("active");
   const [activeFrom, setActiveFrom] = useState(nowLocalDatetimeValue());
   const [activeTo, setActiveTo] = useState("");
+  const [generatedCodes, setGeneratedCodes] = useState<Set<string>>(() => new Set());
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -94,6 +109,11 @@ export function AdminPromosPage() {
     () => items.find((item) => item.id === selectedId) ?? null,
     [items, selectedId],
   );
+
+  const selectedDetail = useMemo(() => {
+    if (!selectedId || !detail || detail.promo.id !== selectedId) return null;
+    return detail;
+  }, [detail, selectedId]);
 
   const loadList = async () => {
     setIsLoading(true);
@@ -132,11 +152,10 @@ export function AdminPromosPage() {
   }, [selectedId]);
 
   const onSelectPromo = (promo: AdminPromoListItem) => {
-    setSelectedId(promo.id);
+    setSelectedId((prev) => (prev === promo.id ? null : promo.id));
     setCode(promo.code);
     setType(promo.type);
     setDiscountPercent(String(promo.discount_percent));
-    setStatus(promo.status);
     setActiveFrom(toLocalDatetimeValue(promo.active_from) || nowLocalDatetimeValue());
     setActiveTo(toLocalDatetimeValue(promo.active_to ?? promo.expires_at ?? null));
     setSuccessText(null);
@@ -149,11 +168,21 @@ export function AdminPromosPage() {
     setCode("");
     setType("single_use");
     setDiscountPercent("10");
-    setStatus("active");
     setActiveFrom(nowLocalDatetimeValue());
     setActiveTo("");
     setSuccessText(null);
     setErrorText(null);
+  };
+
+  const onGenerateCode = () => {
+    let next = generatePromoCode();
+    let attempts = 0;
+    while ((generatedCodes.has(next) || next === code.trim()) && attempts < 12) {
+      next = generatePromoCode();
+      attempts += 1;
+    }
+    setGeneratedCodes((prev) => new Set(prev).add(next));
+    setCode(next);
   };
 
   const onSave = async () => {
@@ -188,6 +217,8 @@ export function AdminPromosPage() {
       if (!confirmHighDiscount) return;
     }
 
+    const statusForSave: PromoStatus = selectedItem?.status ?? "active";
+
     setIsSaving(true);
     setErrorText(null);
     setSuccessText(null);
@@ -197,7 +228,7 @@ export function AdminPromosPage() {
         code: normalizedCode,
         type,
         discount_percent: percent,
-        status,
+        status: statusForSave,
         active_from: activeFromIso,
         active_to: activeToIso,
         confirm_high_discount: confirmHighDiscount,
@@ -241,22 +272,6 @@ export function AdminPromosPage() {
     }
   };
 
-  const onQuickStatus = async (id: string, nextStatus: PromoStatus) => {
-    setErrorText(null);
-    setSuccessText(null);
-    try {
-      await setAdminPromoStatus(id, nextStatus);
-      await loadList();
-      if (selectedId === id) {
-        setStatus(nextStatus);
-        await loadDetail(id);
-      }
-      setSuccessText("Статус обновлён.");
-    } catch (error) {
-      setErrorText(`Не удалось изменить статус: ${(error as Error).message}`);
-    }
-  };
-
   return (
     <Page title="Промокоды" subtitle="Управление кодами и статистикой подтверждённых заказов">
       <div className="admin-promos-page">
@@ -267,12 +282,22 @@ export function AdminPromosPage() {
 
           <label className="admin-promos-page__label">
             Код
-            <input
-              className="admin-promos-page__input admin-post-form-control"
-              value={code}
-              onChange={(event) => setCode(event.target.value.toUpperCase())}
-              placeholder="SPRING10"
-            />
+            <div className="admin-promos-page__code-row">
+              <input
+                className="admin-promos-page__input admin-post-form-control"
+                value={code}
+                onChange={(event) => setCode(event.target.value.toUpperCase())}
+                placeholder="SPRING10"
+              />
+              <button
+                type="button"
+                className="admin-promos-page__generate"
+                onClick={onGenerateCode}
+                disabled={isSaving || isDeleting}
+              >
+                Сгенерировать
+              </button>
+            </div>
           </label>
 
           <label className="admin-promos-page__label">
@@ -297,19 +322,6 @@ export function AdminPromosPage() {
               value={discountPercent}
               onChange={(event) => setDiscountPercent(event.target.value)}
             />
-          </label>
-
-          <label className="admin-promos-page__label">
-            Статус
-            <select
-              className="admin-promos-page__input admin-post-form-control"
-              value={status}
-              onChange={(event) => setStatus(event.target.value as PromoStatus)}
-            >
-              <option value="active">Активен</option>
-              <option value="disabled">Неактивен</option>
-              <option value="exhausted">Исчерпан</option>
-            </select>
           </label>
 
           <div className="admin-promos-page__range">
@@ -345,65 +357,55 @@ export function AdminPromosPage() {
           </div>
         </div>
 
-        {detail ? (
-          <div className="glass admin-promos-page__detail">
-            <div className="admin-promos-page__section-title">Статистика по подтверждённым заказам</div>
-            <div className="admin-promos-page__stats-grid">
-              <div>Заказов: <strong>{detail.stats.confirmed_orders_count}</strong></div>
-              <div>Вещей: <strong>{detail.stats.sold_items_count}</strong></div>
-              <div>Сумма без скидки: <strong>{rub(detail.stats.subtotal_without_discount_rub)}</strong></div>
-              <div>Сумма скидки: <strong>{rub(detail.stats.promo_discount_amount_rub)}</strong></div>
-              <div>Сумма после скидки: <strong>{rub(detail.stats.subtotal_with_discount_rub)}</strong></div>
-            </div>
-            <div className="admin-promos-page__orders">
-              {!detail.orders.length ? <div className="admin-promos-page__muted">Подтверждённых заказов по этому промокоду пока нет.</div> : null}
-              {detail.orders.map((row) => (
-                <div key={row.order_id} className="admin-promos-page__order-row">
-                  <div>Заказ: {row.order_id}</div>
-                  <div>Пользователь: {row.user?.telegram_username ? `@${row.user.telegram_username}` : `tg:${row.tg_user_id}`}</div>
-                  <div>Вещей: {row.items_count}</div>
-                  <div>Без скидки: {rub(Number(row.order?.subtotal_without_discount_rub ?? 0))}</div>
-                  <div>Скидка: {rub(Number(row.order?.promo_discount_amount_rub ?? 0))}</div>
-                  <div>После скидки: {rub(Number(row.order?.subtotal_with_discount_rub ?? 0))}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
         <div className="glass admin-promos-page__list">
           <div className="admin-promos-page__section-title">Список промокодов</div>
           {isLoading ? <div className="admin-promos-page__muted">Загрузка...</div> : null}
           {!isLoading && !items.length ? <div className="admin-promos-page__muted">Промокодов пока нет.</div> : null}
-          {items.map((item) => (
-            <div
-              key={item.id}
-              className={`admin-promos-page__item ${item.id === selectedId ? "is-active" : ""}`}
-              onClick={() => onSelectPromo(item)}
-            >
-              <div className="admin-promos-page__item-top">
-                <div className="admin-promos-page__code">{item.code}</div>
-                <div className={`admin-promos-page__status admin-promos-page__status--${item.effective_status}`}>
-                  {promoStatusLabel(item.effective_status)}
+          {items.map((item) => {
+            const isSelected = item.id === selectedId;
+            const itemDetail = isSelected ? selectedDetail : null;
+            return (
+              <div
+                key={item.id}
+                className={`admin-promos-page__item ${isSelected ? "is-active" : ""}`}
+                onClick={() => onSelectPromo(item)}
+              >
+                <div className="admin-promos-page__item-top">
+                  <div className="admin-promos-page__code">{item.code}</div>
                 </div>
+                <div className="admin-promos-page__item-meta">
+                  <span>{promoTypeLabel(item.type)}</span>
+                  <span>{item.discount_percent}%</span>
+                  <span>{formatPromoPeriod(item.active_from, item.active_to ?? item.expires_at ?? null)}</span>
+                </div>
+
+                {itemDetail ? (
+                  <div className="admin-promos-page__item-detail">
+                    <div className="admin-promos-page__stats-grid">
+                      <div>Заказов: <strong>{itemDetail.stats.confirmed_orders_count}</strong></div>
+                      <div>Вещей: <strong>{itemDetail.stats.sold_items_count}</strong></div>
+                      <div>Сумма без скидки: <strong>{rub(itemDetail.stats.subtotal_without_discount_rub)}</strong></div>
+                      <div>Сумма скидки: <strong>{rub(itemDetail.stats.promo_discount_amount_rub)}</strong></div>
+                      <div>Сумма после скидки: <strong>{rub(itemDetail.stats.subtotal_with_discount_rub)}</strong></div>
+                    </div>
+                    <div className="admin-promos-page__orders">
+                      {!itemDetail.orders.length ? <div className="admin-promos-page__muted">Подтверждённых заказов пока нет.</div> : null}
+                      {itemDetail.orders.map((row) => (
+                        <div key={row.order_id} className="admin-promos-page__order-row">
+                          <div>Заказ: {row.order_id}</div>
+                          <div>Пользователь: {row.user?.telegram_username ? `@${row.user.telegram_username}` : `tg:${row.tg_user_id}`}</div>
+                          <div>Вещей: {row.items_count}</div>
+                          <div>Без скидки: {rub(Number(row.order?.subtotal_without_discount_rub ?? 0))}</div>
+                          <div>Скидка: {rub(Number(row.order?.promo_discount_amount_rub ?? 0))}</div>
+                          <div>После скидки: {rub(Number(row.order?.subtotal_with_discount_rub ?? 0))}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
-              <div className="admin-promos-page__item-meta">
-                <span>{promoTypeLabel(item.type)}</span>
-                <span>{item.discount_percent}%</span>
-                <span>Заказов: {item.stats.confirmed_orders_count}</span>
-                <span>С: {toLocalDatetimeValue(item.active_from) || "—"}</span>
-                <span>По: {toLocalDatetimeValue(item.active_to ?? item.expires_at ?? null) || "—"}</span>
-              </div>
-              <div className="admin-promos-page__item-actions">
-                <Button variant="secondary" onClick={(event) => { event.stopPropagation(); void onQuickStatus(item.id, "active"); }}>
-                  Вкл
-                </Button>
-                <Button variant="secondary" onClick={(event) => { event.stopPropagation(); void onQuickStatus(item.id, "disabled"); }}>
-                  Выкл
-                </Button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {errorText ? <div className="admin-promos-page__error">{errorText}</div> : null}

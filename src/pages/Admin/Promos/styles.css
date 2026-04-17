@@ -41,35 +41,12 @@
   font-weight: 700;
 }
 
-.admin-promos-page__status {
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 999px;
-}
-
-.admin-promos-page__status--active {
-  background: color-mix(in srgb, var(--success) 14%, var(--surface) 86%);
-  color: color-mix(in srgb, var(--success) 80%, var(--text) 20%);
-}
-
-.admin-promos-page__status--disabled,
-.admin-promos-page__status--exhausted,
-.admin-promos-page__status--expired {
-  background: color-mix(in srgb, var(--surface-alt) 78%, var(--surface) 22%);
-  color: var(--muted);
-}
-
 .admin-promos-page__item-meta {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
   font-size: 12px;
   color: var(--muted);
-}
-
-.admin-promos-page__item-actions {
-  display: flex;
-  gap: 8px;
 }
 
 .admin-promos-page__label {
@@ -110,9 +87,40 @@
   gap: 8px;
 }
 
+.admin-promos-page__code-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.admin-promos-page__generate {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  min-height: 40px;
+  padding: 8px 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.admin-promos-page__generate:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .admin-promos-page__stats-grid {
   display: grid;
   gap: 6px;
+}
+
+.admin-promos-page__item-detail {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  display: grid;
+  gap: 8px;
 }
 
 .admin-promos-page__orders {
@@ -152,5 +160,11 @@
 
   .admin-promos-page__actions {
     grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 420px) {
+  .admin-promos-page__code-row {
+    grid-template-columns: 1fr;
   }
 }
