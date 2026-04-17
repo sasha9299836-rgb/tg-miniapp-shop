@@ -213,6 +213,7 @@ export function CartPage() {
       const message = (error as Error).message;
       if (message.includes("PROMO_NOT_FOUND")) setPromoErrorText("Промокод не найден.");
       else if (message.includes("PROMO_DISABLED")) setPromoErrorText("Промокод выключен.");
+      else if (message.includes("PROMO_NOT_STARTED")) setPromoErrorText("Промокод ещё не активен.");
       else if (message.includes("PROMO_EXPIRED")) setPromoErrorText("Срок действия промокода истёк.");
       else if (message.includes("PROMO_EXHAUSTED")) setPromoErrorText("Промокод исчерпан.");
       else if (message.includes("PROMO_ALREADY_USED_BY_USER")) setPromoErrorText("Этот одноразовый промокод уже использован.");

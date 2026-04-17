@@ -18,6 +18,8 @@ type PromoRow = {
   type: PromoType;
   discount_percent: number;
   status: PromoStoredStatus;
+  active_from: string | null;
+  active_to: string | null;
   expires_at: string | null;
   deleted_at: string | null;
 };
@@ -45,8 +47,9 @@ function normalizePromoCode(value: unknown): string | null {
 
 export function resolvePromoEffectiveStatus(row: PromoRow): PromoEffectiveStatus {
   if (row.status !== "active") return row.status;
-  if (!row.expires_at) return "active";
-  const expiresAtMs = new Date(row.expires_at).getTime();
+  const effectiveActiveTo = row.active_to ?? row.expires_at;
+  if (!effectiveActiveTo) return "active";
+  const expiresAtMs = new Date(effectiveActiveTo).getTime();
   if (!Number.isFinite(expiresAtMs)) return "active";
   return expiresAtMs <= Date.now() ? "expired" : "active";
 }
@@ -112,7 +115,7 @@ export async function validatePromoForUserAndSubtotal(input: {
 
   const { data, error } = await input.supabase
     .from("tg_promo_codes")
-    .select("id, code, type, discount_percent, status, expires_at, deleted_at")
+    .select("id, code, type, discount_percent, status, active_from, active_to, expires_at, deleted_at")
     .ilike("code", promoCode)
     .is("deleted_at", null)
     .limit(1)
@@ -129,6 +132,19 @@ export async function validatePromoForUserAndSubtotal(input: {
   if (effectiveStatus === "disabled") throw new PromoValidationError("PROMO_DISABLED");
   if (effectiveStatus === "exhausted") throw new PromoValidationError("PROMO_EXHAUSTED");
   if (effectiveStatus === "expired") throw new PromoValidationError("PROMO_EXPIRED");
+
+  const nowMs = Date.now();
+  const activeFromMs = promo.active_from ? new Date(promo.active_from).getTime() : Number.NaN;
+  if (Number.isFinite(activeFromMs) && activeFromMs > nowMs) {
+    throw new PromoValidationError("PROMO_NOT_STARTED");
+  }
+
+  const activeToRaw = promo.active_to ?? promo.expires_at;
+  const activeToMs = activeToRaw ? new Date(activeToRaw).getTime() : Number.NaN;
+  if (Number.isFinite(activeToMs) && activeToMs <= nowMs) {
+    throw new PromoValidationError("PROMO_EXPIRED");
+  }
+
   if (promo.type !== "single_use" && promo.type !== "multi_use") {
     throw new PromoValidationError("PROMO_TYPE_INVALID");
   }

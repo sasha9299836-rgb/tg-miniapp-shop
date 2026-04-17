@@ -15,7 +15,8 @@ type AdminPromoBody = {
   type?: "single_use" | "multi_use" | null;
   discount_percent?: number | null;
   status?: "active" | "disabled" | "exhausted" | null;
-  expires_at?: string | null;
+  active_from?: string | null;
+  active_to?: string | null;
   confirm_high_discount?: boolean;
 };
 
@@ -25,6 +26,8 @@ type PromoRow = {
   type: "single_use" | "multi_use";
   discount_percent: number;
   status: "active" | "disabled" | "exhausted";
+  active_from: string | null;
+  active_to: string | null;
   expires_at: string | null;
   created_at: string;
   updated_at: string;
@@ -39,12 +42,12 @@ function normalizeCode(value: unknown): string {
   return String(value ?? "").trim().toUpperCase();
 }
 
-function toIsoOrNull(value: unknown): string | null {
+function toIsoOrNull(value: unknown, errorCode: "PROMO_ACTIVE_FROM_INVALID" | "PROMO_ACTIVE_TO_INVALID"): string | null {
   const normalized = String(value ?? "").trim();
   if (!normalized) return null;
   const date = new Date(normalized);
   if (!Number.isFinite(date.getTime())) {
-    throw new Error("PROMO_EXPIRES_AT_INVALID");
+    throw new Error(errorCode);
   }
   return date.toISOString();
 }
@@ -67,6 +70,15 @@ function validateDiscountPercent(value: unknown): number {
     throw new Error("PROMO_PERCENT_INVALID");
   }
   return parsed;
+}
+
+function ensureActiveRange(activeFrom: string | null, activeTo: string | null) {
+  if (!activeFrom || !activeTo) return;
+  const fromMs = new Date(activeFrom).getTime();
+  const toMs = new Date(activeTo).getTime();
+  if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || toMs <= fromMs) {
+    throw new Error("PROMO_ACTIVE_RANGE_INVALID");
+  }
 }
 
 function buildOrderStatsMap(
@@ -119,7 +131,7 @@ Deno.serve(async (req) => {
     if (mode === "list") {
       const { data, error } = await supabase
         .from("tg_promo_codes")
-        .select("id, code, type, discount_percent, status, expires_at, created_at, updated_at, deleted_at")
+        .select("id, code, type, discount_percent, status, active_from, active_to, expires_at, created_at, updated_at, deleted_at")
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
       if (error) return json({ error: "PROMO_LIST_FAILED", details: error.message }, 500);
@@ -174,7 +186,7 @@ Deno.serve(async (req) => {
 
       const { data: promoData, error: promoError } = await supabase
         .from("tg_promo_codes")
-        .select("id, code, type, discount_percent, status, expires_at, created_at, updated_at, deleted_at")
+        .select("id, code, type, discount_percent, status, active_from, active_to, expires_at, created_at, updated_at, deleted_at")
         .eq("id", promoId)
         .is("deleted_at", null)
         .maybeSingle();
@@ -280,13 +292,17 @@ Deno.serve(async (req) => {
       const type = validatePromoType(body?.type);
       const discountPercent = validateDiscountPercent(body?.discount_percent);
       const status = body?.status ? validatePromoStatus(body.status) : "active";
-      const expiresAt = toIsoOrNull(body?.expires_at);
+      const activeFrom = toIsoOrNull(body?.active_from, "PROMO_ACTIVE_FROM_INVALID");
+      const activeTo = toIsoOrNull(body?.active_to, "PROMO_ACTIVE_TO_INVALID");
       const highDiscountConfirmed = Boolean(body?.confirm_high_discount);
 
       if (!code) return json({ ok: false, error: "PROMO_CODE_REQUIRED" }, 400);
       if (discountPercent > 15 && !highDiscountConfirmed) {
         return json({ ok: false, error: "PROMO_DISCOUNT_CONFIRM_REQUIRED" }, 200);
       }
+
+      const finalActiveFrom = activeFrom ?? (!id ? new Date().toISOString() : null);
+      ensureActiveRange(finalActiveFrom, activeTo);
 
       if (!id) {
         const { data, error } = await supabase
@@ -296,10 +312,12 @@ Deno.serve(async (req) => {
             type,
             discount_percent: discountPercent,
             status,
-            expires_at: expiresAt,
+            active_from: finalActiveFrom,
+            active_to: activeTo,
+            expires_at: activeTo,
             deleted_at: null,
           })
-          .select("id, code, type, discount_percent, status, expires_at, created_at, updated_at, deleted_at")
+          .select("id, code, type, discount_percent, status, active_from, active_to, expires_at, created_at, updated_at, deleted_at")
           .single();
         if (error) {
           if (String(error.message ?? "").toLowerCase().includes("tg_promo_codes_code_lower_uidx")) {
@@ -311,19 +329,29 @@ Deno.serve(async (req) => {
         return json({ ok: true, promo: { ...row, effective_status: resolvePromoEffectiveStatus(row) } });
       }
 
+      const updatePayload: Record<string, unknown> = {
+        code,
+        type,
+        discount_percent: discountPercent,
+        status,
+        updated_at: new Date().toISOString(),
+      };
+      if (activeFrom !== null) updatePayload.active_from = activeFrom;
+      if (activeTo !== null || String(body?.active_to ?? "").trim() === "") {
+        updatePayload.active_to = activeTo;
+        updatePayload.expires_at = activeTo;
+      }
+
+      if (activeFrom !== null && activeTo !== null) {
+        ensureActiveRange(activeFrom, activeTo);
+      }
+
       const { data, error } = await supabase
         .from("tg_promo_codes")
-        .update({
-          code,
-          type,
-          discount_percent: discountPercent,
-          status,
-          expires_at: expiresAt,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updatePayload)
         .eq("id", id)
         .is("deleted_at", null)
-        .select("id, code, type, discount_percent, status, expires_at, created_at, updated_at, deleted_at")
+        .select("id, code, type, discount_percent, status, active_from, active_to, expires_at, created_at, updated_at, deleted_at")
         .maybeSingle();
 
       if (error) {
@@ -350,7 +378,7 @@ Deno.serve(async (req) => {
         })
         .eq("id", id)
         .is("deleted_at", null)
-        .select("id, code, type, discount_percent, status, expires_at, created_at, updated_at, deleted_at")
+        .select("id, code, type, discount_percent, status, active_from, active_to, expires_at, created_at, updated_at, deleted_at")
         .maybeSingle();
       if (error) return json({ error: "PROMO_SET_STATUS_FAILED", details: error.message }, 500);
       if (!data) return json({ ok: false, error: "PROMO_NOT_FOUND" }, 404);
@@ -382,7 +410,9 @@ Deno.serve(async (req) => {
       message === "PROMO_TYPE_INVALID"
       || message === "PROMO_STATUS_INVALID"
       || message === "PROMO_PERCENT_INVALID"
-      || message === "PROMO_EXPIRES_AT_INVALID"
+      || message === "PROMO_ACTIVE_FROM_INVALID"
+      || message === "PROMO_ACTIVE_TO_INVALID"
+      || message === "PROMO_ACTIVE_RANGE_INVALID"
     ) {
       return json({ ok: false, error: message }, 400);
     }

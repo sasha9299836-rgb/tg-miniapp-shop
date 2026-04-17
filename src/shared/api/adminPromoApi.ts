@@ -19,7 +19,9 @@ export type AdminPromoListItem = {
   discount_percent: number;
   status: PromoStatus;
   effective_status: PromoEffectiveStatus;
-  expires_at: string | null;
+  active_from: string | null;
+  active_to: string | null;
+  expires_at?: string | null;
   created_at: string;
   updated_at: string;
   stats: AdminPromoStats;
@@ -53,7 +55,9 @@ export type AdminPromoDetail = {
     discount_percent: number;
     status: PromoStatus;
     effective_status: PromoEffectiveStatus;
-    expires_at: string | null;
+    active_from: string | null;
+    active_to: string | null;
+    expires_at?: string | null;
     created_at: string;
     updated_at: string;
   };
@@ -67,7 +71,8 @@ export type UpsertPromoPayload = {
   type: PromoType;
   discount_percent: number;
   status: PromoStatus;
-  expires_at?: string | null;
+  active_from?: string | null;
+  active_to?: string | null;
   confirm_high_discount?: boolean;
 };
 

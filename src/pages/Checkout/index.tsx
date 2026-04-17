@@ -335,6 +335,8 @@ export function CheckoutPage() {
         setErrorText("Промокод не найден. Примените код заново.");
       } else if (message.includes("PROMO_DISABLED")) {
         setErrorText("Промокод выключен.");
+      } else if (message.includes("PROMO_NOT_STARTED")) {
+        setErrorText("Промокод ещё не активен.");
       } else if (message.includes("PROMO_EXPIRED")) {
         setErrorText("Срок действия промокода истёк.");
       } else if (message.includes("PROMO_EXHAUSTED")) {

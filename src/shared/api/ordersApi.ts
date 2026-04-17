@@ -303,6 +303,7 @@ export async function createOrder(payload: CreateOrderPayload): Promise<{ order_
     if (message.includes("CHECKOUT_DELIVERY_TOTAL_MISMATCH")) throw new Error("CHECKOUT_DELIVERY_TOTAL_MISMATCH");
     if (message.includes("PROMO_NOT_FOUND")) throw new Error("PROMO_NOT_FOUND");
     if (message.includes("PROMO_DISABLED")) throw new Error("PROMO_DISABLED");
+    if (message.includes("PROMO_NOT_STARTED")) throw new Error("PROMO_NOT_STARTED");
     if (message.includes("PROMO_EXHAUSTED")) throw new Error("PROMO_EXHAUSTED");
     if (message.includes("PROMO_EXPIRED")) throw new Error("PROMO_EXPIRED");
     if (message.includes("PROMO_ALREADY_USED_BY_USER")) throw new Error("PROMO_ALREADY_USED_BY_USER");
@@ -330,6 +331,7 @@ export async function createOrder(payload: CreateOrderPayload): Promise<{ order_
     if (message.includes("CHECKOUT_DELIVERY_TOTAL_MISMATCH")) throw new Error("CHECKOUT_DELIVERY_TOTAL_MISMATCH");
     if (message.includes("PROMO_NOT_FOUND")) throw new Error("PROMO_NOT_FOUND");
     if (message.includes("PROMO_DISABLED")) throw new Error("PROMO_DISABLED");
+    if (message.includes("PROMO_NOT_STARTED")) throw new Error("PROMO_NOT_STARTED");
     if (message.includes("PROMO_EXHAUSTED")) throw new Error("PROMO_EXHAUSTED");
     if (message.includes("PROMO_EXPIRED")) throw new Error("PROMO_EXPIRED");
     if (message.includes("PROMO_ALREADY_USED_BY_USER")) throw new Error("PROMO_ALREADY_USED_BY_USER");

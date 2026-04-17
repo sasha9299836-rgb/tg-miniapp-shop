@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../../shared/ui/Button";
 import { Page } from "../../../shared/ui/Page";
+import { AdminDateTimeField } from "../DateTimeField";
 import {
   deleteAdminPromo,
   getAdminPromoDetail,
@@ -14,13 +15,14 @@ import {
   type PromoStatus,
   type PromoType,
 } from "../../../shared/api/adminPromoApi";
+import "../datetime-controls.css";
 import "./styles.css";
 
 function rub(value: number) {
   return `${Number(value ?? 0).toLocaleString("ru-RU")} ₽`;
 }
 
-function toLocalDatetimeValue(iso: string | null): string {
+function toLocalDatetimeValue(iso: string | null | undefined): string {
   if (!iso) return "";
   const date = new Date(iso);
   if (!Number.isFinite(date.getTime())) return "";
@@ -39,6 +41,17 @@ function fromLocalDatetimeValue(value: string): string | null {
   const date = new Date(normalized);
   if (!Number.isFinite(date.getTime())) return null;
   return date.toISOString();
+}
+
+function nowLocalDatetimeValue(): string {
+  const date = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const yyyy = date.getFullYear();
+  const mm = pad(date.getMonth() + 1);
+  const dd = pad(date.getDate());
+  const hh = pad(date.getHours());
+  const min = pad(date.getMinutes());
+  return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
 }
 
 function promoTypeLabel(type: PromoType): string {
@@ -69,7 +82,8 @@ export function AdminPromosPage() {
   const [type, setType] = useState<PromoType>("single_use");
   const [discountPercent, setDiscountPercent] = useState("10");
   const [status, setStatus] = useState<PromoStatus>("active");
-  const [expiresAt, setExpiresAt] = useState("");
+  const [activeFrom, setActiveFrom] = useState(nowLocalDatetimeValue());
+  const [activeTo, setActiveTo] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -123,7 +137,8 @@ export function AdminPromosPage() {
     setType(promo.type);
     setDiscountPercent(String(promo.discount_percent));
     setStatus(promo.status);
-    setExpiresAt(toLocalDatetimeValue(promo.expires_at));
+    setActiveFrom(toLocalDatetimeValue(promo.active_from) || nowLocalDatetimeValue());
+    setActiveTo(toLocalDatetimeValue(promo.active_to ?? promo.expires_at ?? null));
     setSuccessText(null);
     setErrorText(null);
   };
@@ -135,7 +150,8 @@ export function AdminPromosPage() {
     setType("single_use");
     setDiscountPercent("10");
     setStatus("active");
-    setExpiresAt("");
+    setActiveFrom(nowLocalDatetimeValue());
+    setActiveTo("");
     setSuccessText(null);
     setErrorText(null);
   };
@@ -150,6 +166,20 @@ export function AdminPromosPage() {
     if (!Number.isFinite(percent) || percent <= 0 || percent > 95) {
       setErrorText("Процент скидки должен быть от 1 до 95.");
       return;
+    }
+    const activeFromIso = fromLocalDatetimeValue(activeFrom);
+    const activeToIso = fromLocalDatetimeValue(activeTo);
+    if (!activeFromIso) {
+      setErrorText("Заполните поле «Активен с».");
+      return;
+    }
+    if (activeToIso) {
+      const fromMs = new Date(activeFromIso).getTime();
+      const toMs = new Date(activeToIso).getTime();
+      if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || toMs <= fromMs) {
+        setErrorText("Дата «Активен до» должна быть позже «Активен с».");
+        return;
+      }
     }
 
     let confirmHighDiscount = true;
@@ -168,7 +198,8 @@ export function AdminPromosPage() {
         type,
         discount_percent: percent,
         status,
-        expires_at: fromLocalDatetimeValue(expiresAt),
+        active_from: activeFromIso,
+        active_to: activeToIso,
         confirm_high_discount: confirmHighDiscount,
       });
       await loadList();
@@ -181,6 +212,8 @@ export function AdminPromosPage() {
         setErrorText("Для скидки больше 15% нужно подтверждение.");
       } else if (message.includes("PROMO_CODE_EXISTS")) {
         setErrorText("Промокод с таким кодом уже существует.");
+      } else if (message.includes("PROMO_ACTIVE_RANGE_INVALID")) {
+        setErrorText("Период действия задан неверно.");
       } else {
         setErrorText(`Не удалось сохранить промокод: ${message}`);
       }
@@ -227,108 +260,88 @@ export function AdminPromosPage() {
   return (
     <Page title="Промокоды" subtitle="Управление кодами и статистикой подтверждённых заказов">
       <div className="admin-promos-page">
-        <div className="admin-promos-page__layout">
-          <div className="glass admin-promos-page__list">
-            <div className="admin-promos-page__section-title">Список промокодов</div>
-            {isLoading ? <div className="admin-promos-page__muted">Загрузка...</div> : null}
-            {!isLoading && !items.length ? <div className="admin-promos-page__muted">Промокодов пока нет.</div> : null}
-            {items.map((item) => (
-              <div
-                key={item.id}
-                className={`admin-promos-page__item ${item.id === selectedId ? "is-active" : ""}`}
-                onClick={() => onSelectPromo(item)}
-              >
-                <div className="admin-promos-page__item-top">
-                  <div className="admin-promos-page__code">{item.code}</div>
-                  <div className={`admin-promos-page__status admin-promos-page__status--${item.effective_status}`}>
-                    {promoStatusLabel(item.effective_status)}
-                  </div>
-                </div>
-                <div className="admin-promos-page__item-meta">
-                  <span>{promoTypeLabel(item.type)}</span>
-                  <span>{item.discount_percent}%</span>
-                  <span>Заказов: {item.stats.confirmed_orders_count}</span>
-                </div>
-                <div className="admin-promos-page__item-actions">
-                  <Button variant="secondary" onClick={(event) => { event.stopPropagation(); void onQuickStatus(item.id, "active"); }}>
-                    Вкл
-                  </Button>
-                  <Button variant="secondary" onClick={(event) => { event.stopPropagation(); void onQuickStatus(item.id, "disabled"); }}>
-                    Выкл
-                  </Button>
-                </div>
-              </div>
-            ))}
+        <div className="glass admin-promos-page__form">
+          <div className="admin-promos-page__section-title">
+            {selectedItem ? "Редактирование промокода" : "Новый промокод"}
           </div>
 
-          <div className="glass admin-promos-page__form">
-            <div className="admin-promos-page__section-title">
-              {selectedItem ? "Редактирование промокода" : "Новый промокод"}
-            </div>
+          <label className="admin-promos-page__label">
+            Код
+            <input
+              className="admin-promos-page__input admin-post-form-control"
+              value={code}
+              onChange={(event) => setCode(event.target.value.toUpperCase())}
+              placeholder="SPRING10"
+            />
+          </label>
 
-            <label className="admin-promos-page__label">
-              Код
-              <input
-                className="admin-promos-page__input"
-                value={code}
-                onChange={(event) => setCode(event.target.value.toUpperCase())}
-                placeholder="SPRING10"
-              />
-            </label>
+          <label className="admin-promos-page__label">
+            Тип
+            <select
+              className="admin-promos-page__input admin-post-form-control"
+              value={type}
+              onChange={(event) => setType(event.target.value as PromoType)}
+            >
+              <option value="single_use">Одноразовый</option>
+              <option value="multi_use">Многоразовый</option>
+            </select>
+          </label>
 
-            <label className="admin-promos-page__label">
-              Тип
-              <select className="admin-promos-page__input" value={type} onChange={(event) => setType(event.target.value as PromoType)}>
-                <option value="single_use">Одноразовый</option>
-                <option value="multi_use">Многоразовый</option>
-              </select>
-            </label>
+          <label className="admin-promos-page__label">
+            Скидка, %
+            <input
+              className="admin-promos-page__input admin-post-form-control"
+              type="number"
+              min={1}
+              max={95}
+              value={discountPercent}
+              onChange={(event) => setDiscountPercent(event.target.value)}
+            />
+          </label>
 
-            <label className="admin-promos-page__label">
-              Скидка, %
-              <input
-                className="admin-promos-page__input"
-                type="number"
-                min={1}
-                max={95}
-                value={discountPercent}
-                onChange={(event) => setDiscountPercent(event.target.value)}
-              />
-            </label>
+          <label className="admin-promos-page__label">
+            Статус
+            <select
+              className="admin-promos-page__input admin-post-form-control"
+              value={status}
+              onChange={(event) => setStatus(event.target.value as PromoStatus)}
+            >
+              <option value="active">Активен</option>
+              <option value="disabled">Неактивен</option>
+              <option value="exhausted">Исчерпан</option>
+            </select>
+          </label>
 
-            <label className="admin-promos-page__label">
-              Статус
-              <select className="admin-promos-page__input" value={status} onChange={(event) => setStatus(event.target.value as PromoStatus)}>
-                <option value="active">Активен</option>
-                <option value="disabled">Неактивен</option>
-                <option value="exhausted">Исчерпан</option>
-              </select>
-            </label>
+          <div className="admin-promos-page__range">
+            <AdminDateTimeField
+              id="promo-active-from"
+              label="Активен с"
+              value={activeFrom}
+              onChange={setActiveFrom}
+              placeholder="Выберите дату и время"
+            />
+            <AdminDateTimeField
+              id="promo-active-to"
+              label="Активен до"
+              value={activeTo}
+              onChange={setActiveTo}
+              placeholder="Выберите дату и время"
+            />
+          </div>
 
-            <label className="admin-promos-page__label">
-              Срок действия (опционально)
-              <input
-                className="admin-promos-page__input admin-promos-page__datetime"
-                type="datetime-local"
-                value={expiresAt}
-                onChange={(event) => setExpiresAt(event.target.value)}
-              />
-            </label>
-
-            <div className="admin-promos-page__actions">
-              <Button onClick={() => void onSave()} disabled={isSaving || isDeleting}>
-                {isSaving ? "Сохраняем..." : "Сохранить"}
-              </Button>
-              <Button variant="secondary" onClick={onResetForm} disabled={isSaving || isDeleting}>
-                Новый
-              </Button>
-              <Button variant="secondary" onClick={() => nav("/admin")} disabled={isSaving || isDeleting}>
-                Назад
-              </Button>
-              <Button variant="secondary" onClick={() => void onDelete()} disabled={!selectedId || isSaving || isDeleting}>
-                {isDeleting ? "Удаляем..." : "Удалить"}
-              </Button>
-            </div>
+          <div className="admin-promos-page__actions">
+            <Button onClick={() => void onSave()} disabled={isSaving || isDeleting}>
+              {isSaving ? "Сохраняем..." : "Сохранить"}
+            </Button>
+            <Button variant="secondary" onClick={onResetForm} disabled={isSaving || isDeleting}>
+              Новый
+            </Button>
+            <Button variant="secondary" onClick={() => nav("/admin")} disabled={isSaving || isDeleting}>
+              Назад
+            </Button>
+            <Button variant="secondary" onClick={() => void onDelete()} disabled={!selectedId || isSaving || isDeleting}>
+              {isDeleting ? "Удаляем..." : "Удалить"}
+            </Button>
           </div>
         </div>
 
@@ -357,6 +370,41 @@ export function AdminPromosPage() {
             </div>
           </div>
         ) : null}
+
+        <div className="glass admin-promos-page__list">
+          <div className="admin-promos-page__section-title">Список промокодов</div>
+          {isLoading ? <div className="admin-promos-page__muted">Загрузка...</div> : null}
+          {!isLoading && !items.length ? <div className="admin-promos-page__muted">Промокодов пока нет.</div> : null}
+          {items.map((item) => (
+            <div
+              key={item.id}
+              className={`admin-promos-page__item ${item.id === selectedId ? "is-active" : ""}`}
+              onClick={() => onSelectPromo(item)}
+            >
+              <div className="admin-promos-page__item-top">
+                <div className="admin-promos-page__code">{item.code}</div>
+                <div className={`admin-promos-page__status admin-promos-page__status--${item.effective_status}`}>
+                  {promoStatusLabel(item.effective_status)}
+                </div>
+              </div>
+              <div className="admin-promos-page__item-meta">
+                <span>{promoTypeLabel(item.type)}</span>
+                <span>{item.discount_percent}%</span>
+                <span>Заказов: {item.stats.confirmed_orders_count}</span>
+                <span>С: {toLocalDatetimeValue(item.active_from) || "—"}</span>
+                <span>По: {toLocalDatetimeValue(item.active_to ?? item.expires_at ?? null) || "—"}</span>
+              </div>
+              <div className="admin-promos-page__item-actions">
+                <Button variant="secondary" onClick={(event) => { event.stopPropagation(); void onQuickStatus(item.id, "active"); }}>
+                  Вкл
+                </Button>
+                <Button variant="secondary" onClick={(event) => { event.stopPropagation(); void onQuickStatus(item.id, "disabled"); }}>
+                  Выкл
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
 
         {errorText ? <div className="admin-promos-page__error">{errorText}</div> : null}
         {successText ? <div className="admin-promos-page__success">{successText}</div> : null}
