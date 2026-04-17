@@ -217,6 +217,7 @@ export function CartPage() {
       else if (message.includes("PROMO_EXPIRED")) setPromoErrorText("Срок действия промокода истёк.");
       else if (message.includes("PROMO_EXHAUSTED")) setPromoErrorText("Промокод исчерпан.");
       else if (message.includes("PROMO_ALREADY_USED_BY_USER")) setPromoErrorText("Этот одноразовый промокод уже использован.");
+      else if (message.includes("PROMO_RATE_LIMITED")) setPromoErrorText("Слишком много попыток. Попробуйте снова чуть позже.");
       else setPromoErrorText("Не удалось применить промокод.");
     } finally {
       setIsPromoApplying(false);

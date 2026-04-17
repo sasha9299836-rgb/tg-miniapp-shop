@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../../shared/ui/Button";
 import { Page } from "../../../shared/ui/Page";
@@ -7,6 +7,7 @@ import {
   deleteAdminPromo,
   getAdminPromoDetail,
   listAdminPromos,
+  setAdminPromoStatus,
   upsertAdminPromo,
   type AdminPromoDetail,
   type AdminPromoListItem,
@@ -66,7 +67,7 @@ function formatPromoPeriod(
 ): string {
   const from = formatShortDateTime(activeFromIso);
   const to = formatShortDateTime(activeToIso);
-  if (from && to) return `${from} — ${to}`;
+  if (from && to) return `${from} - ${to}`;
   if (to) return to;
   if (from) return from;
   return "Без срока";
@@ -88,6 +89,20 @@ function generatePromoCode(): string {
   return `${group(4)}-${group(4)}-${group(4)}`;
 }
 
+function moveUsedSingleUseToBottom(items: AdminPromoListItem[]): AdminPromoListItem[] {
+  const regular: AdminPromoListItem[] = [];
+  const usedSingle: AdminPromoListItem[] = [];
+  for (const item of items) {
+    const isUsedSingleUse = item.type === "single_use" && Number(item.stats.confirmed_orders_count ?? 0) > 0;
+    if (isUsedSingleUse) {
+      usedSingle.push(item);
+      continue;
+    }
+    regular.push(item);
+  }
+  return [...regular, ...usedSingle];
+}
+
 export function AdminPromosPage() {
   const nav = useNavigate();
   const [items, setItems] = useState<AdminPromoListItem[]>([]);
@@ -102,6 +117,8 @@ export function AdminPromosPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isStatusUpdating, setIsStatusUpdating] = useState(false);
+  const [confirmDeletePromo, setConfirmDeletePromo] = useState<AdminPromoListItem | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [successText, setSuccessText] = useState<string | null>(null);
 
@@ -120,7 +137,7 @@ export function AdminPromosPage() {
     setErrorText(null);
     try {
       const list = await listAdminPromos();
-      setItems(list);
+      setItems(moveUsedSingleUseToBottom(list));
       if (selectedId && !list.some((row) => row.id === selectedId)) {
         setSelectedId(null);
         setDetail(null);
@@ -253,22 +270,42 @@ export function AdminPromosPage() {
     }
   };
 
-  const onDelete = async () => {
-    if (!selectedId || isDeleting) return;
-    const confirmed = window.confirm("Удалить промокод?");
-    if (!confirmed) return;
+  const onDelete = async (promoId: string) => {
+    if (!promoId || isDeleting || isStatusUpdating) return;
     setIsDeleting(true);
     setErrorText(null);
     setSuccessText(null);
     try {
-      await deleteAdminPromo(selectedId);
+      await deleteAdminPromo(promoId);
       await loadList();
-      onResetForm();
+      if (selectedId === promoId) {
+        onResetForm();
+      }
       setSuccessText("Промокод удалён.");
     } catch (error) {
       setErrorText(`Не удалось удалить промокод: ${(error as Error).message}`);
     } finally {
       setIsDeleting(false);
+      setConfirmDeletePromo(null);
+    }
+  };
+
+  const onSetStatus = async (promo: AdminPromoListItem, status: PromoStatus) => {
+    if (isSaving || isDeleting || isStatusUpdating) return;
+    setIsStatusUpdating(true);
+    setErrorText(null);
+    setSuccessText(null);
+    try {
+      await setAdminPromoStatus(promo.id, status);
+      await loadList();
+      if (selectedId === promo.id) {
+        await loadDetail(promo.id);
+      }
+      setSuccessText(status === "active" ? "Промокод активирован." : "Промокод деактивирован.");
+    } catch (error) {
+      setErrorText(`Не удалось изменить статус: ${(error as Error).message}`);
+    } finally {
+      setIsStatusUpdating(false);
     }
   };
 
@@ -293,7 +330,7 @@ export function AdminPromosPage() {
                 type="button"
                 className="admin-promos-page__generate"
                 onClick={onGenerateCode}
-                disabled={isSaving || isDeleting}
+                disabled={isSaving || isDeleting || isStatusUpdating}
               >
                 Сгенерировать
               </button>
@@ -342,17 +379,14 @@ export function AdminPromosPage() {
           </div>
 
           <div className="admin-promos-page__actions">
-            <Button onClick={() => void onSave()} disabled={isSaving || isDeleting}>
+            <Button onClick={() => void onSave()} disabled={isSaving || isDeleting || isStatusUpdating}>
               {isSaving ? "Сохраняем..." : "Сохранить"}
             </Button>
-            <Button variant="secondary" onClick={onResetForm} disabled={isSaving || isDeleting}>
+            <Button variant="secondary" onClick={onResetForm} disabled={isSaving || isDeleting || isStatusUpdating}>
               Новый
             </Button>
-            <Button variant="secondary" onClick={() => nav("/admin")} disabled={isSaving || isDeleting}>
+            <Button variant="secondary" onClick={() => nav("/admin")} disabled={isSaving || isDeleting || isStatusUpdating}>
               Назад
-            </Button>
-            <Button variant="secondary" onClick={() => void onDelete()} disabled={!selectedId || isSaving || isDeleting}>
-              {isDeleting ? "Удаляем..." : "Удалить"}
             </Button>
           </div>
         </div>
@@ -388,6 +422,38 @@ export function AdminPromosPage() {
                       <div>Сумма скидки: <strong>{rub(itemDetail.stats.promo_discount_amount_rub)}</strong></div>
                       <div>Сумма после скидки: <strong>{rub(itemDetail.stats.subtotal_with_discount_rub)}</strong></div>
                     </div>
+                    <div className="admin-promos-page__item-actions">
+                      <Button
+                        variant="secondary"
+                        disabled={isSaving || isDeleting || isStatusUpdating || item.status === "active"}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void onSetStatus(item, "active");
+                        }}
+                      >
+                        Активировать
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        disabled={isSaving || isDeleting || isStatusUpdating || item.status === "disabled"}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void onSetStatus(item, "disabled");
+                        }}
+                      >
+                        Деактивировать
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        disabled={isSaving || isDeleting || isStatusUpdating}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setConfirmDeletePromo(item);
+                        }}
+                      >
+                        Удалить
+                      </Button>
+                    </div>
                     <div className="admin-promos-page__orders">
                       {!itemDetail.orders.length ? <div className="admin-promos-page__muted">Подтверждённых заказов пока нет.</div> : null}
                       {itemDetail.orders.map((row) => (
@@ -411,6 +477,29 @@ export function AdminPromosPage() {
         {errorText ? <div className="admin-promos-page__error">{errorText}</div> : null}
         {successText ? <div className="admin-promos-page__success">{successText}</div> : null}
       </div>
+      {confirmDeletePromo ? (
+        <div className="admin-promos-page__confirm-overlay" onClick={() => setConfirmDeletePromo(null)}>
+          <div className="admin-promos-page__confirm-dialog glass" onClick={(event) => event.stopPropagation()}>
+            <div className="admin-promos-page__confirm-title">Точно удалить промокод?</div>
+            <div className="admin-promos-page__confirm-text">{confirmDeletePromo.code}</div>
+            <div className="admin-promos-page__confirm-actions">
+              <Button
+                variant="secondary"
+                onClick={() => setConfirmDeletePromo(null)}
+                disabled={isDeleting}
+              >
+                Отмена
+              </Button>
+              <Button
+                onClick={() => void onDelete(confirmDeletePromo.id)}
+                disabled={isDeleting}
+              >
+                {isDeleting ? "Удаляем..." : "Удалить"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </Page>
   );
 }
