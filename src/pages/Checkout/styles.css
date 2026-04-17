@@ -44,6 +44,36 @@
   font-weight: 700;
 }
 
+.checkout-total__promo-value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.checkout-total__old-value {
+  text-decoration: line-through;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.checkout-total__promo-note {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.checkout-total__promo-remove {
+  border: 0;
+  background: transparent;
+  color: var(--accent-strong);
+  cursor: pointer;
+  padding: 0;
+  font-size: 13px;
+}
+
 .checkout-actions {
   display: grid;
   gap: 10px;

@@ -6,8 +6,11 @@ import { getCurrentTgUserId, isTgIdentityRequiredError, TG_IDENTITY_REQUIRED_MES
 import { useUserSessionReadiness } from "../../shared/auth/useUserSessionReadiness";
 import {
   calculateDeliveryQuote,
+  clearCheckoutPromoSnapshot,
   createOrder,
+  readCheckoutPromoSnapshot,
   saveLastOrderId,
+  type PromoPreviewSnapshot,
   type DeliveryQuoteResult,
   type PackagingType,
 } from "../../shared/api/ordersApi";
@@ -61,6 +64,7 @@ export function CheckoutPage() {
   const [deliveryQuote, setDeliveryQuote] = useState<DeliveryQuoteResult | null>(null);
   const [deliveryQuoteError, setDeliveryQuoteError] = useState<string | null>(null);
   const [isDeliveryQuoteLoading, setIsDeliveryQuoteLoading] = useState(false);
+  const [promoSnapshot, setPromoSnapshot] = useState<PromoPreviewSnapshot | null>(null);
   const [isOfferAccepted, setIsOfferAccepted] = useState(false);
   const [isPrivacyAccepted, setIsPrivacyAccepted] = useState(false);
 
@@ -206,10 +210,28 @@ export function CheckoutPage() {
     () => itemsWithProducts.reduce((sum, item) => sum + item.product.price * item.qty, 0),
     [itemsWithProducts],
   );
+  const discountedItemsSum = useMemo(() => {
+    if (!promoSnapshot) return itemsSum;
+    if (promoSnapshot.subtotal_without_discount_rub !== itemsSum) return itemsSum;
+    return promoSnapshot.subtotal_with_discount_rub;
+  }, [itemsSum, promoSnapshot]);
 
   const deliveryTotalFee = deliveryQuote?.delivery_total_fee_rub ?? 0;
-  const total = itemsSum + deliveryTotalFee;
+  const total = discountedItemsSum + deliveryTotalFee;
   const isLegalAccepted = isOfferAccepted && isPrivacyAccepted;
+
+  useEffect(() => {
+    const snapshot = readCheckoutPromoSnapshot();
+    if (!snapshot) return;
+    setPromoSnapshot(snapshot);
+  }, []);
+
+  useEffect(() => {
+    if (!promoSnapshot) return;
+    if (promoSnapshot.subtotal_without_discount_rub === itemsSum) return;
+    setPromoSnapshot(null);
+    clearCheckoutPromoSnapshot();
+  }, [itemsSum, promoSnapshot]);
 
   if (isChecking) {
     return (
@@ -296,10 +318,12 @@ export function CheckoutPage() {
         delivery_base_fee_rub: deliveryQuote?.delivery_base_fee_rub ?? 0,
         delivery_markup_rub: (deliveryQuote?.delivery_markup_rub ?? 60) + (deliveryQuote?.package_fee_rub ?? 0),
         delivery_total_fee_rub: deliveryQuote?.delivery_total_fee_rub ?? 0,
+        promo_code: promoSnapshot?.promo_code ?? null,
       };
 
       const created = await createOrder(createPayload);
       saveLastOrderId(created.order_id);
+      clearCheckoutPromoSnapshot();
       saveSelectedPresetSelection(selectedAddressId, "manual");
       nav(`/payment?order=${encodeURIComponent(created.order_id)}`, { replace: true });
     } catch (error) {
@@ -307,6 +331,16 @@ export function CheckoutPage() {
       const message = error instanceof Error ? error.message : "UNKNOWN_ERROR";
       if (isTgIdentityRequiredError(error)) {
         setErrorText(TG_IDENTITY_REQUIRED_MESSAGE);
+      } else if (message.includes("PROMO_NOT_FOUND")) {
+        setErrorText("Промокод не найден. Примените код заново.");
+      } else if (message.includes("PROMO_DISABLED")) {
+        setErrorText("Промокод выключен.");
+      } else if (message.includes("PROMO_EXPIRED")) {
+        setErrorText("Срок действия промокода истёк.");
+      } else if (message.includes("PROMO_EXHAUSTED")) {
+        setErrorText("Промокод исчерпан.");
+      } else if (message.includes("PROMO_ALREADY_USED_BY_USER")) {
+        setErrorText("Этот одноразовый промокод уже использован.");
       } else if (message.includes("NOT_AVAILABLE")) {
         setErrorText("Товар уже зарезервирован или продан.");
       } else if (message.includes("PERMISSION_DENIED")) {
@@ -395,7 +429,14 @@ export function CheckoutPage() {
         <Card className="ui-card--padded checkout-total">
           <div className="checkout-total__row">
             <span>Товары</span>
-            <span>{rub(itemsSum)}</span>
+            {promoSnapshot && discountedItemsSum !== itemsSum ? (
+              <span className="checkout-total__promo-value">
+                <span className="checkout-total__old-value">{rub(itemsSum)}</span>
+                <span>{rub(discountedItemsSum)}</span>
+              </span>
+            ) : (
+              <span>{rub(itemsSum)}</span>
+            )}
           </div>
           <div className="checkout-total__row checkout-total__divider">
             <span>Доставка</span>
@@ -405,6 +446,21 @@ export function CheckoutPage() {
             <span>Итого</span>
             <span>{rub(total)}</span>
           </div>
+          {promoSnapshot ? (
+            <div className="checkout-total__promo-note">
+              Промокод: {promoSnapshot.promo_code} (-{promoSnapshot.promo_discount_percent}%)
+              <button
+                type="button"
+                className="checkout-total__promo-remove"
+                onClick={() => {
+                  setPromoSnapshot(null);
+                  clearCheckoutPromoSnapshot();
+                }}
+              >
+                Убрать
+              </button>
+            </div>
+          ) : null}
         </Card>
 
         <div className="checkout-actions">

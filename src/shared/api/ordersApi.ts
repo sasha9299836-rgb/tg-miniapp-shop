@@ -3,6 +3,7 @@ import { TG_IDENTITY_REQUIRED_ERROR } from "../auth/tgUser";
 import { ensureTelegramUserSessionToken } from "../auth/tgUserSession";
 
 export const TG_LAST_ORDER_ID_KEY = "tg_last_order_id";
+export const TG_CHECKOUT_PROMO_KEY = "tg_checkout_promo_snapshot";
 
 export type TgOrderStatus =
   | "created"
@@ -67,6 +68,24 @@ export type TgOrder = {
   shipment_create_in_progress?: boolean | null;
   shipment_create_started_at?: string | null;
   price?: number | null;
+  promo_id?: string | null;
+  promo_code?: string | null;
+  promo_type?: "single_use" | "multi_use" | null;
+  promo_discount_percent?: number | null;
+  subtotal_without_discount_rub?: number | null;
+  promo_discount_amount_rub?: number | null;
+  subtotal_with_discount_rub?: number | null;
+  final_total_rub?: number | null;
+};
+
+export type PromoPreviewSnapshot = {
+  promo_id: string;
+  promo_code: string;
+  promo_type: "single_use" | "multi_use";
+  promo_discount_percent: number;
+  subtotal_without_discount_rub: number;
+  promo_discount_amount_rub: number;
+  subtotal_with_discount_rub: number;
 };
 
 export type TgOrderTimelineEvent = {
@@ -127,6 +146,7 @@ export type CreateOrderPayload = {
   delivery_base_fee_rub: number;
   delivery_markup_rub: number;
   delivery_total_fee_rub: number;
+  promo_code?: string | null;
 };
 
 export type TgOrderItem = {
@@ -229,6 +249,7 @@ export async function createOrder(payload: CreateOrderPayload): Promise<{ order_
     delivery_base_fee_rub: payload.delivery_base_fee_rub,
     delivery_markup_rub: payload.delivery_markup_rub,
     delivery_total_fee_rub: payload.delivery_total_fee_rub,
+    has_promo_code: Boolean(String(payload.promo_code ?? "").trim()),
   });
   // Критично: RPC ожидает имена аргументов p_* (см. сигнатуру функции в Postgres).
   // Если отправить обычные имена полей, заказ не создастся.
@@ -258,6 +279,7 @@ export async function createOrder(payload: CreateOrderPayload): Promise<{ order_
       delivery_base_fee_rub: payload.delivery_base_fee_rub,
       delivery_markup_rub: payload.delivery_markup_rub,
       delivery_total_fee_rub: payload.delivery_total_fee_rub,
+      promo_code: String(payload.promo_code ?? "").trim() || null,
     },
     headers: buildTelegramUserSessionHeaders(userSessionToken),
   });
@@ -279,6 +301,14 @@ export async function createOrder(payload: CreateOrderPayload): Promise<{ order_
     if (message.includes("CHECKOUT_DELIVERY_FEE_INVALID")) throw new Error("CHECKOUT_DELIVERY_FEE_INVALID");
     if (message.includes("CHECKOUT_DELIVERY_MARKUP_INVALID")) throw new Error("CHECKOUT_DELIVERY_MARKUP_INVALID");
     if (message.includes("CHECKOUT_DELIVERY_TOTAL_MISMATCH")) throw new Error("CHECKOUT_DELIVERY_TOTAL_MISMATCH");
+    if (message.includes("PROMO_NOT_FOUND")) throw new Error("PROMO_NOT_FOUND");
+    if (message.includes("PROMO_DISABLED")) throw new Error("PROMO_DISABLED");
+    if (message.includes("PROMO_EXHAUSTED")) throw new Error("PROMO_EXHAUSTED");
+    if (message.includes("PROMO_EXPIRED")) throw new Error("PROMO_EXPIRED");
+    if (message.includes("PROMO_ALREADY_USED_BY_USER")) throw new Error("PROMO_ALREADY_USED_BY_USER");
+    if (message.includes("PROMO_POST_NOT_AVAILABLE")) throw new Error("PROMO_POST_NOT_AVAILABLE");
+    if (message.includes("PROMO_POST_NOT_PUBLISHED")) throw new Error("PROMO_POST_NOT_PUBLISHED");
+    if (message.includes("PROMO_SUBTOTAL_MISMATCH")) throw new Error("PROMO_SUBTOTAL_MISMATCH");
     if (message.toLowerCase().includes("row-level security") || message.toLowerCase().includes("permission")) {
       throw new Error("PERMISSION_DENIED");
     }
@@ -298,6 +328,14 @@ export async function createOrder(payload: CreateOrderPayload): Promise<{ order_
     if (message.includes("CHECKOUT_DELIVERY_FEE_INVALID")) throw new Error("CHECKOUT_DELIVERY_FEE_INVALID");
     if (message.includes("CHECKOUT_DELIVERY_MARKUP_INVALID")) throw new Error("CHECKOUT_DELIVERY_MARKUP_INVALID");
     if (message.includes("CHECKOUT_DELIVERY_TOTAL_MISMATCH")) throw new Error("CHECKOUT_DELIVERY_TOTAL_MISMATCH");
+    if (message.includes("PROMO_NOT_FOUND")) throw new Error("PROMO_NOT_FOUND");
+    if (message.includes("PROMO_DISABLED")) throw new Error("PROMO_DISABLED");
+    if (message.includes("PROMO_EXHAUSTED")) throw new Error("PROMO_EXHAUSTED");
+    if (message.includes("PROMO_EXPIRED")) throw new Error("PROMO_EXPIRED");
+    if (message.includes("PROMO_ALREADY_USED_BY_USER")) throw new Error("PROMO_ALREADY_USED_BY_USER");
+    if (message.includes("PROMO_POST_NOT_AVAILABLE")) throw new Error("PROMO_POST_NOT_AVAILABLE");
+    if (message.includes("PROMO_POST_NOT_PUBLISHED")) throw new Error("PROMO_POST_NOT_PUBLISHED");
+    if (message.includes("PROMO_SUBTOTAL_MISMATCH")) throw new Error("PROMO_SUBTOTAL_MISMATCH");
     throw new Error(message || "CREATE_ORDER_FAILED");
   }
 
@@ -423,6 +461,63 @@ export async function getOrder(orderId: string): Promise<TgOrder | null> {
   if (error) throw error;
   if (!data?.ok) throw new Error("ORDER_LOAD_FAILED");
   return data.order ?? null;
+}
+
+export function saveCheckoutPromoSnapshot(snapshot: PromoPreviewSnapshot | null) {
+  try {
+    if (!snapshot) {
+      window.localStorage.removeItem(TG_CHECKOUT_PROMO_KEY);
+      return;
+    }
+    window.localStorage.setItem(TG_CHECKOUT_PROMO_KEY, JSON.stringify(snapshot));
+  } catch {
+    // ignore
+  }
+}
+
+export function readCheckoutPromoSnapshot(): PromoPreviewSnapshot | null {
+  try {
+    const raw = window.localStorage.getItem(TG_CHECKOUT_PROMO_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PromoPreviewSnapshot;
+    if (!parsed || typeof parsed !== "object") return null;
+    if (!parsed.promo_id || !parsed.promo_code) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function clearCheckoutPromoSnapshot() {
+  try {
+    window.localStorage.removeItem(TG_CHECKOUT_PROMO_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+export async function previewPromo(input: {
+  post_ids: string[];
+  promo_code: string;
+}): Promise<PromoPreviewSnapshot> {
+  const userSessionToken = await readTelegramUserSessionToken();
+  const { data, error } = await supabase.functions.invoke<{
+    ok?: boolean;
+    error?: string;
+    promo?: PromoPreviewSnapshot;
+  }>("tg_promo_preview", {
+    body: {
+      post_ids: input.post_ids,
+      promo_code: input.promo_code,
+    },
+    headers: buildTelegramUserSessionHeaders(userSessionToken),
+  });
+
+  if (error) throw error;
+  if (!data?.ok || !data.promo) {
+    throw new Error(String(data?.error ?? "PROMO_PREVIEW_FAILED"));
+  }
+  return data.promo;
 }
 
 export async function getOrderPaymentContext(orderId: string): Promise<TgOrderPaymentContext> {

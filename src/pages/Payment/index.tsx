@@ -464,6 +464,11 @@ export function PaymentPage() {
             <div className="payment-exit-dialog__text">
               Вы можете продолжить оформление или отменить заказ.
             </div>
+            {order?.promo_code ? (
+              <div className="payment-exit-dialog__text">
+                Промокод после отмены заказа останется активным
+              </div>
+            ) : null}
             <div className="payment-exit-dialog__actions">
               <Button variant="secondary" onClick={onStayInCheckout} disabled={isCancellingOrder}>
                 Продолжить оформление

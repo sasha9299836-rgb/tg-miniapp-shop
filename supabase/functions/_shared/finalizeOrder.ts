@@ -49,6 +49,12 @@ export function classifyConfirmPaymentError(message: string) {
   if (message.startsWith("STOCK_CONFLICT:")) {
     return { code: "STOCK_CONFLICT", status: 409 };
   }
+  if (message === "PROMO_ALREADY_USED_BY_USER") {
+    return { code: "PROMO_ALREADY_USED_BY_USER", status: 409 };
+  }
+  if (message === "PROMO_TYPE_INVALID" || message === "PROMO_CODE_INVALID") {
+    return { code: "PROMO_SNAPSHOT_INVALID", status: 409 };
+  }
   return null;
 }
 
@@ -95,7 +101,7 @@ export async function finalizePaidOrder(
   orderId: string,
 ): Promise<FinalizeOrderShipmentResponse> {
   console.log(JSON.stringify({ scope: "shipment", event: "finalize_order_start", orderId }));
-  const { data, error } = await supabase.rpc("tg_admin_confirm_paid_and_record_sale", {
+  const { data, error } = await supabase.rpc("tg_admin_confirm_paid_and_record_sale_atomic", {
     p_order_id: orderId,
   });
 

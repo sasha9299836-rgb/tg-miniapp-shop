@@ -3,6 +3,11 @@ import {
   empty,
   json,
 } from "../_shared/admin.ts";
+import {
+  PromoValidationError,
+  resolveSubtotalByPosts,
+  validatePromoForUserAndSubtotal,
+} from "../_shared/promo.ts";
 import { requireTelegramUserSession } from "../_shared/telegramUserSession.ts";
 
 type CreateOrderSecureBody = {
@@ -25,6 +30,7 @@ type CreateOrderSecureBody = {
   delivery_base_fee_rub?: number | null;
   delivery_markup_rub?: number | null;
   delivery_total_fee_rub?: number | null;
+  promo_code?: string | null;
 };
 
 function normalizePostIds(value: unknown): string[] {
@@ -46,9 +52,28 @@ Deno.serve(async (req) => {
     const deliveryType = String(body?.delivery_type ?? "").trim();
     const fio = String(body?.fio ?? "").trim();
     const phone = String(body?.phone ?? "").trim();
+    const promoCode = String(body?.promo_code ?? "").trim();
 
     if (!postIds.length || !deliveryType || !fio || !phone) {
       return json({ ok: false, error: "BAD_PAYLOAD" }, 400);
+    }
+
+    let promoSnapshot: Awaited<ReturnType<typeof validatePromoForUserAndSubtotal>> | null = null;
+    if (promoCode) {
+      try {
+        const subtotalWithoutDiscount = await resolveSubtotalByPosts(supabase, postIds);
+        promoSnapshot = await validatePromoForUserAndSubtotal({
+          supabase,
+          tgUserId: userSession.tgUserId,
+          promoCode,
+          subtotalWithoutDiscountRub: subtotalWithoutDiscount,
+        });
+      } catch (error) {
+        if (error instanceof PromoValidationError) {
+          return json({ ok: false, error: error.code }, 200);
+        }
+        throw error;
+      }
     }
 
     const { data, error } = await supabase.rpc("tg_create_order", {
@@ -72,6 +97,14 @@ Deno.serve(async (req) => {
       p_delivery_base_fee_rub: body?.delivery_base_fee_rub ?? null,
       p_delivery_markup_rub: body?.delivery_markup_rub ?? null,
       p_delivery_total_fee_rub: body?.delivery_total_fee_rub ?? null,
+      p_promo_id: promoSnapshot?.promo_id ?? null,
+      p_promo_code: promoSnapshot?.promo_code ?? null,
+      p_promo_type: promoSnapshot?.promo_type ?? null,
+      p_promo_discount_percent: promoSnapshot?.promo_discount_percent ?? null,
+      p_subtotal_without_discount_rub: promoSnapshot?.subtotal_without_discount_rub ?? null,
+      p_promo_discount_amount_rub: promoSnapshot?.promo_discount_amount_rub ?? null,
+      p_subtotal_with_discount_rub: promoSnapshot?.subtotal_with_discount_rub ?? null,
+      p_final_total_rub: null,
     });
 
     if (error) {

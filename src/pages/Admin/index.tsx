@@ -67,6 +67,7 @@ export function AdminHome() {
         </div>
         <Button variant="secondary" onClick={() => nav("/admin/post-video")}>Добавить видео в пост</Button>
         <Button variant="secondary" onClick={() => nav("/admin/drop-preview")}>Добавить превью</Button>
+        <Button variant="secondary" onClick={() => nav("/admin/promos")}>Промокоды</Button>
         <Button variant="secondary" onClick={onBack}>Назад</Button>
       </div>
 

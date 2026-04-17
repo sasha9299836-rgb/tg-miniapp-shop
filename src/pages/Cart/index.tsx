@@ -11,7 +11,15 @@ import {
   saveSelectedPresetSelection,
   type TgAddressPreset,
 } from "../../shared/api/addressPresetsApi";
-import { calculateDeliveryQuote, type DeliveryQuoteResult } from "../../shared/api/ordersApi";
+import {
+  calculateDeliveryQuote,
+  clearCheckoutPromoSnapshot,
+  previewPromo,
+  readCheckoutPromoSnapshot,
+  saveCheckoutPromoSnapshot,
+  type DeliveryQuoteResult,
+  type PromoPreviewSnapshot,
+} from "../../shared/api/ordersApi";
 import { formatCompactAddressHint } from "../../shared/lib/addressDisplay";
 import { getProductDisplayTitle } from "../../shared/lib/productTitle";
 import { EmptyState } from "../../shared/ui/EmptyState";
@@ -32,6 +40,10 @@ export function CartPage() {
   const [deliveryQuote, setDeliveryQuote] = useState<DeliveryQuoteResult | null>(null);
   const [deliveryQuoteError, setDeliveryQuoteError] = useState<string | null>(null);
   const [isDeliveryQuoteLoading, setIsDeliveryQuoteLoading] = useState(false);
+  const [promoCodeInput, setPromoCodeInput] = useState("");
+  const [promoSnapshot, setPromoSnapshot] = useState<PromoPreviewSnapshot | null>(null);
+  const [isPromoApplying, setIsPromoApplying] = useState(false);
+  const [promoErrorText, setPromoErrorText] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isReady) return;
@@ -153,10 +165,69 @@ export function CartPage() {
   }, [isReady, quotePostIds, selectedPreset?.city_code, selectedPreset?.pvz_code]);
 
   const itemsSum = useMemo(() => lines.reduce((sum, line) => sum + line.lineSum, 0), [lines]);
+  const discountedItemsSum = useMemo(() => {
+    if (!promoSnapshot) return itemsSum;
+    if (promoSnapshot.subtotal_without_discount_rub !== itemsSum) return itemsSum;
+    return promoSnapshot.subtotal_with_discount_rub;
+  }, [itemsSum, promoSnapshot]);
   const deliveryTotalFee = deliveryQuote?.delivery_total_fee_rub ?? 0;
-  const total = itemsSum + deliveryTotalFee;
+  const total = discountedItemsSum + deliveryTotalFee;
   const totalQty = cart.totalQty();
   const hasValidDeliveryAddress = Boolean(selectedPreset?.city_code && selectedPreset?.pvz_code);
+
+  useEffect(() => {
+    const saved = readCheckoutPromoSnapshot();
+    if (!saved) return;
+    setPromoSnapshot(saved);
+    setPromoCodeInput(saved.promo_code);
+  }, []);
+
+  useEffect(() => {
+    if (!promoSnapshot) return;
+    if (promoSnapshot.subtotal_without_discount_rub === itemsSum) return;
+    setPromoSnapshot(null);
+    clearCheckoutPromoSnapshot();
+  }, [itemsSum, promoSnapshot]);
+
+  const onApplyPromo = async () => {
+    const code = promoCodeInput.trim();
+    if (!code) {
+      setPromoErrorText("Введите промокод.");
+      return;
+    }
+    if (!quotePostIds.length) {
+      setPromoErrorText("Корзина пуста.");
+      return;
+    }
+    setIsPromoApplying(true);
+    setPromoErrorText(null);
+    try {
+      const snapshot = await previewPromo({
+        post_ids: quotePostIds,
+        promo_code: code,
+      });
+      setPromoSnapshot(snapshot);
+      setPromoCodeInput(snapshot.promo_code);
+      saveCheckoutPromoSnapshot(snapshot);
+    } catch (error) {
+      const message = (error as Error).message;
+      if (message.includes("PROMO_NOT_FOUND")) setPromoErrorText("Промокод не найден.");
+      else if (message.includes("PROMO_DISABLED")) setPromoErrorText("Промокод выключен.");
+      else if (message.includes("PROMO_EXPIRED")) setPromoErrorText("Срок действия промокода истёк.");
+      else if (message.includes("PROMO_EXHAUSTED")) setPromoErrorText("Промокод исчерпан.");
+      else if (message.includes("PROMO_ALREADY_USED_BY_USER")) setPromoErrorText("Этот одноразовый промокод уже использован.");
+      else setPromoErrorText("Не удалось применить промокод.");
+    } finally {
+      setIsPromoApplying(false);
+    }
+  };
+
+  const onRemovePromo = () => {
+    setPromoSnapshot(null);
+    setPromoCodeInput("");
+    setPromoErrorText(null);
+    clearCheckoutPromoSnapshot();
+  };
 
   if (isChecking) {
     return (
@@ -276,9 +347,36 @@ export function CartPage() {
         </Card>
 
         <Card className="ui-card--padded cart-total">
+          <div className="cart-promo">
+            <div className="cart-section__title">Промокод</div>
+            <div className="cart-promo__row">
+              <input
+                className="cart-promo__input"
+                value={promoCodeInput}
+                onChange={(event) => setPromoCodeInput(event.target.value.toUpperCase())}
+                placeholder="Введите код"
+              />
+              <Button variant="secondary" onClick={() => void onApplyPromo()} disabled={isPromoApplying}>
+                {isPromoApplying ? "..." : "Применить"}
+              </Button>
+              {promoSnapshot ? (
+                <Button variant="secondary" onClick={onRemovePromo}>
+                  Убрать
+                </Button>
+              ) : null}
+            </div>
+            {promoErrorText ? <div className="cart-checkout-error">{promoErrorText}</div> : null}
+          </div>
           <div className="cart-total__row">
             <div className="cart-total__label">Товары ({totalQty})</div>
-            <div className="cart-total__value">{itemsSum.toLocaleString("ru-RU")} ₽</div>
+            {promoSnapshot && discountedItemsSum !== itemsSum ? (
+              <div className="cart-total__value cart-total__value--promo">
+                <span className="cart-total__old">{itemsSum.toLocaleString("ru-RU")} ₽</span>
+                <span>{discountedItemsSum.toLocaleString("ru-RU")} ₽</span>
+              </div>
+            ) : (
+              <div className="cart-total__value">{itemsSum.toLocaleString("ru-RU")} ₽</div>
+            )}
           </div>
           <div className="cart-total__row">
             <div className="cart-total__label">Доставка</div>
