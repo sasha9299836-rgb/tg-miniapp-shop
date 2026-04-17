@@ -439,6 +439,17 @@
 .item-viewer__nav--prev { left: -14px; }
 .item-viewer__nav--next { right: -14px; }
 
+[data-theme="dark"] .item-accordion--plain .item-accordion__head {
+  color: #aeb6c8;
+}
+
+[data-theme="dark"] .item-accordion--plain .item-accordion__body {
+  color: #c9d1e3;
+}
+
+[data-theme="dark"] .item-accordion__chevron {
+  color: #cfd6e4;
+}
 
 
 
