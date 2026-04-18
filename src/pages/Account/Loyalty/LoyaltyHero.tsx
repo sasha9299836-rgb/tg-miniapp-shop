@@ -3,7 +3,7 @@ import { LoyaltyBadge } from "../../../shared/ui/LoyaltyBadge";
 import "./LoyaltyHero.css";
 
 type LoyaltyHeroProps = {
-  currentLevel: 1 | 2 | 3 | 4 | 5;
+  currentLevel: number;
   totalSpentRub: number;
   progress: number;
   amountToNextLevelRub: number;
@@ -24,12 +24,13 @@ export function LoyaltyHero({
   nextLevelBonuses,
 }: LoyaltyHeroProps) {
   const safeProgress = clamp(progress, 0, 1);
+  const badgeLevel = clamp(currentLevel, 1, 5) as 1 | 2 | 3 | 4 | 5;
 
   return (
     <Card className="ui-card--padded loyalty-hero-card">
       <div className="loyalty-hero">
         <div className="loyalty-hero__symbol">
-          <LoyaltyBadge level={currentLevel} percentLabel={`L${currentLevel}`} size={168} />
+          <LoyaltyBadge level={badgeLevel} percentLabel={`L${currentLevel}`} size={168} />
         </div>
 
         <div className="loyalty-hero__meta">
@@ -72,4 +73,3 @@ export function LoyaltyHero({
 }
 
 export default LoyaltyHero;
-

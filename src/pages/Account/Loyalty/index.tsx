@@ -16,6 +16,13 @@ type LoyaltyLevelInfo = {
   bonuses: string[];
 };
 
+type CurrentLevelInfo = {
+  level: 0 | 1 | 2 | 3 | 4 | 5;
+  threshold: number;
+  title: string;
+  bonuses: string[];
+};
+
 const LEVELS: LoyaltyLevelInfo[] = [
   {
     level: 1,
@@ -69,6 +76,18 @@ function rub(value: number) {
 function getLevelByNumber(level: number): LoyaltyLevelInfo {
   const found = LEVELS.find((entry) => entry.level === level);
   return found ?? LEVELS[0];
+}
+
+const LEVEL_ZERO_INFO: CurrentLevelInfo = {
+  level: 0,
+  threshold: 0,
+  title: "Level 0",
+  bonuses: [],
+};
+
+function getCurrentLevelInfo(level: number): CurrentLevelInfo {
+  if (level <= 0) return LEVEL_ZERO_INFO;
+  return getLevelByNumber(level);
 }
 
 function getCurrentBonusLines(loyalty: LoyaltyState): string[] {
@@ -129,11 +148,11 @@ export function LoyaltyPage() {
   }, [isReady]);
 
   const currentLevel = useMemo(() => {
-    if (!loyalty) return 1;
-    return Math.max(1, Math.min(5, loyalty.level || 1)) as 1 | 2 | 3 | 4 | 5;
+    if (!loyalty) return 0;
+    return Math.max(0, Math.min(5, Number(loyalty.level ?? 0)));
   }, [loyalty]);
 
-  const currentLevelInfo = useMemo(() => getLevelByNumber(currentLevel), [currentLevel]);
+  const currentLevelInfo = useMemo(() => getCurrentLevelInfo(currentLevel), [currentLevel]);
   const selectedLevelInfo = useMemo(() => getLevelByNumber(selectedLevel), [selectedLevel]);
   const nextLevelInfo = useMemo(() => {
     if (!loyalty?.next_level) return null;
@@ -249,4 +268,3 @@ export function LoyaltyPage() {
 }
 
 export default LoyaltyPage;
-

@@ -85,7 +85,14 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: "CHECKOUT_PRICING_FAILED" }, 200);
     }
 
-    const { data, error } = await supabase.rpc("tg_create_order", {
+    const loyaltyDiscountKind = String(pricingSnapshot.loyalty_discount_kind ?? "none").trim() || "none";
+    const loyaltyDiscountPercentRaw = Number(pricingSnapshot.loyalty_discount_percent ?? 0);
+    const loyaltyDiscountAmountRaw = Number(pricingSnapshot.loyalty_discount_amount_rub ?? 0);
+    const deliveryDiscountAmountRaw = Number(pricingSnapshot.delivery_discount_amount_rub ?? 0);
+    const subtotalWithAllDiscountsRaw = Number(pricingSnapshot.subtotal_with_all_discounts_rub ?? 0);
+    const loyaltyLevelRaw = Number(pricingSnapshot.loyalty_level ?? 0);
+
+    const { data, error } = await supabase.rpc("tg_create_order_with_pricing_snapshot", {
       p_tg_user_id: userSession.tgUserId,
       p_post_ids: postIds,
       p_delivery_type: deliveryType,
@@ -114,6 +121,14 @@ Deno.serve(async (req) => {
       p_promo_discount_amount_rub: Number(pricingSnapshot.promo_discount_amount_rub ?? 0) || null,
       p_subtotal_with_discount_rub: Number(pricingSnapshot.subtotal_with_discount_rub ?? 0) || null,
       p_final_total_rub: Number(pricingSnapshot.final_total_rub ?? 0) || null,
+      p_loyalty_level: Number.isFinite(loyaltyLevelRaw) ? Math.max(0, Math.round(loyaltyLevelRaw)) : null,
+      p_loyalty_discount_kind: loyaltyDiscountKind,
+      p_loyalty_discount_percent: Number.isFinite(loyaltyDiscountPercentRaw) && loyaltyDiscountPercentRaw > 0
+        ? Math.max(1, Math.round(loyaltyDiscountPercentRaw))
+        : null,
+      p_loyalty_discount_amount_rub: Math.max(0, Math.round(loyaltyDiscountAmountRaw)),
+      p_delivery_discount_amount_rub: Math.max(0, Math.round(deliveryDiscountAmountRaw)),
+      p_subtotal_with_all_discounts_rub: Math.max(0, Math.round(subtotalWithAllDiscountsRaw)),
     });
 
     if (error) {
@@ -125,33 +140,6 @@ Deno.serve(async (req) => {
     const reservedUntil = String((row as { reserved_until?: string | null })?.reserved_until ?? "").trim();
     if (!orderId || !reservedUntil) {
       return json({ ok: false, error: "CREATE_ORDER_FAILED" }, 200);
-    }
-
-    const loyaltyDiscountKind = String(pricingSnapshot.loyalty_discount_kind ?? "none").trim() || "none";
-    const loyaltyDiscountPercentRaw = Number(pricingSnapshot.loyalty_discount_percent ?? 0);
-    const loyaltyDiscountAmountRaw = Number(pricingSnapshot.loyalty_discount_amount_rub ?? 0);
-    const deliveryDiscountAmountRaw = Number(pricingSnapshot.delivery_discount_amount_rub ?? 0);
-    const subtotalWithAllDiscountsRaw = Number(pricingSnapshot.subtotal_with_all_discounts_rub ?? 0);
-    const finalTotalRaw = Number(pricingSnapshot.final_total_rub ?? 0);
-    const loyaltyLevelRaw = Number(pricingSnapshot.loyalty_level ?? 0);
-    const pricingUpdatePayload = {
-      price_rub: Math.max(0, Math.round(subtotalWithAllDiscountsRaw)),
-      final_total_rub: Math.max(0, Math.round(finalTotalRaw)),
-      loyalty_level: Number.isFinite(loyaltyLevelRaw) ? Math.max(0, Math.round(loyaltyLevelRaw)) : null,
-      loyalty_discount_kind: loyaltyDiscountKind,
-      loyalty_discount_percent: Number.isFinite(loyaltyDiscountPercentRaw) && loyaltyDiscountPercentRaw > 0
-        ? Math.max(1, Math.round(loyaltyDiscountPercentRaw))
-        : null,
-      loyalty_discount_amount_rub: Math.max(0, Math.round(loyaltyDiscountAmountRaw)),
-      delivery_discount_amount_rub: Math.max(0, Math.round(deliveryDiscountAmountRaw)),
-      subtotal_with_all_discounts_rub: Math.max(0, Math.round(subtotalWithAllDiscountsRaw)),
-    };
-    const { error: pricingUpdateError } = await supabase
-      .from("tg_orders")
-      .update(pricingUpdatePayload)
-      .eq("id", orderId);
-    if (pricingUpdateError) {
-      return json({ ok: false, error: "ORDER_PRICING_SNAPSHOT_SAVE_FAILED" }, 200);
     }
 
     return json({
