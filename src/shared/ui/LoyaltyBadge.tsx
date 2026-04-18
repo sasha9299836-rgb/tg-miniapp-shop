@@ -45,7 +45,7 @@ export function LoyaltyBadge({ level, percentLabel, size = 96 }: LoyaltyBadgePro
   const innerHex = useMemo(() => hexPoints(34), []);
   const oct = useMemo(() => octPoints(44), []);
   const octInner = useMemo(() => octPoints(30), []);
-  const rays = useMemo(() => rayPolygons(12, 46, 60), []);
+  const rays = useMemo(() => rayPolygons(12, 44, 54), []);
 
   return (
     <svg
@@ -117,14 +117,12 @@ export function LoyaltyBadge({ level, percentLabel, size = 96 }: LoyaltyBadgePro
             strokeWidth="1"
             strokeLinejoin="round"
           />
-          <polygon points="50,8 74,20 62,34" fill="rgba(255,255,255,0.3)" />
-          <polygon points="74,20 90,46 66,46" fill="rgba(255,255,255,0.2)" />
-          <polygon points="90,46 84,74 66,56" fill="rgba(255,255,255,0.18)" />
-          <polygon points="84,74 62,92 54,70" fill="rgba(255,255,255,0.15)" />
-          <polygon points="50,92 26,80 38,66" fill="rgba(0,0,0,0.08)" />
-          <polygon points="26,80 10,54 34,54" fill="rgba(0,0,0,0.06)" />
-          <polygon points="10,54 16,26 34,44" fill="rgba(0,0,0,0.08)" />
-          <polygon points="16,26 38,8 46,30" fill="rgba(255,255,255,0.18)" />
+          <polygon points="50,8 72,22 60,36" fill="rgba(255,255,255,0.28)" />
+          <polygon points="72,22 88,46 66,48" fill="rgba(255,255,255,0.2)" />
+          <polygon points="88,46 80,72 64,56" fill="rgba(255,255,255,0.16)" />
+          <polygon points="50,92 28,78 40,64" fill="rgba(0,0,0,0.08)" />
+          <polygon points="28,78 12,54 34,52" fill="rgba(0,0,0,0.06)" />
+          <polygon points="12,54 20,28 36,44" fill="rgba(0,0,0,0.07)" />
         </g>
       ) : null}
 
@@ -138,9 +136,11 @@ export function LoyaltyBadge({ level, percentLabel, size = 96 }: LoyaltyBadgePro
             strokeWidth="1"
             strokeLinejoin="round"
           />
-          <polygon points="50,10 82,34 50,40" fill="rgba(255,255,255,0.35)" />
-          <polygon points="82,34 90,62 62,58" fill="rgba(255,255,255,0.24)" />
-          <polygon points="50,90 18,66 50,60" fill="rgba(0,0,0,0.08)" />
+          <polygon points="50,10 80,32 50,40" fill="rgba(255,255,255,0.34)" />
+          <polygon points="80,32 88,60 62,56" fill="rgba(255,255,255,0.23)" />
+          <polygon points="20,32 50,40 20,60" fill="rgba(255,255,255,0.16)" />
+          <polygon points="50,90 20,68 50,60" fill="rgba(0,0,0,0.08)" />
+          <polygon points="80,68 50,60 80,40" fill="rgba(0,0,0,0.05)" />
         </g>
       ) : null}
 
@@ -161,16 +161,18 @@ export function LoyaltyBadge({ level, percentLabel, size = 96 }: LoyaltyBadgePro
             strokeWidth="1"
             strokeLinejoin="round"
           />
-          <polygon points="50,10 82,34 50,40" fill="rgba(255,255,255,0.35)" />
-          <polygon points="82,34 90,62 62,58" fill="rgba(255,255,255,0.24)" />
-          <polygon points="50,90 18,66 50,60" fill="rgba(0,0,0,0.08)" />
+          <polygon points="50,10 80,32 50,40" fill="rgba(255,255,255,0.35)" />
+          <polygon points="80,32 88,60 62,56" fill="rgba(255,255,255,0.24)" />
+          <polygon points="20,32 50,40 20,60" fill="rgba(255,255,255,0.16)" />
+          <polygon points="50,90 20,68 50,60" fill="rgba(0,0,0,0.08)" />
+          <polygon points="80,68 50,60 80,40" fill="rgba(0,0,0,0.05)" />
           <g className="loyalty-badge__drops">
-            <circle cx="16" cy="30" r="2" />
-            <circle cx="84" cy="20" r="2.2" />
-            <circle cx="90" cy="76" r="1.6" />
-            <circle cx="10" cy="70" r="1.8" />
-            <circle cx="86" cy="90" r="1.5" />
-            <circle cx="20" cy="90" r="1.4" />
+            <circle cx="18" cy="28" r="1.9" />
+            <circle cx="82" cy="22" r="2.1" />
+            <circle cx="88" cy="74" r="1.5" />
+            <circle cx="12" cy="68" r="1.7" />
+            <circle cx="82" cy="86" r="1.4" />
+            <circle cx="18" cy="86" r="1.3" />
           </g>
         </g>
       ) : null}
