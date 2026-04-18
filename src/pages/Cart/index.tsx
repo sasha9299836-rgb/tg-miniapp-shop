@@ -14,7 +14,7 @@ import {
 import {
   calculateDeliveryQuote,
   clearCheckoutPromoSnapshot,
-  previewPromo,
+  previewCheckoutPricing,
   readCheckoutPromoSnapshot,
   saveCheckoutPromoSnapshot,
   type DeliveryQuoteResult,
@@ -41,7 +41,8 @@ export function CartPage() {
   const [deliveryQuoteError, setDeliveryQuoteError] = useState<string | null>(null);
   const [isDeliveryQuoteLoading, setIsDeliveryQuoteLoading] = useState(false);
   const [promoCodeInput, setPromoCodeInput] = useState("");
-  const [promoSnapshot, setPromoSnapshot] = useState<PromoPreviewSnapshot | null>(null);
+  const [pricingSnapshot, setPricingSnapshot] = useState<PromoPreviewSnapshot | null>(null);
+  const [appliedPromoCode, setAppliedPromoCode] = useState<string | null>(null);
   const [isPromoApplying, setIsPromoApplying] = useState(false);
   const [promoErrorText, setPromoErrorText] = useState<string | null>(null);
 
@@ -166,28 +167,70 @@ export function CartPage() {
 
   const itemsSum = useMemo(() => lines.reduce((sum, line) => sum + line.lineSum, 0), [lines]);
   const discountedItemsSum = useMemo(() => {
-    if (!promoSnapshot) return itemsSum;
-    if (promoSnapshot.subtotal_without_discount_rub !== itemsSum) return itemsSum;
-    return promoSnapshot.subtotal_with_discount_rub;
-  }, [itemsSum, promoSnapshot]);
+    if (!pricingSnapshot) return itemsSum;
+    if (pricingSnapshot.subtotal_without_discount_rub !== itemsSum) return itemsSum;
+    return pricingSnapshot.subtotal_with_all_discounts_rub;
+  }, [itemsSum, pricingSnapshot]);
   const deliveryTotalFee = deliveryQuote?.delivery_total_fee_rub ?? 0;
-  const total = discountedItemsSum + deliveryTotalFee;
+  const deliveryDiscountAmount = pricingSnapshot?.delivery_discount_amount_rub ?? 0;
+  const payableDeliveryFee = Math.max(0, deliveryTotalFee - deliveryDiscountAmount);
+  const total = pricingSnapshot?.subtotal_without_discount_rub === itemsSum
+    ? pricingSnapshot.final_total_rub
+    : (discountedItemsSum + payableDeliveryFee);
   const totalQty = cart.totalQty();
   const hasValidDeliveryAddress = Boolean(selectedPreset?.city_code && selectedPreset?.pvz_code);
 
   useEffect(() => {
     const saved = readCheckoutPromoSnapshot();
     if (!saved) return;
-    setPromoSnapshot(saved);
-    setPromoCodeInput(saved.promo_code);
+    setPricingSnapshot(saved);
+    setAppliedPromoCode(saved.promo_code);
+    setPromoCodeInput(saved.promo_code ?? "");
   }, []);
 
   useEffect(() => {
-    if (!promoSnapshot) return;
-    if (promoSnapshot.subtotal_without_discount_rub === itemsSum) return;
-    setPromoSnapshot(null);
+    if (!pricingSnapshot) return;
+    if (pricingSnapshot.subtotal_without_discount_rub === itemsSum) return;
+    setPricingSnapshot(null);
+    setAppliedPromoCode(null);
     clearCheckoutPromoSnapshot();
-  }, [itemsSum, promoSnapshot]);
+  }, [itemsSum, pricingSnapshot]);
+
+  useEffect(() => {
+    if (!isReady) return;
+    if (!quotePostIds.length) {
+      setPricingSnapshot(null);
+      setAppliedPromoCode(null);
+      clearCheckoutPromoSnapshot();
+      return;
+    }
+    let cancelled = false;
+    const loadPricing = async () => {
+      try {
+        const snapshot = await previewCheckoutPricing({
+          post_ids: quotePostIds,
+          promo_code: appliedPromoCode,
+          delivery_total_fee_rub: deliveryTotalFee,
+        });
+        if (cancelled) return;
+        setPricingSnapshot(snapshot);
+        if (snapshot.promo_code) {
+          setAppliedPromoCode(snapshot.promo_code);
+          saveCheckoutPromoSnapshot(snapshot);
+        } else {
+          clearCheckoutPromoSnapshot();
+        }
+      } catch {
+        if (cancelled) return;
+        if (!appliedPromoCode) return;
+        setPricingSnapshot(null);
+      }
+    };
+    void loadPricing();
+    return () => {
+      cancelled = true;
+    };
+  }, [isReady, quotePostIds, deliveryTotalFee, appliedPromoCode]);
 
   const onApplyPromo = async () => {
     const code = promoCodeInput.trim();
@@ -202,12 +245,14 @@ export function CartPage() {
     setIsPromoApplying(true);
     setPromoErrorText(null);
     try {
-      const snapshot = await previewPromo({
+      const snapshot = await previewCheckoutPricing({
         post_ids: quotePostIds,
         promo_code: code,
+        delivery_total_fee_rub: deliveryTotalFee,
       });
-      setPromoSnapshot(snapshot);
-      setPromoCodeInput(snapshot.promo_code);
+      setPricingSnapshot(snapshot);
+      setAppliedPromoCode(snapshot.promo_code);
+      setPromoCodeInput(snapshot.promo_code ?? "");
       saveCheckoutPromoSnapshot(snapshot);
     } catch (error) {
       const message = (error as Error).message;
@@ -225,7 +270,7 @@ export function CartPage() {
   };
 
   const onRemovePromo = () => {
-    setPromoSnapshot(null);
+    setAppliedPromoCode(null);
     setPromoCodeInput("");
     setPromoErrorText(null);
     clearCheckoutPromoSnapshot();
@@ -361,7 +406,7 @@ export function CartPage() {
               <Button variant="secondary" onClick={() => void onApplyPromo()} disabled={isPromoApplying}>
                 {isPromoApplying ? "..." : "Применить"}
               </Button>
-              {promoSnapshot ? (
+              {appliedPromoCode ? (
                 <Button variant="secondary" onClick={onRemovePromo}>
                   Убрать
                 </Button>
@@ -371,7 +416,7 @@ export function CartPage() {
           </div>
           <div className="cart-total__row">
             <div className="cart-total__label">Товары ({totalQty})</div>
-            {promoSnapshot && discountedItemsSum !== itemsSum ? (
+            {pricingSnapshot && discountedItemsSum !== itemsSum ? (
               <div className="cart-total__value cart-total__value--promo">
                 <span className="cart-total__old">{itemsSum.toLocaleString("ru-RU")} ₽</span>
                 <span>{discountedItemsSum.toLocaleString("ru-RU")} ₽</span>
@@ -383,13 +428,22 @@ export function CartPage() {
           <div className="cart-total__row">
             <div className="cart-total__label">Доставка</div>
             <div className="cart-total__value">
-              {isDeliveryQuoteLoading ? "..." : `${deliveryTotalFee.toLocaleString("ru-RU")} ₽`}
+              {isDeliveryQuoteLoading ? "..." : `${payableDeliveryFee.toLocaleString("ru-RU")} ₽`}
             </div>
           </div>
           <div className="cart-total__row cart-total__sum">
             <div className="cart-total__label">Итого</div>
             <div className="cart-total__value">{total.toLocaleString("ru-RU")} ₽</div>
           </div>
+          {pricingSnapshot?.promo_code ? (
+            <div className="cart-muted">Промокод: {pricingSnapshot.promo_code} (-{pricingSnapshot.promo_discount_percent}%)</div>
+          ) : null}
+          {deliveryDiscountAmount > 0 ? (
+            <div className="cart-muted">Скидка на доставку: -{deliveryDiscountAmount.toLocaleString("ru-RU")} ₽</div>
+          ) : null}
+          {pricingSnapshot?.loyalty_discount_amount_rub ? (
+            <div className="cart-muted">Loyalty-скидка: -{pricingSnapshot.loyalty_discount_amount_rub.toLocaleString("ru-RU")} ₽</div>
+          ) : null}
           {deliveryQuoteError ? <div className="cart-muted">{deliveryQuoteError}</div> : null}
           {!deliveryQuote && !isDeliveryQuoteLoading ? (
             <div className="cart-muted">Стоимость доставки появится после выбора валидного адреса.</div>

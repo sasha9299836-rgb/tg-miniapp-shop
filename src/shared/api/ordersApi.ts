@@ -76,16 +76,30 @@ export type TgOrder = {
   promo_discount_amount_rub?: number | null;
   subtotal_with_discount_rub?: number | null;
   final_total_rub?: number | null;
+  loyalty_level?: number | null;
+  loyalty_discount_kind?: "none" | "level1_one_time" | "level4_permanent" | "level5_permanent" | null;
+  loyalty_discount_percent?: number | null;
+  loyalty_discount_amount_rub?: number | null;
+  delivery_discount_amount_rub?: number | null;
+  subtotal_with_all_discounts_rub?: number | null;
 };
 
 export type PromoPreviewSnapshot = {
-  promo_id: string;
-  promo_code: string;
-  promo_type: "single_use" | "multi_use";
-  promo_discount_percent: number;
+  promo_id: string | null;
+  promo_code: string | null;
+  promo_type: "single_use" | "multi_use" | null;
+  promo_discount_percent: number | null;
   subtotal_without_discount_rub: number;
   promo_discount_amount_rub: number;
   subtotal_with_discount_rub: number;
+  loyalty_level: number;
+  loyalty_discount_kind: "none" | "level1_one_time" | "level4_permanent" | "level5_permanent";
+  loyalty_discount_percent: number | null;
+  loyalty_discount_amount_rub: number;
+  delivery_total_fee_rub: number;
+  delivery_discount_amount_rub: number;
+  subtotal_with_all_discounts_rub: number;
+  final_total_rub: number;
 };
 
 export type TgOrderTimelineEvent = {
@@ -307,9 +321,11 @@ export async function createOrder(payload: CreateOrderPayload): Promise<{ order_
     if (message.includes("PROMO_EXHAUSTED")) throw new Error("PROMO_EXHAUSTED");
     if (message.includes("PROMO_EXPIRED")) throw new Error("PROMO_EXPIRED");
     if (message.includes("PROMO_ALREADY_USED_BY_USER")) throw new Error("PROMO_ALREADY_USED_BY_USER");
+    if (message.includes("PROMO_NOT_AVAILABLE_FOR_USER")) throw new Error("PROMO_NOT_AVAILABLE_FOR_USER");
     if (message.includes("PROMO_POST_NOT_AVAILABLE")) throw new Error("PROMO_POST_NOT_AVAILABLE");
     if (message.includes("PROMO_POST_NOT_PUBLISHED")) throw new Error("PROMO_POST_NOT_PUBLISHED");
     if (message.includes("PROMO_SUBTOTAL_MISMATCH")) throw new Error("PROMO_SUBTOTAL_MISMATCH");
+    if (message.includes("LOYALTY_LEVEL1_ALREADY_USED")) throw new Error("LOYALTY_LEVEL1_ALREADY_USED");
     if (message.toLowerCase().includes("row-level security") || message.toLowerCase().includes("permission")) {
       throw new Error("PERMISSION_DENIED");
     }
@@ -335,9 +351,11 @@ export async function createOrder(payload: CreateOrderPayload): Promise<{ order_
     if (message.includes("PROMO_EXHAUSTED")) throw new Error("PROMO_EXHAUSTED");
     if (message.includes("PROMO_EXPIRED")) throw new Error("PROMO_EXPIRED");
     if (message.includes("PROMO_ALREADY_USED_BY_USER")) throw new Error("PROMO_ALREADY_USED_BY_USER");
+    if (message.includes("PROMO_NOT_AVAILABLE_FOR_USER")) throw new Error("PROMO_NOT_AVAILABLE_FOR_USER");
     if (message.includes("PROMO_POST_NOT_AVAILABLE")) throw new Error("PROMO_POST_NOT_AVAILABLE");
     if (message.includes("PROMO_POST_NOT_PUBLISHED")) throw new Error("PROMO_POST_NOT_PUBLISHED");
     if (message.includes("PROMO_SUBTOTAL_MISMATCH")) throw new Error("PROMO_SUBTOTAL_MISMATCH");
+    if (message.includes("LOYALTY_LEVEL1_ALREADY_USED")) throw new Error("LOYALTY_LEVEL1_ALREADY_USED");
     throw new Error(message || "CREATE_ORDER_FAILED");
   }
 
@@ -467,7 +485,7 @@ export async function getOrder(orderId: string): Promise<TgOrder | null> {
 
 export function saveCheckoutPromoSnapshot(snapshot: PromoPreviewSnapshot | null) {
   try {
-    if (!snapshot) {
+    if (!snapshot || !snapshot.promo_code) {
       window.localStorage.removeItem(TG_CHECKOUT_PROMO_KEY);
       return;
     }
@@ -483,7 +501,7 @@ export function readCheckoutPromoSnapshot(): PromoPreviewSnapshot | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as PromoPreviewSnapshot;
     if (!parsed || typeof parsed !== "object") return null;
-    if (!parsed.promo_id || !parsed.promo_code) return null;
+    if (!parsed.promo_code) return null;
     return parsed;
   } catch {
     return null;
@@ -498,9 +516,10 @@ export function clearCheckoutPromoSnapshot() {
   }
 }
 
-export async function previewPromo(input: {
+export async function previewCheckoutPricing(input: {
   post_ids: string[];
-  promo_code: string;
+  promo_code?: string | null;
+  delivery_total_fee_rub?: number;
 }): Promise<PromoPreviewSnapshot> {
   const userSessionToken = await readTelegramUserSessionToken();
   const { data, error } = await supabase.functions.invoke<{
@@ -510,7 +529,8 @@ export async function previewPromo(input: {
   }>("tg_promo_preview", {
     body: {
       post_ids: input.post_ids,
-      promo_code: input.promo_code,
+      promo_code: input.promo_code ?? null,
+      delivery_total_fee_rub: Math.max(0, Math.round(Number(input.delivery_total_fee_rub ?? 0))),
     },
     headers: buildTelegramUserSessionHeaders(userSessionToken),
   });
@@ -520,6 +540,14 @@ export async function previewPromo(input: {
     throw new Error(String(data?.error ?? "PROMO_PREVIEW_FAILED"));
   }
   return data.promo;
+}
+
+export async function previewPromo(input: {
+  post_ids: string[];
+  promo_code: string;
+  delivery_total_fee_rub?: number;
+}): Promise<PromoPreviewSnapshot> {
+  return previewCheckoutPricing(input);
 }
 
 export async function getOrderPaymentContext(orderId: string): Promise<TgOrderPaymentContext> {

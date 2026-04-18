@@ -183,12 +183,14 @@ export function PaymentPage() {
     return () => window.clearInterval(timer);
   }, [order?.reserved_until]);
 
-  const priceRub = Number(order?.price_rub ?? order?.price ?? 0);
+  const priceRub = Number(order?.subtotal_with_all_discounts_rub ?? order?.price_rub ?? order?.price ?? 0);
   const deliveryBaseFee = Number(order?.delivery_base_fee_rub ?? 0);
   const deliveryMarkupFee = Number(order?.delivery_markup_rub ?? 60);
-  const deliveryFee = Number(order?.delivery_total_fee_rub ?? (deliveryBaseFee + deliveryMarkupFee));
+  const rawDeliveryFee = Number(order?.delivery_total_fee_rub ?? (deliveryBaseFee + deliveryMarkupFee));
+  const deliveryDiscountAmount = Number(order?.delivery_discount_amount_rub ?? 0);
+  const deliveryFee = Math.max(0, rawDeliveryFee - deliveryDiscountAmount);
   const packagingFee = Number(order?.packaging_fee_rub ?? getPackagingFeeRub(order?.packaging_type));
-  const total = priceRub + deliveryFee + packagingFee;
+  const total = Number(order?.final_total_rub ?? (priceRub + deliveryFee + packagingFee));
   const displayedDeliveryFee = Math.max(0, total - priceRub);
   const dominantOrigin = resolveDominantOrigin(orderItems, order?.origin_profile ?? null);
   const requisites = paymentRequisitesByOrigin[dominantOrigin];

@@ -52,6 +52,9 @@ export function classifyConfirmPaymentError(message: string) {
   if (message === "PROMO_ALREADY_USED_BY_USER") {
     return { code: "PROMO_ALREADY_USED_BY_USER", status: 409 };
   }
+  if (message === "LOYALTY_LEVEL1_ALREADY_USED") {
+    return { code: "LOYALTY_LEVEL1_ALREADY_USED", status: 409 };
+  }
   if (message === "PROMO_TYPE_INVALID" || message === "PROMO_CODE_INVALID") {
     return { code: "PROMO_SNAPSHOT_INVALID", status: 409 };
   }

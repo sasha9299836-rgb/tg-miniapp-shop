@@ -62,3 +62,24 @@
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
   opacity: 0.6;
 }
+
+.loyalty-hero__benefits {
+  display: grid;
+  gap: 8px;
+  text-align: left;
+}
+
+.loyalty-hero__benefits-title {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.loyalty-hero__benefits-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+

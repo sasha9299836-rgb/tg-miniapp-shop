@@ -1,4 +1,5 @@
 import { supabase } from "./supabaseClient";
+import { ensureTelegramUserSessionToken } from "../auth/tgUserSession";
 
 export type DropTeaser = {
   id: string;
@@ -24,6 +25,7 @@ type DropTeaserRow = {
   highlights: string[] | null;
   is_active: boolean;
   updated_at: string;
+  published_at?: string | null;
 };
 
 function mapDropTeaser(row: DropTeaserRow): DropTeaser {
@@ -42,15 +44,24 @@ function mapDropTeaser(row: DropTeaserRow): DropTeaser {
 }
 
 export async function getActiveDropTeaser(): Promise<DropTeaser | null> {
-  const { data, error } = await supabase
-    .from("tg_drop_teasers")
-    .select("id, title, short_text, details, preview_images, item_count, drop_date, highlights, is_active, updated_at")
-    .eq("is_active", true)
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  let token = await ensureTelegramUserSessionToken();
+  if (!token) {
+    token = await ensureTelegramUserSessionToken();
+  }
+  if (!token) {
+    throw new Error("TG_USER_SESSION_REQUIRED");
+  }
+
+  const { data, error } = await supabase.functions.invoke<{
+    ok?: boolean;
+    teaser?: DropTeaserRow | null;
+  }>("tg_drop_teaser_secure", {
+    body: {},
+    headers: { "x-tg-user-session": token },
+  });
 
   if (error) throw error;
-  if (!data) return null;
-  return mapDropTeaser(data as DropTeaserRow);
+  if (!data?.ok) throw new Error("DROP_TEASER_LOAD_FAILED");
+  if (!data.teaser) return null;
+  return mapDropTeaser(data.teaser);
 }

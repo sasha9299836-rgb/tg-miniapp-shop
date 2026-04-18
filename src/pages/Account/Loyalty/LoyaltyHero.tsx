@@ -3,45 +3,68 @@ import { LoyaltyBadge } from "../../../shared/ui/LoyaltyBadge";
 import "./LoyaltyHero.css";
 
 type LoyaltyHeroProps = {
-  currentLevel: number;
-  percentLabel: string;
-  spentRub: number;
-  nextLevel: number;
-  nextLevelThresholdRub: number;
+  currentLevel: 1 | 2 | 3 | 4 | 5;
+  totalSpentRub: number;
+  progress: number;
+  amountToNextLevelRub: number;
+  nextLevel: 1 | 2 | 3 | 4 | 5 | null;
+  currentBonuses: string[];
+  nextLevelBonuses: string[];
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 export function LoyaltyHero({
   currentLevel,
-  percentLabel,
-  spentRub,
+  totalSpentRub,
+  progress,
+  amountToNextLevelRub,
   nextLevel,
-  nextLevelThresholdRub,
+  currentBonuses,
+  nextLevelBonuses,
 }: LoyaltyHeroProps) {
-  const remainingRub = Math.max(0, nextLevelThresholdRub - spentRub);
-  const progress = clamp(spentRub / nextLevelThresholdRub, 0, 1);
-  const safeLevel = Math.min(5, Math.max(1, currentLevel)) as 1 | 2 | 3 | 4 | 5;
+  const safeProgress = clamp(progress, 0, 1);
 
   return (
     <Card className="ui-card--padded loyalty-hero-card">
       <div className="loyalty-hero">
         <div className="loyalty-hero__symbol">
-          <LoyaltyBadge level={safeLevel} percentLabel={percentLabel} size={168} />
+          <LoyaltyBadge level={currentLevel} percentLabel={`L${currentLevel}`} size={168} />
         </div>
 
         <div className="loyalty-hero__meta">
           <div className="loyalty-hero__title">Текущий уровень: Level {currentLevel}</div>
-          <div className="loyalty-hero__subtitle">Кешбэк {percentLabel} с каждой покупки</div>
+          <div className="loyalty-hero__subtitle">Сумма подтверждённых покупок: {totalSpentRub.toLocaleString("ru-RU")} ₽</div>
         </div>
 
         <div className="loyalty-hero__progress">
           <div className="loyalty-hero__progressText">
-            До Level {nextLevel} осталось {remainingRub.toLocaleString("ru-RU")} ₽
+            {nextLevel
+              ? `До Level ${nextLevel} осталось ${amountToNextLevelRub.toLocaleString("ru-RU")} ₽`
+              : "Максимальный уровень достигнут"}
           </div>
           <div className="loyalty-hero__bar">
-            <div className="loyalty-hero__barFill" style={{ width: `${Math.round(progress * 100)}%` }} />
+            <div className="loyalty-hero__barFill" style={{ width: `${Math.round(safeProgress * 100)}%` }} />
           </div>
+        </div>
+
+        <div className="loyalty-hero__benefits">
+          <div className="loyalty-hero__benefits-title">Ваши текущие бонусы:</div>
+          <ul className="loyalty-hero__benefits-list">
+            {currentBonuses.map((line) => (
+              <li key={`current-${line}`}>{line}</li>
+            ))}
+          </ul>
+          {nextLevel && nextLevelBonuses.length ? (
+            <>
+              <div className="loyalty-hero__benefits-title">На следующем уровне:</div>
+              <ul className="loyalty-hero__benefits-list">
+                {nextLevelBonuses.map((line) => (
+                  <li key={`next-${line}`}>{line}</li>
+                ))}
+              </ul>
+            </>
+          ) : null}
         </div>
       </div>
     </Card>
@@ -49,3 +72,4 @@ export function LoyaltyHero({
 }
 
 export default LoyaltyHero;
+

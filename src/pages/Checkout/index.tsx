@@ -8,7 +8,9 @@ import {
   calculateDeliveryQuote,
   clearCheckoutPromoSnapshot,
   createOrder,
+  previewCheckoutPricing,
   readCheckoutPromoSnapshot,
+  saveCheckoutPromoSnapshot,
   saveLastOrderId,
   type PromoPreviewSnapshot,
   type DeliveryQuoteResult,
@@ -64,7 +66,7 @@ export function CheckoutPage() {
   const [deliveryQuote, setDeliveryQuote] = useState<DeliveryQuoteResult | null>(null);
   const [deliveryQuoteError, setDeliveryQuoteError] = useState<string | null>(null);
   const [isDeliveryQuoteLoading, setIsDeliveryQuoteLoading] = useState(false);
-  const [promoSnapshot, setPromoSnapshot] = useState<PromoPreviewSnapshot | null>(null);
+  const [pricingSnapshot, setPricingSnapshot] = useState<PromoPreviewSnapshot | null>(null);
   const [isOfferAccepted, setIsOfferAccepted] = useState(false);
   const [isPrivacyAccepted, setIsPrivacyAccepted] = useState(false);
 
@@ -211,27 +213,61 @@ export function CheckoutPage() {
     [itemsWithProducts],
   );
   const discountedItemsSum = useMemo(() => {
-    if (!promoSnapshot) return itemsSum;
-    if (promoSnapshot.subtotal_without_discount_rub !== itemsSum) return itemsSum;
-    return promoSnapshot.subtotal_with_discount_rub;
-  }, [itemsSum, promoSnapshot]);
+    if (!pricingSnapshot) return itemsSum;
+    if (pricingSnapshot.subtotal_without_discount_rub !== itemsSum) return itemsSum;
+    return pricingSnapshot.subtotal_with_all_discounts_rub;
+  }, [itemsSum, pricingSnapshot]);
 
   const deliveryTotalFee = deliveryQuote?.delivery_total_fee_rub ?? 0;
-  const total = discountedItemsSum + deliveryTotalFee;
+  const deliveryDiscountAmount = pricingSnapshot?.delivery_discount_amount_rub ?? 0;
+  const payableDeliveryFee = Math.max(0, deliveryTotalFee - deliveryDiscountAmount);
+  const total = pricingSnapshot?.subtotal_without_discount_rub === itemsSum
+    ? pricingSnapshot.final_total_rub
+    : (discountedItemsSum + payableDeliveryFee);
   const isLegalAccepted = isOfferAccepted && isPrivacyAccepted;
 
   useEffect(() => {
     const snapshot = readCheckoutPromoSnapshot();
     if (!snapshot) return;
-    setPromoSnapshot(snapshot);
+    setPricingSnapshot(snapshot);
   }, []);
 
   useEffect(() => {
-    if (!promoSnapshot) return;
-    if (promoSnapshot.subtotal_without_discount_rub === itemsSum) return;
-    setPromoSnapshot(null);
+    if (!pricingSnapshot) return;
+    if (pricingSnapshot.subtotal_without_discount_rub === itemsSum) return;
+    setPricingSnapshot(null);
     clearCheckoutPromoSnapshot();
-  }, [itemsSum, promoSnapshot]);
+  }, [itemsSum, pricingSnapshot]);
+
+  useEffect(() => {
+    if (!isReady) return;
+    if (!quotePostIds.length) {
+      setPricingSnapshot(null);
+      clearCheckoutPromoSnapshot();
+      return;
+    }
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const snapshot = await previewCheckoutPricing({
+          post_ids: quotePostIds,
+          promo_code: pricingSnapshot?.promo_code ?? null,
+          delivery_total_fee_rub: deliveryTotalFee,
+        });
+        if (cancelled) return;
+        setPricingSnapshot(snapshot);
+        if (snapshot.promo_code) {
+          saveCheckoutPromoSnapshot(snapshot);
+        }
+      } catch {
+        if (cancelled) return;
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [isReady, quotePostIds, deliveryTotalFee, pricingSnapshot?.promo_code]);
 
   if (isChecking) {
     return (
@@ -318,7 +354,7 @@ export function CheckoutPage() {
         delivery_base_fee_rub: deliveryQuote?.delivery_base_fee_rub ?? 0,
         delivery_markup_rub: (deliveryQuote?.delivery_markup_rub ?? 60) + (deliveryQuote?.package_fee_rub ?? 0),
         delivery_total_fee_rub: deliveryQuote?.delivery_total_fee_rub ?? 0,
-        promo_code: promoSnapshot?.promo_code ?? null,
+        promo_code: pricingSnapshot?.promo_code ?? null,
       };
 
       const created = await createOrder(createPayload);
@@ -431,7 +467,7 @@ export function CheckoutPage() {
         <Card className="ui-card--padded checkout-total">
           <div className="checkout-total__row">
             <span>Товары</span>
-            {promoSnapshot && discountedItemsSum !== itemsSum ? (
+            {pricingSnapshot && discountedItemsSum !== itemsSum ? (
               <span className="checkout-total__promo-value">
                 <span className="checkout-total__old-value">{rub(itemsSum)}</span>
                 <span>{rub(discountedItemsSum)}</span>
@@ -442,26 +478,32 @@ export function CheckoutPage() {
           </div>
           <div className="checkout-total__row checkout-total__divider">
             <span>Доставка</span>
-            <span>{isDeliveryQuoteLoading ? "..." : rub(deliveryTotalFee)}</span>
+            <span>{isDeliveryQuoteLoading ? "..." : rub(payableDeliveryFee)}</span>
           </div>
           <div className="checkout-total__row checkout-total__sum">
             <span>Итого</span>
             <span>{rub(total)}</span>
           </div>
-          {promoSnapshot ? (
+          {pricingSnapshot?.promo_code ? (
             <div className="checkout-total__promo-note">
-              Промокод: {promoSnapshot.promo_code} (-{promoSnapshot.promo_discount_percent}%)
+              Промокод: {pricingSnapshot.promo_code} (-{pricingSnapshot.promo_discount_percent}%)
               <button
                 type="button"
                 className="checkout-total__promo-remove"
                 onClick={() => {
-                  setPromoSnapshot(null);
+                  setPricingSnapshot(null);
                   clearCheckoutPromoSnapshot();
                 }}
               >
                 Убрать
               </button>
             </div>
+          ) : null}
+          {deliveryDiscountAmount > 0 ? (
+            <div className="checkout-total__promo-note">Скидка на доставку: -{rub(deliveryDiscountAmount)}</div>
+          ) : null}
+          {pricingSnapshot?.loyalty_discount_amount_rub ? (
+            <div className="checkout-total__promo-note">Loyalty-скидка: -{rub(pricingSnapshot.loyalty_discount_amount_rub)}</div>
           ) : null}
         </Card>
 

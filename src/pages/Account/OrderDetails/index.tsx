@@ -248,10 +248,12 @@ export function OrderDetailsPage() {
     void load();
   }, [orderId]);
 
-  const priceRub = Number(order?.price_rub ?? 0);
-  const deliveryFee = Number(order?.delivery_total_fee_rub ?? 0);
+  const priceRub = Number(order?.subtotal_with_all_discounts_rub ?? order?.price_rub ?? 0);
+  const rawDeliveryFee = Number(order?.delivery_total_fee_rub ?? 0);
+  const deliveryDiscountAmount = Number(order?.delivery_discount_amount_rub ?? 0);
+  const deliveryFee = Math.max(0, rawDeliveryFee - deliveryDiscountAmount);
   const packagingFee = Number(order?.packaging_fee_rub ?? getPackagingFeeRub(order?.packaging_type));
-  const total = priceRub + deliveryFee + packagingFee;
+  const total = Number(order?.final_total_rub ?? (priceRub + deliveryFee + packagingFee));
 
   const timelineRows = useMemo(
     () => [...timeline].sort((a, b) => new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime()),

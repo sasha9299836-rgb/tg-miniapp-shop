@@ -1,11 +1,61 @@
-﻿.loyalty-grid {
+.loyalty-grid {
   display: grid;
   gap: 10px;
+}
+
+.loyalty-page-state {
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.loyalty-page-state--error {
+  color: #b42318;
+}
+
+.loyalty-selector-card {
+  display: grid;
+  gap: 10px;
+}
+
+.loyalty-selector__top {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.loyalty-selector__title {
+  text-align: center;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.loyalty-selector__meta {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.loyalty-selector__bonuses-title {
+  font-weight: 700;
+}
+
+.loyalty-selector__bonuses {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
 }
 
 .loyalty-card {
   display: grid;
   gap: 8px;
+  cursor: pointer;
+}
+
+.loyalty-card.is-selected {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border) 40%);
 }
 
 .loyalty-card__head {
@@ -21,7 +71,7 @@
 }
 
 .loyalty-card__discount {
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -31,25 +81,3 @@
   color: var(--muted);
 }
 
-.loyalty-card__status {
-  display: inline-flex;
-}
-
-.loyalty-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 7px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--surface-alt);
-  color: var(--text);
-  font-weight: 600;
-  font-size: 12px;
-  line-height: 1.1;
-  white-space: nowrap;
-}
-
-.loyalty-pill.is-done {
-  border-color: color-mix(in srgb, var(--success) 40%, var(--border) 60%);
-  background: color-mix(in srgb, var(--success) 12%, var(--surface) 88%);
-}

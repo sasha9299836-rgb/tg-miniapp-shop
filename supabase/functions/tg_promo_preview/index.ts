@@ -1,14 +1,10 @@
 import { createSupabaseAdminClient, empty, json } from "../_shared/admin.ts";
-import {
-  PromoValidationError,
-  resolveSubtotalByPosts,
-  validatePromoForUserAndSubtotal,
-} from "../_shared/promo.ts";
 import { requireTelegramUserSession } from "../_shared/telegramUserSession.ts";
 
 type PromoPreviewBody = {
   promo_code?: string | null;
   post_ids?: string[];
+  delivery_total_fee_rub?: number | null;
 };
 
 const FAILED_ATTEMPTS_WINDOW_SECONDS = 600;
@@ -90,56 +86,79 @@ Deno.serve(async (req) => {
     const body = (await req.json().catch(() => null)) as PromoPreviewBody | null;
     const postIds = normalizePostIds(body?.post_ids);
     const promoCode = String(body?.promo_code ?? "").trim();
+    const deliveryTotalFee = Math.max(0, Math.round(Number(body?.delivery_total_fee_rub ?? 0)));
     promoCodeForAttempt = promoCode;
 
-    if (!postIds.length || !promoCode) {
+    if (!postIds.length) {
       return json({ ok: false, error: "BAD_PAYLOAD" }, 400);
     }
 
-    const throttle = await readPromoPreviewThrottleState(supabase, currentTgUserId);
-    if (throttle.blocked) {
+    if (promoCode) {
+      const throttle = await readPromoPreviewThrottleState(supabase, currentTgUserId);
+      if (throttle.blocked) {
+        await writePromoPreviewAttempt(supabase, {
+          tgUserId: currentTgUserId,
+          promoCode,
+          success: false,
+        }).catch(() => null);
+        return json({
+          ok: false,
+          error: "PROMO_RATE_LIMITED",
+          retry_after_seconds: throttle.retryAfterSeconds,
+        }, 200);
+      }
+    }
+
+    const { data: pricingData, error: pricingError } = await supabase.rpc("tg_build_checkout_pricing", {
+      p_tg_user_id: currentTgUserId,
+      p_post_ids: postIds,
+      p_promo_code: promoCode || null,
+      p_delivery_total_fee_rub: deliveryTotalFee,
+    });
+    if (pricingError) {
+      const message = String(pricingError.message ?? "").trim();
+      if (!message) throw new Error("PROMO_PREVIEW_FAILED");
+      if (
+        message.includes("PROMO_NOT_FOUND") ||
+        message.includes("PROMO_DISABLED") ||
+        message.includes("PROMO_EXHAUSTED") ||
+        message.includes("PROMO_EXPIRED") ||
+        message.includes("PROMO_NOT_STARTED") ||
+        message.includes("PROMO_ALREADY_USED_BY_USER") ||
+        message.includes("PROMO_NOT_AVAILABLE_FOR_USER") ||
+        message.includes("PROMO_POST_NOT_FOUND") ||
+        message.includes("PROMO_POST_NOT_PUBLISHED") ||
+        message.includes("PROMO_POST_NOT_AVAILABLE")
+      ) {
+        return json({ ok: false, error: message }, 200);
+      }
+      throw new Error(message);
+    }
+
+    const snapshot = (Array.isArray(pricingData) ? pricingData[0] : pricingData) as Record<string, unknown> | null;
+    if (!snapshot || typeof snapshot !== "object") {
+      return json({ ok: false, error: "PROMO_PREVIEW_FAILED" }, 200);
+    }
+
+    if (promoCode) {
       await writePromoPreviewAttempt(supabase, {
         tgUserId: currentTgUserId,
         promoCode,
-        success: false,
+        success: true,
       }).catch(() => null);
-      return json({
-        ok: false,
-        error: "PROMO_RATE_LIMITED",
-        retry_after_seconds: throttle.retryAfterSeconds,
-      }, 200);
     }
-
-    const subtotalWithoutDiscount = await resolveSubtotalByPosts(supabase, postIds);
-    const snapshot = await validatePromoForUserAndSubtotal({
-      supabase,
-      tgUserId: currentTgUserId,
-      promoCode,
-      subtotalWithoutDiscountRub: subtotalWithoutDiscount,
-    });
-
-    await writePromoPreviewAttempt(supabase, {
-      tgUserId: currentTgUserId,
-      promoCode,
-      success: true,
-    }).catch(() => null);
 
     return json({
       ok: true,
       promo: snapshot,
     });
   } catch (error) {
-    if (error instanceof PromoValidationError) {
-      if (supabase && typeof tgUserId === "number" && promoCodeForAttempt) {
-        await writePromoPreviewAttempt(supabase, {
-          tgUserId,
-          promoCode: promoCodeForAttempt,
-          success: false,
-        }).catch(() => null);
-      }
-    }
-    if (error instanceof PromoValidationError) {
-      return json({ ok: false, error: error.code }, 200);
+    if (supabase && typeof tgUserId === "number" && promoCodeForAttempt) {
+      await writePromoPreviewAttempt(supabase, {
+        tgUserId,
+        promoCode: promoCodeForAttempt,
+        success: false,
+      }).catch(() => null);
     }
     const message = error instanceof Error ? error.message : "UNKNOWN_ERROR";
     return json({ error: "SERVER_ERROR", details: message }, 500);

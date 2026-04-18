@@ -3,11 +3,6 @@ import {
   empty,
   json,
 } from "../_shared/admin.ts";
-import {
-  PromoValidationError,
-  resolveSubtotalByPosts,
-  validatePromoForUserAndSubtotal,
-} from "../_shared/promo.ts";
 import { requireTelegramUserSession } from "../_shared/telegramUserSession.ts";
 
 type CreateOrderSecureBody = {
@@ -58,22 +53,36 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: "BAD_PAYLOAD" }, 400);
     }
 
-    let promoSnapshot: Awaited<ReturnType<typeof validatePromoForUserAndSubtotal>> | null = null;
-    if (promoCode) {
-      try {
-        const subtotalWithoutDiscount = await resolveSubtotalByPosts(supabase, postIds);
-        promoSnapshot = await validatePromoForUserAndSubtotal({
-          supabase,
-          tgUserId: userSession.tgUserId,
-          promoCode,
-          subtotalWithoutDiscountRub: subtotalWithoutDiscount,
-        });
-      } catch (error) {
-        if (error instanceof PromoValidationError) {
-          return json({ ok: false, error: error.code }, 200);
-        }
-        throw error;
+    const deliveryTotalFee = Math.max(0, Math.round(Number(body?.delivery_total_fee_rub ?? 0)));
+    const { data: pricingData, error: pricingError } = await supabase.rpc("tg_build_checkout_pricing", {
+      p_tg_user_id: userSession.tgUserId,
+      p_post_ids: postIds,
+      p_promo_code: promoCode || null,
+      p_delivery_total_fee_rub: deliveryTotalFee,
+    });
+
+    if (pricingError) {
+      const message = String(pricingError.message ?? "").trim();
+      if (
+        message.includes("PROMO_NOT_FOUND") ||
+        message.includes("PROMO_DISABLED") ||
+        message.includes("PROMO_EXHAUSTED") ||
+        message.includes("PROMO_EXPIRED") ||
+        message.includes("PROMO_NOT_STARTED") ||
+        message.includes("PROMO_ALREADY_USED_BY_USER") ||
+        message.includes("PROMO_NOT_AVAILABLE_FOR_USER") ||
+        message.includes("PROMO_POST_NOT_FOUND") ||
+        message.includes("PROMO_POST_NOT_PUBLISHED") ||
+        message.includes("PROMO_POST_NOT_AVAILABLE")
+      ) {
+        return json({ ok: false, error: message }, 200);
       }
+      throw new Error(message || "CHECKOUT_PRICING_FAILED");
+    }
+
+    const pricingSnapshot = (Array.isArray(pricingData) ? pricingData[0] : pricingData) as Record<string, unknown> | null;
+    if (!pricingSnapshot || typeof pricingSnapshot !== "object") {
+      return json({ ok: false, error: "CHECKOUT_PRICING_FAILED" }, 200);
     }
 
     const { data, error } = await supabase.rpc("tg_create_order", {
@@ -97,14 +106,14 @@ Deno.serve(async (req) => {
       p_delivery_base_fee_rub: body?.delivery_base_fee_rub ?? null,
       p_delivery_markup_rub: body?.delivery_markup_rub ?? null,
       p_delivery_total_fee_rub: body?.delivery_total_fee_rub ?? null,
-      p_promo_id: promoSnapshot?.promo_id ?? null,
-      p_promo_code: promoSnapshot?.promo_code ?? null,
-      p_promo_type: promoSnapshot?.promo_type ?? null,
-      p_promo_discount_percent: promoSnapshot?.promo_discount_percent ?? null,
-      p_subtotal_without_discount_rub: promoSnapshot?.subtotal_without_discount_rub ?? null,
-      p_promo_discount_amount_rub: promoSnapshot?.promo_discount_amount_rub ?? null,
-      p_subtotal_with_discount_rub: promoSnapshot?.subtotal_with_discount_rub ?? null,
-      p_final_total_rub: null,
+      p_promo_id: String(pricingSnapshot.promo_id ?? "").trim() || null,
+      p_promo_code: String(pricingSnapshot.promo_code ?? "").trim() || null,
+      p_promo_type: String(pricingSnapshot.promo_type ?? "").trim() || null,
+      p_promo_discount_percent: Number(pricingSnapshot.promo_discount_percent ?? 0) || null,
+      p_subtotal_without_discount_rub: Number(pricingSnapshot.subtotal_without_discount_rub ?? 0) || null,
+      p_promo_discount_amount_rub: Number(pricingSnapshot.promo_discount_amount_rub ?? 0) || null,
+      p_subtotal_with_discount_rub: Number(pricingSnapshot.subtotal_with_discount_rub ?? 0) || null,
+      p_final_total_rub: Number(pricingSnapshot.final_total_rub ?? 0) || null,
     });
 
     if (error) {
@@ -116,6 +125,33 @@ Deno.serve(async (req) => {
     const reservedUntil = String((row as { reserved_until?: string | null })?.reserved_until ?? "").trim();
     if (!orderId || !reservedUntil) {
       return json({ ok: false, error: "CREATE_ORDER_FAILED" }, 200);
+    }
+
+    const loyaltyDiscountKind = String(pricingSnapshot.loyalty_discount_kind ?? "none").trim() || "none";
+    const loyaltyDiscountPercentRaw = Number(pricingSnapshot.loyalty_discount_percent ?? 0);
+    const loyaltyDiscountAmountRaw = Number(pricingSnapshot.loyalty_discount_amount_rub ?? 0);
+    const deliveryDiscountAmountRaw = Number(pricingSnapshot.delivery_discount_amount_rub ?? 0);
+    const subtotalWithAllDiscountsRaw = Number(pricingSnapshot.subtotal_with_all_discounts_rub ?? 0);
+    const finalTotalRaw = Number(pricingSnapshot.final_total_rub ?? 0);
+    const loyaltyLevelRaw = Number(pricingSnapshot.loyalty_level ?? 0);
+    const pricingUpdatePayload = {
+      price_rub: Math.max(0, Math.round(subtotalWithAllDiscountsRaw)),
+      final_total_rub: Math.max(0, Math.round(finalTotalRaw)),
+      loyalty_level: Number.isFinite(loyaltyLevelRaw) ? Math.max(0, Math.round(loyaltyLevelRaw)) : null,
+      loyalty_discount_kind: loyaltyDiscountKind,
+      loyalty_discount_percent: Number.isFinite(loyaltyDiscountPercentRaw) && loyaltyDiscountPercentRaw > 0
+        ? Math.max(1, Math.round(loyaltyDiscountPercentRaw))
+        : null,
+      loyalty_discount_amount_rub: Math.max(0, Math.round(loyaltyDiscountAmountRaw)),
+      delivery_discount_amount_rub: Math.max(0, Math.round(deliveryDiscountAmountRaw)),
+      subtotal_with_all_discounts_rub: Math.max(0, Math.round(subtotalWithAllDiscountsRaw)),
+    };
+    const { error: pricingUpdateError } = await supabase
+      .from("tg_orders")
+      .update(pricingUpdatePayload)
+      .eq("id", orderId);
+    if (pricingUpdateError) {
+      return json({ ok: false, error: "ORDER_PRICING_SNAPSHOT_SAVE_FAILED" }, 200);
     }
 
     return json({
