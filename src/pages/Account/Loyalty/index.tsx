@@ -23,6 +23,8 @@ type CurrentLevelInfo = {
   bonuses: string[];
 };
 
+type LoyaltyDisplayLevel = 0 | 1 | 2 | 3 | 4 | 5;
+
 const LEVELS: LoyaltyLevelInfo[] = [
   {
     level: 1,
@@ -90,6 +92,11 @@ function getCurrentLevelInfo(level: number): CurrentLevelInfo {
   return getLevelByNumber(level);
 }
 
+function normalizeDisplayLevel(level: number): LoyaltyDisplayLevel {
+  if (!Number.isFinite(level)) return 0;
+  return Math.max(0, Math.min(5, Math.round(level))) as LoyaltyDisplayLevel;
+}
+
 function getCurrentBonusLines(loyalty: LoyaltyState): string[] {
   const lines: string[] = [];
   if (loyalty.level >= 1) {
@@ -116,7 +123,7 @@ export function LoyaltyPage() {
   const [loyalty, setLoyalty] = useState<LoyaltyState | null>(null);
   const [loadingText, setLoadingText] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
-  const [selectedLevel, setSelectedLevel] = useState<1 | 2 | 3 | 4 | 5>(1);
+  const [selectedLevel, setSelectedLevel] = useState<LoyaltyDisplayLevel>(0);
 
   useEffect(() => {
     if (!isReady) return;
@@ -128,7 +135,7 @@ export function LoyaltyPage() {
         const state = await getLoyaltyState();
         if (cancelled) return;
         setLoyalty(state);
-        const normalizedLevel = Math.max(1, Math.min(5, state.level || 1)) as 1 | 2 | 3 | 4 | 5;
+        const normalizedLevel = normalizeDisplayLevel(Number(state.level ?? 0));
         setSelectedLevel(normalizedLevel);
       } catch (error) {
         if (cancelled) return;
@@ -149,11 +156,14 @@ export function LoyaltyPage() {
 
   const currentLevel = useMemo(() => {
     if (!loyalty) return 0;
-    return Math.max(0, Math.min(5, Number(loyalty.level ?? 0)));
+    return normalizeDisplayLevel(Number(loyalty.level ?? 0));
   }, [loyalty]);
 
   const currentLevelInfo = useMemo(() => getCurrentLevelInfo(currentLevel), [currentLevel]);
-  const selectedLevelInfo = useMemo(() => getLevelByNumber(selectedLevel), [selectedLevel]);
+  const selectedLevelInfo = useMemo(
+    () => (selectedLevel <= 0 ? LEVEL_ZERO_INFO : getLevelByNumber(selectedLevel)),
+    [selectedLevel],
+  );
   const nextLevelInfo = useMemo(() => {
     if (!loyalty?.next_level) return null;
     return getLevelByNumber(Math.max(1, Math.min(5, loyalty.next_level)));
@@ -171,11 +181,11 @@ export function LoyaltyPage() {
   const currentBonusLines = useMemo(() => (loyalty ? getCurrentBonusLines(loyalty) : []), [loyalty]);
 
   const onPrevLevel = () => {
-    setSelectedLevel((prev) => (prev > 1 ? ((prev - 1) as 1 | 2 | 3 | 4 | 5) : prev));
+    setSelectedLevel((prev) => (prev > 0 ? normalizeDisplayLevel(prev - 1) : prev));
   };
 
   const onNextLevel = () => {
-    setSelectedLevel((prev) => (prev < 5 ? ((prev + 1) as 1 | 2 | 3 | 4 | 5) : prev));
+    setSelectedLevel((prev) => (prev < 5 ? normalizeDisplayLevel(prev + 1) : prev));
   };
 
   if (isChecking) {
@@ -204,6 +214,7 @@ export function LoyaltyPage() {
         <>
           <LoyaltyHero
             currentLevel={currentLevel}
+            selectedLevel={selectedLevel}
             totalSpentRub={loyalty.total_spent}
             progress={heroProgress}
             amountToNextLevelRub={loyalty.amount_to_next_level}
@@ -214,18 +225,18 @@ export function LoyaltyPage() {
 
           <Card className="ui-card--padded loyalty-selector-card">
             <div className="loyalty-selector__top">
-              <Button variant="secondary" onClick={onPrevLevel} disabled={selectedLevel <= 1}>←</Button>
+              <Button variant="secondary" onClick={onPrevLevel} disabled={selectedLevel <= 0}>←</Button>
               <div className="loyalty-selector__title">{selectedLevelInfo.title}</div>
               <Button variant="secondary" onClick={onNextLevel} disabled={selectedLevel >= 5}>→</Button>
             </div>
 
             <div className="loyalty-selector__meta">
               <div>Порог: от {rub(selectedLevelInfo.threshold)}</div>
-              <div>
-                Статус:{" "}
-                {selectedLevel < currentLevel ? "Достигнут" : selectedLevel === currentLevel ? "Текущий" : "Следующий"}
-              </div>
-            </div>
+                  <div>
+                    Статус:{" "}
+                    {selectedLevel < currentLevel ? "Достигнут" : selectedLevel === currentLevel ? "Текущий" : "Следующий"}
+                  </div>
+                </div>
 
             <div className="loyalty-selector__bonuses-title">Бонусы уровня:</div>
             <ul className="loyalty-selector__bonuses">

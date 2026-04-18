@@ -4,6 +4,7 @@ import "./LoyaltyHero.css";
 
 type LoyaltyHeroProps = {
   currentLevel: number;
+  selectedLevel: number;
   totalSpentRub: number;
   progress: number;
   amountToNextLevelRub: number;
@@ -16,6 +17,7 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 
 export function LoyaltyHero({
   currentLevel,
+  selectedLevel,
   totalSpentRub,
   progress,
   amountToNextLevelRub,
@@ -24,13 +26,13 @@ export function LoyaltyHero({
   nextLevelBonuses,
 }: LoyaltyHeroProps) {
   const safeProgress = clamp(progress, 0, 1);
-  const badgeLevel = clamp(currentLevel, 1, 5) as 1 | 2 | 3 | 4 | 5;
+  const badgeLevel = clamp(selectedLevel, 1, 5) as 1 | 2 | 3 | 4 | 5;
 
   return (
     <Card className="ui-card--padded loyalty-hero-card">
       <div className="loyalty-hero">
         <div className="loyalty-hero__symbol">
-          <LoyaltyBadge level={badgeLevel} percentLabel={`L${currentLevel}`} size={168} />
+          <LoyaltyBadge level={badgeLevel} percentLabel={`L${selectedLevel}`} size={168} />
         </div>
 
         <div className="loyalty-hero__meta">
@@ -50,12 +52,16 @@ export function LoyaltyHero({
         </div>
 
         <div className="loyalty-hero__benefits">
-          <div className="loyalty-hero__benefits-title">Ваши текущие бонусы:</div>
-          <ul className="loyalty-hero__benefits-list">
-            {currentBonuses.map((line) => (
-              <li key={`current-${line}`}>{line}</li>
-            ))}
-          </ul>
+          {currentBonuses.length ? (
+            <>
+              <div className="loyalty-hero__benefits-title">Ваши текущие бонусы:</div>
+              <ul className="loyalty-hero__benefits-list">
+                {currentBonuses.map((line) => (
+                  <li key={`current-${line}`}>{line}</li>
+                ))}
+              </ul>
+            </>
+          ) : null}
           {nextLevel && nextLevelBonuses.length ? (
             <>
               <div className="loyalty-hero__benefits-title">На следующем уровне:</div>
