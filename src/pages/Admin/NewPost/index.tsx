@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Page } from "../../../shared/ui/Page";
 import { Button } from "../../../shared/ui/Button";
 import { PhotoUploader, type PhotoPreviewItem } from "../../../shared/ui/PhotoUploader";
@@ -24,6 +24,7 @@ import {
   getPostPhotos,
   publishPostNow,
   schedulePost,
+  saveCatalogPostVideoLink,
   unschedulePost,
   type NalichieItem,
   type TgPost,
@@ -276,6 +277,18 @@ function normalizeConditionValue(value: string | null | undefined) {
   return LEGACY_CONDITION_MAP[raw] ?? raw;
 }
 
+function normalizeVideoLink(raw: string): string | null {
+  const value = String(raw ?? "").trim();
+  if (!value) return null;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "https:") return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
 function moscowDateTimeLocalToIso(value: string): string | null {
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
   if (!match) return null;
@@ -320,8 +333,14 @@ function statusLabel(status: TgPost["status"]) {
 
 export function AdminNewPostPage() {
   const nav = useNavigate();
+  const location = useLocation();
   const { id: editPostId } = useParams();
   const isEditMode = Boolean(editPostId);
+  const isOpenedFromCatalog = useMemo(
+    () => new URLSearchParams(location.search).get("from") === "catalog",
+    [location.search],
+  );
+  const backPath = isOpenedFromCatalog ? "/admin/catalog" : "/admin/posts/scheduled";
 
   const [postType, setPostType] = useState<TgPostType>("warehouse");
   const [nalichieIdInput, setNalichieIdInput] = useState("");
@@ -346,6 +365,7 @@ export function AdminNewPostPage() {
   const [defectsText, setDefectsText] = useState("");
   const [scheduleAtInput, setScheduleAtInput] = useState("");
   const [packagingPreset, setPackagingPreset] = useState<TgPostPackagingPreset>("A3");
+  const [videoLinkInput, setVideoLinkInput] = useState("");
 
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [isAutoFetching, setIsAutoFetching] = useState(false);
@@ -354,6 +374,7 @@ export function AdminNewPostPage() {
   const [isUploadingDefects, setIsUploadingDefects] = useState(false);
   const [isUploadingMeasurements, setIsUploadingMeasurements] = useState(false);
   const [isPublishingNow, setIsPublishingNow] = useState(false);
+  const [isSavingVideo, setIsSavingVideo] = useState(false);
   const [isScheduling, setIsScheduling] = useState(false);
   const [isUnscheduling, setIsUnscheduling] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
@@ -602,6 +623,7 @@ export function AdminNewPostPage() {
     setDefectsText("");
     setScheduleAtInput("");
     setPackagingPreset("A3");
+    setVideoLinkInput("");
     setFieldError(null);
     setIsAutoFetching(false);
     setIsTypeSuggestionsOpen(false);
@@ -630,6 +652,7 @@ export function AdminNewPostPage() {
     setDefectsText(post.defects_text ?? "");
     setScheduleAtInput(toMoscowInputValue(post.scheduled_at));
     setPackagingPreset(post.packaging_preset ?? "A3");
+    setVideoLinkInput(post.video_url ?? "");
   };
 
   useEffect(() => {
@@ -1606,6 +1629,40 @@ export function AdminNewPostPage() {
     }
   };
 
+  const onSaveVideoLink = async () => {
+    setErrorText(null);
+    setSuccessText(null);
+    if (!isAdminRuntimeReady) {
+      setErrorText("Подождите: идет подготовка админ-сессии.");
+      return;
+    }
+    const targetPost = currentPostRef.current ?? currentPost;
+    if (!targetPost?.id) {
+      setErrorText("Сначала сохраните пост, затем добавьте видео.");
+      return;
+    }
+    const raw = videoLinkInput.trim();
+    const normalized = normalizeVideoLink(raw);
+    if (raw && !normalized) {
+      setErrorText("Укажите корректную https-ссылку на видео.");
+      return;
+    }
+
+    setIsSavingVideo(true);
+    try {
+      await saveCatalogPostVideoLink(targetPost.id, normalized);
+      const updatedPost: TgPost = { ...targetPost, video_url: normalized };
+      currentPostRef.current = updatedPost;
+      setCurrentPost(updatedPost);
+      setVideoLinkInput(normalized ?? "");
+      setSuccessText(normalized ? "Ссылка на видео сохранена." : "Видео удалено из поста.");
+    } catch (error) {
+      setErrorText(`Ошибка сохранения видео: ${(error as Error).message}`);
+    } finally {
+      setIsSavingVideo(false);
+    }
+  };
+
   const scheduleButtonLabel = currentPost?.status === "scheduled"
     ? "Изменить время"
     : "Запланировать";
@@ -1689,6 +1746,30 @@ export function AdminNewPostPage() {
           onSelect={(files) => stageSelectedFiles(files, "main")}
           onRemove={(id) => void onDeleteMainPhoto(id)}
         />
+
+        {currentPost ? (
+          <div className="glass" style={{ padding: 12, display: "grid", gap: 8 }}>
+            <div style={{ fontWeight: 700 }}>{"Видео поста"}</div>
+            <Field label={"Ссылка на видео (https)"}>
+              <input
+                value={videoLinkInput}
+                className="admin-post-form-control"
+                onChange={(e) => setVideoLinkInput(e.target.value)}
+                placeholder={"https://..."}
+                style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }}
+              />
+            </Field>
+            <div style={{ display: "grid", gap: 8 }}>
+              <Button
+                variant="secondary"
+                onClick={() => void onSaveVideoLink()}
+                disabled={isSavingVideo || isPreparingAdminRuntime || !isAdminRuntimeReady}
+              >
+                {isSavingVideo ? "Сохраняем видео..." : "Сохранить видео"}
+              </Button>
+            </div>
+          </div>
+        ) : null}
 
         {!canRenderProductForm ? (
           <div className="glass" style={{ padding: 12, color: "var(--muted)" }}>
@@ -1954,7 +2035,7 @@ export function AdminNewPostPage() {
               {isUnscheduling ? "Обновление..." : "Вернуть в черновики"}
             </Button>
           ) : null}
-          <Button variant="secondary" onClick={() => nav("/admin/posts/scheduled")}>{"Назад"}</Button>
+          <Button variant="secondary" onClick={() => nav(backPath)}>{"Назад"}</Button>
         </div>
           {errorText ? <div style={{ color: "#b42318" }}>{errorText}</div> : null}
           {successText ? <div style={{ color: "#067647" }}>{successText}</div> : null}

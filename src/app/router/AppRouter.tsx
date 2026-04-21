@@ -28,6 +28,7 @@ import { AdminOrdersPage } from "../../pages/Admin/Orders";
 import { AdminPostVideoPage } from "../../pages/Admin/PostVideo";
 import { AdminDropTeaserPage } from "../../pages/Admin/DropTeaser";
 import { AdminPromosPage } from "../../pages/Admin/Promos";
+import { AdminCatalogPage } from "../../pages/Admin/Catalog";
 import { useAccountStore } from "../../entities/account/model/useAccountStore";
 import { useAdminStore } from "../../entities/account/model/useAdminStore";
 import { canUseAdminSessionByContext, getAdminAccessDebugState } from "../../shared/auth/adminAccess";
@@ -75,6 +76,7 @@ const router = createBrowserRouter([
       { path: "/admin/orders", element: <AdminGuard><AdminOrdersPage /></AdminGuard> },
       { path: "/admin/post-video", element: <AdminGuard><AdminPostVideoPage /></AdminGuard> },
       { path: "/admin/drop-preview", element: <AdminGuard><AdminDropTeaserPage /></AdminGuard> },
+      { path: "/admin/catalog", element: <AdminGuard><AdminCatalogPage /></AdminGuard> },
       { path: "/admin/promos", element: <AdminGuard><AdminPromosPage /></AdminGuard> },
 
       { path: "/item/:id", element: <ItemPage /> },
