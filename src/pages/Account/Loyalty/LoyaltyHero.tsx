@@ -1,10 +1,8 @@
 import { Card } from "../../../shared/ui/Card";
-import { LoyaltyBadge } from "../../../shared/ui/LoyaltyBadge";
 import "./LoyaltyHero.css";
 
 type LoyaltyHeroProps = {
   currentLevel: number;
-  selectedLevel: number;
   totalSpentRub: number;
   progress: number;
   amountToNextLevelRub: number;
@@ -17,7 +15,6 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 
 export function LoyaltyHero({
   currentLevel,
-  selectedLevel,
   totalSpentRub,
   progress,
   amountToNextLevelRub,
@@ -26,15 +23,10 @@ export function LoyaltyHero({
   nextLevelBonuses,
 }: LoyaltyHeroProps) {
   const safeProgress = clamp(progress, 0, 1);
-  const badgeLevel = clamp(selectedLevel, 1, 5) as 1 | 2 | 3 | 4 | 5;
 
   return (
     <Card className="ui-card--padded loyalty-hero-card">
       <div className="loyalty-hero">
-        <div className="loyalty-hero__symbol">
-          <LoyaltyBadge level={badgeLevel} percentLabel={`L${selectedLevel}`} size={168} />
-        </div>
-
         <div className="loyalty-hero__meta">
           <div className="loyalty-hero__title">Текущий уровень: Level {currentLevel}</div>
           <div className="loyalty-hero__subtitle">Сумма подтверждённых покупок: {totalSpentRub.toLocaleString("ru-RU")} ₽</div>

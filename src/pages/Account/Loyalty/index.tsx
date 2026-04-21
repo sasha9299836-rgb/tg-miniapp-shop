@@ -214,7 +214,6 @@ export function LoyaltyPage() {
         <>
           <LoyaltyHero
             currentLevel={currentLevel}
-            selectedLevel={selectedLevel}
             totalSpentRub={loyalty.total_spent}
             progress={heroProgress}
             amountToNextLevelRub={loyalty.amount_to_next_level}

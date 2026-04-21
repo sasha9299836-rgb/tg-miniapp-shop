@@ -9,12 +9,6 @@
   text-align: center;
 }
 
-.loyalty-hero__symbol {
-  display: grid;
-  place-items: center;
-  margin: 0 auto;
-}
-
 .loyalty-hero__meta {
   display: grid;
   gap: 4px;
@@ -82,4 +76,3 @@
   font-size: 13px;
   color: var(--muted);
 }
-
