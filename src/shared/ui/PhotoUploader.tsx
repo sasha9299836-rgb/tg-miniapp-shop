@@ -92,7 +92,7 @@ export function PhotoUploader({
                   preload="metadata"
                   playsInline
                 />
-                <Button variant="secondary" onClick={() => onRemove(photo.id)}>Удалить</Button>
+                <Button className="photo-uploader__remove" variant="secondary" onClick={() => onRemove(photo.id)}>Удалить</Button>
               </div>
             ))}
         </div>
