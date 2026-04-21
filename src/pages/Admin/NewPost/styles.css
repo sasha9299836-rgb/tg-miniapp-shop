@@ -12,3 +12,9 @@
 .admin-post-form-control:focus::placeholder {
   opacity: 0;
 }
+
+.admin-post-delete-btn.btn {
+  background: #fef3f2;
+  color: #b42318;
+  border-color: #fecdca;
+}

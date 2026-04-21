@@ -928,6 +928,11 @@ export async function unschedulePost(postId: string): Promise<TgPost> {
   return data as TgPost;
 }
 
+export async function deletePostById(postId: string): Promise<void> {
+  const { error } = await supabase.from("tg_posts").delete().eq("id", postId);
+  if (error) throw error;
+}
+
 export async function deleteDraftOrScheduledPost(postId: string): Promise<void> {
   const { data: post, error: readError } = await supabase
     .from("tg_posts")

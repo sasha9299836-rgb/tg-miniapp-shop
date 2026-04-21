@@ -12,6 +12,7 @@ import {
   createPostMeasurementPhoto,
   createPostPhoto,
   deleteDefectPhotoViaProxy,
+  deletePostById,
   deletePostMeasurementPhoto,
   deletePostPhoto,
   fetchNalichieById,
@@ -375,6 +376,7 @@ export function AdminNewPostPage() {
   const [isUploadingMeasurements, setIsUploadingMeasurements] = useState(false);
   const [isPublishingNow, setIsPublishingNow] = useState(false);
   const [isSavingVideo, setIsSavingVideo] = useState(false);
+  const [isDeletingPost, setIsDeletingPost] = useState(false);
   const [isScheduling, setIsScheduling] = useState(false);
   const [isUnscheduling, setIsUnscheduling] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
@@ -1629,6 +1631,59 @@ export function AdminNewPostPage() {
     }
   };
 
+  const onApplyChanges = async () => {
+    setErrorText(null);
+    setSuccessText(null);
+    setIsSaving(true);
+    try {
+      await persistDraft();
+      setSuccessText("Изменения применены.");
+    } catch (error) {
+      setErrorText(`Ошибка сохранения: ${(error as Error).message}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const onDeletePost = async () => {
+    setErrorText(null);
+    setSuccessText(null);
+    if (!isAdminRuntimeReady) {
+      setErrorText("Подождите: идет подготовка админ-сессии.");
+      return;
+    }
+    const targetPost = currentPostRef.current ?? currentPost;
+    if (!targetPost?.id) {
+      setErrorText("Пост не найден.");
+      return;
+    }
+    const confirmed = window.confirm("Точно удалить пост?");
+    if (!confirmed) return;
+
+    setIsDeletingPost(true);
+    try {
+      const [mainRows, defectRows, measurementRows] = await Promise.all([
+        getPostPhotos(targetPost.id),
+        getPostDefectPhotos(targetPost.id),
+        getPostMeasurementPhotos(targetPost.id),
+      ]);
+      const storageKeys = Array.from(new Set([
+        ...mainRows.map((row) => row.storage_key),
+        ...defectRows.map((row) => row.storage_key),
+        ...measurementRows.map((row) => row.storage_key),
+      ].filter(Boolean)));
+
+      await deletePostById(targetPost.id);
+
+      await Promise.allSettled(storageKeys.map((key) => deleteYcObject(key)));
+      nav(backPath, { replace: true });
+    } catch (error) {
+      setErrorText(`Ошибка удаления: ${(error as Error).message}`);
+    } finally {
+      setIsDeletingPost(false);
+    }
+  };
+
   const onSaveVideoLink = async () => {
     setErrorText(null);
     setSuccessText(null);
@@ -2017,25 +2072,47 @@ export function AdminNewPostPage() {
           {isPreparingAdminRuntime ? (
             <div style={{ color: "var(--muted)", fontSize: 13 }}>{"Подготовка админ-сессии..."}</div>
           ) : null}
-          <Button onClick={() => void saveAsDraft()} disabled={isSaving || isUploadingPhotos || isUploadingDefects || isUploadingMeasurements || hasPendingUploads || isPublishingNow || isScheduling || isUnscheduling}>
-            {isSaving ? "Сохраняем..." : "Сохранить черновик"}
-          </Button>
-          <Button variant="secondary" onClick={() => void onSchedule()} disabled={isScheduling || isSaving || isUploadingPhotos || isUploadingDefects || isUploadingMeasurements || hasPendingUploads || isUnscheduling}>
-            {isScheduling ? "Планируем..." : scheduleButtonLabel}
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => void onPublishNow()}
-            disabled={!isAdminRuntimeReady || isPreparingAdminRuntime || isPublishingNow || isSaving || isUploadingPhotos || isUploadingDefects || isUploadingMeasurements || hasPendingUploads || isUnscheduling}
-          >
-            {isPublishingNow ? "Публикуем..." : "Опубликовать пост"}
-          </Button>
-          {currentPost?.status === "scheduled" ? (
-            <Button variant="secondary" onClick={() => void onReturnToDraft()} disabled={isUnscheduling || isSaving}>
-              {isUnscheduling ? "Обновление..." : "Вернуть в черновики"}
-            </Button>
-          ) : null}
-          <Button variant="secondary" onClick={() => nav(backPath)}>{"Назад"}</Button>
+          {isEditMode ? (
+            <>
+              <Button
+                onClick={() => void onApplyChanges()}
+                disabled={isSaving || isUploadingPhotos || isUploadingDefects || isUploadingMeasurements || hasPendingUploads || isPublishingNow || isScheduling || isUnscheduling || isDeletingPost}
+              >
+                {isSaving ? "Применяем..." : "Применить изменения"}
+              </Button>
+              <Button
+                className="admin-post-delete-btn"
+                variant="secondary"
+                onClick={() => void onDeletePost()}
+                disabled={isDeletingPost || isSaving || isUploadingPhotos || isUploadingDefects || isUploadingMeasurements || hasPendingUploads || isPublishingNow || isScheduling || isUnscheduling}
+              >
+                {isDeletingPost ? "Удаляем..." : "Удалить пост"}
+              </Button>
+              <Button variant="secondary" onClick={() => nav(backPath)} disabled={isDeletingPost}>{"Назад"}</Button>
+            </>
+          ) : (
+            <>
+              <Button onClick={() => void saveAsDraft()} disabled={isSaving || isUploadingPhotos || isUploadingDefects || isUploadingMeasurements || hasPendingUploads || isPublishingNow || isScheduling || isUnscheduling}>
+                {isSaving ? "Сохраняем..." : "Сохранить черновик"}
+              </Button>
+              <Button variant="secondary" onClick={() => void onSchedule()} disabled={isScheduling || isSaving || isUploadingPhotos || isUploadingDefects || isUploadingMeasurements || hasPendingUploads || isUnscheduling}>
+                {isScheduling ? "Планируем..." : scheduleButtonLabel}
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => void onPublishNow()}
+                disabled={!isAdminRuntimeReady || isPreparingAdminRuntime || isPublishingNow || isSaving || isUploadingPhotos || isUploadingDefects || isUploadingMeasurements || hasPendingUploads || isUnscheduling}
+              >
+                {isPublishingNow ? "Публикуем..." : "Опубликовать пост"}
+              </Button>
+              {currentPost?.status === "scheduled" ? (
+                <Button variant="secondary" onClick={() => void onReturnToDraft()} disabled={isUnscheduling || isSaving}>
+                  {isUnscheduling ? "Обновление..." : "Вернуть в черновики"}
+                </Button>
+              ) : null}
+              <Button variant="secondary" onClick={() => nav(backPath)}>{"Назад"}</Button>
+            </>
+          )}
         </div>
           {errorText ? <div style={{ color: "#b42318" }}>{errorText}</div> : null}
           {successText ? <div style={{ color: "#067647" }}>{successText}</div> : null}
