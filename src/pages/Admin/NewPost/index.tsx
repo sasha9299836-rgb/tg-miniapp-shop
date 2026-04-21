@@ -369,6 +369,7 @@ export function AdminNewPostPage() {
   const [videoLinkInput, setVideoLinkInput] = useState("");
 
   const [fieldError, setFieldError] = useState<string | null>(null);
+  const [isNalichieIdOccupied, setIsNalichieIdOccupied] = useState(false);
   const [isAutoFetching, setIsAutoFetching] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
@@ -627,11 +628,51 @@ export function AdminNewPostPage() {
     setPackagingPreset("A3");
     setVideoLinkInput("");
     setFieldError(null);
+    setIsNalichieIdOccupied(false);
     setIsAutoFetching(false);
     setIsTypeSuggestionsOpen(false);
     setIsBrandSuggestionsOpen(false);
     setManualPackagingOverrideTypeKey(null);
     lastAutoAppliedTypeKey.current = null;
+  };
+
+  const resetFormForNalichieChange = (nextNalichieId: string) => {
+    fetchRequestId.current += 1;
+    pendingMainUploads.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
+    pendingDefectUploads.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
+    pendingMeasurementUploads.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
+    setNalichieIdInput(nextNalichieId);
+    setItemData(null);
+    clearPostIdentity("resetFormForNalichieChange", { force: true });
+    setMainPhotos([]);
+    setDefectPhotos([]);
+    setMeasurementPhotos([]);
+    setPendingMainUploads([]);
+    setPendingDefectUploads([]);
+    setPendingMeasurementUploads([]);
+    setTitle("");
+    setBrand("");
+    setDescription("");
+    setCondition(CONDITION_OPTIONS[0]);
+    setSize("");
+    setPrice("");
+    setMeasurementsText("");
+    setHasDefects(false);
+    setDefectsText("");
+    setScheduleAtInput("");
+    setPackagingPreset("A3");
+    setVideoLinkInput("");
+    setFieldError(null);
+    setIsNalichieIdOccupied(false);
+    setErrorText(null);
+    setSuccessText(null);
+    setIsTypeSuggestionsOpen(false);
+    setIsBrandSuggestionsOpen(false);
+    setManualPackagingOverrideTypeKey(null);
+    lastAutoAppliedTypeKey.current = null;
+    pendingMainActivationRef.current = null;
+    pendingDefectActivationRef.current = null;
+    pendingMeasurementActivationRef.current = null;
   };
 
   const hydrateFromPost = (post: TgPost) => {
@@ -707,6 +748,7 @@ export function AdminNewPostPage() {
       if (requestId !== fetchRequestId.current) return;
 
       if (!foundItem) {
+        setIsNalichieIdOccupied(false);
         setItemData(null);
         const cleared = clearPostIdentity("applyFetchedItem:not_found");
         if (cleared) {
@@ -719,6 +761,7 @@ export function AdminNewPostPage() {
 
       const itemStatus = String(foundItem.status ?? "").trim();
       if (!ALLOWED_NALICHIE_STATUSES.has(itemStatus)) {
+        setIsNalichieIdOccupied(false);
         setItemData(null);
         const cleared = clearPostIdentity("applyFetchedItem:status_not_allowed");
         if (cleared) {
@@ -735,9 +778,11 @@ export function AdminNewPostPage() {
       if (requestId !== fetchRequestId.current) return;
 
       if (existing) {
-        hydrateFromPost(existing);
-        await hydrateAllPhotosFromDb(existing.id);
+        setIsNalichieIdOccupied(true);
+        setFieldError("Этот nalichie_id уже используется, пост уже создан.");
+        return;
       } else {
+        setIsNalichieIdOccupied(false);
         const nextTitle = (foundItem.tip_veshi ?? "").trim();
         const nextDescription = (foundItem.opisanie_veshi ?? "").trim();
         const nextCondition = foundItem.defekt_marker ? CONDITION_OPTIONS[6] : CONDITION_OPTIONS[1];
@@ -796,6 +841,7 @@ export function AdminNewPostPage() {
   }, [editPostId]);
 
   const validateDraftForm = () => {
+    if (postType === "warehouse" && isNalichieIdOccupied) return "Этот nalichie_id уже используется, пост уже создан.";
     if (!title.trim()) return "Название обязательно.";
     if (!description.trim()) return "Описание обязательно.";
     if (!condition.trim()) return "Состояние обязательно.";
@@ -806,7 +852,12 @@ export function AdminNewPostPage() {
     return null;
   };
 
-  const onNalichieIdChange = (value: string) => setNalichieIdInput(value.replace(/\D/g, ""));
+  const onNalichieIdChange = (value: string) => {
+    if (isEditMode) return;
+    const normalized = value.replace(/\D/g, "");
+    if (normalized === nalichieIdInput) return;
+    resetFormForNalichieChange(normalized);
+  };
 
   const onPriceChange = (value: string) => {
     const digits = value.replace(/\D/g, "");
@@ -833,6 +884,7 @@ export function AdminNewPostPage() {
       setPendingDefectUploads([]);
       setPendingMeasurementUploads([]);
       setFieldError(null);
+      setIsNalichieIdOccupied(false);
       return;
     }
     if (!isEditMode && nalichieIdInput.trim()) {
@@ -1751,7 +1803,7 @@ export function AdminNewPostPage() {
                 inputMode="numeric"
                 pattern="[0-9]*"
                 value={nalichieIdInput}
-                className="admin-post-form-control"
+                className={`admin-post-form-control${isNalichieIdOccupied ? " admin-post-form-control--invalid" : ""}`}
                 disabled={isEditMode}
                 onChange={(e) => onNalichieIdChange(e.target.value)}
                 onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
