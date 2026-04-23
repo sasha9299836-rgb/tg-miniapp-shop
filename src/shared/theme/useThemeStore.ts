@@ -14,6 +14,11 @@ const STORAGE_KEY = "tg-miniapp-theme";
 const STORAGE_AUTO = "tg-miniapp-theme-auto";
 
 function detectSystemTheme(): ThemeMode {
+  const telegramScheme = window.Telegram?.WebApp?.colorScheme;
+  if (telegramScheme === "dark" || telegramScheme === "light") {
+    return telegramScheme;
+  }
+
   try {
     return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ? "dark" : "light";
   } catch {
@@ -41,14 +46,14 @@ export const useThemeStore = create<State>((set) => ({
     const saved = localStorage.getItem(STORAGE_KEY) as ThemeMode | null;
     const savedAuto = localStorage.getItem(STORAGE_AUTO);
     const auto = savedAuto === null ? true : savedAuto === "true";
+    const detected = detectSystemTheme();
 
-    if (saved === "light" || saved === "dark") {
+    if (!auto && (saved === "light" || saved === "dark")) {
       applyThemeToDom(saved);
-      set({ mode: saved, auto });
+      set({ mode: saved, auto: false });
     } else {
-      const detected = detectSystemTheme();
       applyThemeToDom(detected);
-      set({ mode: detected, auto });
+      set({ mode: detected, auto: true });
     }
   },
 
