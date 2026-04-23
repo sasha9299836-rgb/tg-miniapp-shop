@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import type { TouchEvent as ReactTouchEvent } from "react";
 import type { Product } from "../../shared/types/product";
@@ -27,7 +27,6 @@ function ProductCardInner({
   const [index, setIndex] = useState(0);
   const [isActive, setIsActive] = useState(false);
   const [cartPulse, setCartPulse] = useState(false);
-  const cartPulseTimerRef = useRef<number | null>(null);
   const dragRef = useRef({ down: false, startX: 0, moved: false });
   const touchRef = useRef({
     active: false,
@@ -140,25 +139,10 @@ function ProductCardInner({
     setIsActive(false);
   };
 
-  useEffect(() => {
-    return () => {
-      if (cartPulseTimerRef.current != null) {
-        window.clearTimeout(cartPulseTimerRef.current);
-      }
-    };
-  }, []);
-
   const handleCartClick = () => {
     onAddToCart();
-    setCartPulse(false);
-    window.requestAnimationFrame(() => setCartPulse(true));
-    if (cartPulseTimerRef.current != null) {
-      window.clearTimeout(cartPulseTimerRef.current);
-    }
-    cartPulseTimerRef.current = window.setTimeout(() => {
-      setCartPulse(false);
-      cartPulseTimerRef.current = null;
-    }, 420);
+    setCartPulse(true);
+    window.setTimeout(() => setCartPulse(false), 360);
   };
 
   return (
@@ -229,7 +213,7 @@ function ProductCardInner({
       <div className="pcard__actions">
         <button
           type="button"
-          className={`pcard__cartWide ${isInCart ? "is-on" : ""} ${cartPulse ? "is-animate" : ""}`.trim()}
+          className={`pcard__cartWide ${isInCart ? "is-on" : ""} ${cartPulse ? "is-animate" : ""}`}
           onClick={handleCartClick}
           aria-label="Добавить в корзину"
         >
