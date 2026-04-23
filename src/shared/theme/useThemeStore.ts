@@ -13,8 +13,24 @@ type State = {
 const STORAGE_KEY = "tg-miniapp-theme";
 const STORAGE_AUTO = "tg-miniapp-theme-auto";
 
+function detectSystemTheme(): ThemeMode {
+  try {
+    return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ? "dark" : "light";
+  } catch {
+    return "light";
+  }
+}
+
 function applyThemeToDom(mode: ThemeMode) {
-  document.documentElement.dataset.theme = mode;
+  const root = document.documentElement;
+  root.dataset.theme = mode;
+  root.style.colorScheme = mode;
+
+  const body = document.body;
+  if (body) {
+    body.dataset.theme = mode;
+    body.style.colorScheme = mode;
+  }
 }
 
 export const useThemeStore = create<State>((set) => ({
@@ -30,7 +46,9 @@ export const useThemeStore = create<State>((set) => ({
       applyThemeToDom(saved);
       set({ mode: saved, auto });
     } else {
-      set({ mode: null, auto });
+      const detected = detectSystemTheme();
+      applyThemeToDom(detected);
+      set({ mode: detected, auto });
     }
   },
 

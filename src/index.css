@@ -198,62 +198,6 @@ body::after {
   color: var(--muted);
 }
 
-.themeGate {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 18px;
-}
-
-.themeGate__card {
-  width: min(420px, 100%);
-  padding: 16px;
-}
-
-.themeGate__title {
-  font-size: 18px;
-  font-weight: 800;
-  margin-bottom: 6px;
-}
-
-.themeGate__text {
-  color: var(--muted);
-  font-size: 13px;
-  margin-bottom: 12px;
-}
-
-.themeGate__grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.themeGate__choice {
-  border: none;
-  text-align: left;
-  padding: 10px;
-  cursor: pointer;
-}
-
-.themeGate__preview {
-  height: 86px;
-  border-radius: 14px;
-  border: 1px solid var(--glass-stroke);
-  margin-bottom: 8px;
-}
-
-.themeGate__preview--light {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(200, 220, 255, 0.7));
-}
-
-.themeGate__preview--dark {
-  background: linear-gradient(135deg, rgba(12, 12, 18, 0.95), rgba(91, 157, 255, 0.36));
-}
-
-.themeGate__label {
-  font-weight: 800;
-}
-
 button,
 input,
 select,
