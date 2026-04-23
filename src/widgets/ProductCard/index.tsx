@@ -1,4 +1,4 @@
-﻿import { memo, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import type { TouchEvent as ReactTouchEvent } from "react";
 import type { Product } from "../../shared/types/product";
@@ -27,6 +27,7 @@ function ProductCardInner({
   const [index, setIndex] = useState(0);
   const [isActive, setIsActive] = useState(false);
   const [cartPulse, setCartPulse] = useState(false);
+  const cartPulseTimerRef = useRef<number | null>(null);
   const dragRef = useRef({ down: false, startX: 0, moved: false });
   const touchRef = useRef({
     active: false,
@@ -139,10 +140,25 @@ function ProductCardInner({
     setIsActive(false);
   };
 
+  useEffect(() => {
+    return () => {
+      if (cartPulseTimerRef.current != null) {
+        window.clearTimeout(cartPulseTimerRef.current);
+      }
+    };
+  }, []);
+
   const handleCartClick = () => {
     onAddToCart();
-    setCartPulse(true);
-    window.setTimeout(() => setCartPulse(false), 360);
+    setCartPulse(false);
+    window.requestAnimationFrame(() => setCartPulse(true));
+    if (cartPulseTimerRef.current != null) {
+      window.clearTimeout(cartPulseTimerRef.current);
+    }
+    cartPulseTimerRef.current = window.setTimeout(() => {
+      setCartPulse(false);
+      cartPulseTimerRef.current = null;
+    }, 420);
   };
 
   return (
@@ -213,11 +229,11 @@ function ProductCardInner({
       <div className="pcard__actions">
         <button
           type="button"
-          className={`pcard__cartWide ${isInCart ? "is-on" : ""}`}
+          className={`pcard__cartWide ${isInCart ? "is-on" : ""} ${cartPulse ? "is-animate" : ""}`.trim()}
           onClick={handleCartClick}
           aria-label="Добавить в корзину"
         >
-          <svg className={`pcard__cartIcon ${cartPulse ? "is-animate" : ""}`} viewBox="0 0 24 24" aria-hidden>
+          <svg className="pcard__cartIcon" viewBox="0 0 24 24" aria-hidden>
             <path d="M7 6h13l-1.6 8.5a2 2 0 0 1-2 1.6H9a2 2 0 0 1-2-1.6L5.5 4H3" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             <circle cx="10" cy="19" r="1.5" fill="currentColor" />
             <circle cx="17" cy="19" r="1.5" fill="currentColor" />

@@ -20,21 +20,32 @@ export function FavoriteButton({
   const timerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!isActive) return;
-    setIsAnimated(true);
-    if (timerRef.current) window.clearTimeout(timerRef.current);
-    timerRef.current = window.setTimeout(() => setIsAnimated(false), 360);
     return () => {
       if (timerRef.current) window.clearTimeout(timerRef.current);
       timerRef.current = null;
     };
-  }, [isActive]);
+  }, []);
+
+  const triggerPulse = () => {
+    setIsAnimated(false);
+    window.requestAnimationFrame(() => setIsAnimated(true));
+    if (timerRef.current) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => {
+      setIsAnimated(false);
+      timerRef.current = null;
+    }, 420);
+  };
+
+  const handleClick = () => {
+    triggerPulse();
+    onToggle();
+  };
 
   return (
     <button
       type="button"
       className={`favorite-button ${isActive ? "is-on" : ""} ${isAnimated ? "is-animate" : ""} ${className}`.trim()}
-      onClick={onToggle}
+      onClick={handleClick}
       aria-label={ariaLabel}
       title={title}
     >
