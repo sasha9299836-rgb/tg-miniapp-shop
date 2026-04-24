@@ -270,6 +270,13 @@ export function ItemPage() {
   const [videoPosterByUrl, setVideoPosterByUrl] = useState<Record<string, string>>({});
   const [isViewerPhotoZoomed, setIsViewerPhotoZoomed] = useState(false);
   const defectsSectionRef = useRef<HTMLDivElement | null>(null);
+  const photoTouchRef = useRef({
+    active: false,
+    startX: 0,
+    startY: 0,
+    horizontal: false,
+  });
+  const suppressPhotoClickRef = useRef(false);
 
   useEffect(() => {
     if (!products.length) void load();
@@ -418,6 +425,51 @@ export function ItemPage() {
     setIsViewerOpen(true);
   };
 
+  const handlePhotoClick = () => {
+    if (suppressPhotoClickRef.current) {
+      suppressPhotoClickRef.current = false;
+      return;
+    }
+    openViewer(images, safeIndex);
+  };
+
+  const handlePhotoTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+    if (event.touches.length !== 1) return;
+    const touch = event.touches[0];
+    photoTouchRef.current = {
+      active: true,
+      startX: touch.clientX,
+      startY: touch.clientY,
+      horizontal: false,
+    };
+  };
+
+  const handlePhotoTouchMove = (event: TouchEvent<HTMLDivElement>) => {
+    if (!photoTouchRef.current.active || event.touches.length !== 1) return;
+    const touch = event.touches[0];
+    const dx = touch.clientX - photoTouchRef.current.startX;
+    const dy = touch.clientY - photoTouchRef.current.startY;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 6) {
+      photoTouchRef.current.horizontal = true;
+    }
+  };
+
+  const handlePhotoTouchEnd = (event: TouchEvent<HTMLDivElement>) => {
+    if (!photoTouchRef.current.active || event.changedTouches.length !== 1) return;
+    const touch = event.changedTouches[0];
+    const dx = touch.clientX - photoTouchRef.current.startX;
+    const shouldSwipe = photoTouchRef.current.horizontal && Math.abs(dx) > 50;
+    photoTouchRef.current.active = false;
+    if (!shouldSwipe || total < 2) return;
+    suppressPhotoClickRef.current = true;
+    if (dx > 0) setPhotoIndex((i) => (i - 1 + total) % total);
+    else setPhotoIndex((i) => (i + 1) % total);
+  };
+
+  const handlePhotoTouchCancel = () => {
+    photoTouchRef.current.active = false;
+  };
+
   useEffect(() => {
     if (!isViewerOpen) setIsViewerPhotoZoomed(false);
   }, [isViewerOpen]);
@@ -500,7 +552,16 @@ export function ItemPage() {
       <div className="item-page">
         <button type="button" className="item-back-top" onClick={goBack}>Назад</button>
 
-        <div className="item-photo" role="button" tabIndex={0} onClick={() => openViewer(images, safeIndex)}>
+        <div
+          className="item-photo"
+          role="button"
+          tabIndex={0}
+          onClick={handlePhotoClick}
+          onTouchStart={handlePhotoTouchStart}
+          onTouchMove={handlePhotoTouchMove}
+          onTouchEnd={handlePhotoTouchEnd}
+          onTouchCancel={handlePhotoTouchCancel}
+        >
           <ProductThumb
             src={currentImage}
             alt={product.title}
