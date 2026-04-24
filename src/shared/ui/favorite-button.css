@@ -18,6 +18,10 @@
   animation: favorite-heartbeat 0.36s ease-out;
 }
 
+.favorite-button.is-animate {
+  animation: favorite-bump 0.36s ease-out;
+}
+
 .favorite-button.is-animate::after {
   content: "";
   position: absolute;
@@ -36,6 +40,13 @@
   100% { transform: scale(1); }
 }
 
+@keyframes favorite-bump {
+  0% { transform: scale(1); }
+  28% { transform: scale(1.16); }
+  52% { transform: scale(0.94); }
+  100% { transform: scale(1); }
+}
+
 @keyframes favorite-ripple {
   0% { transform: scale(0.68); opacity: 0; }
   34% { opacity: 0.5; }
@@ -43,6 +54,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .favorite-button.is-animate,
   .favorite-button.is-animate .favorite-button__icon,
   .favorite-button.is-animate::after {
     animation: none;
