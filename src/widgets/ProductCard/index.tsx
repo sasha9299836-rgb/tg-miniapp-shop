@@ -162,15 +162,38 @@ function ProductCardInner({
         role="button"
         tabIndex={0}
       >
-        <ProductThumb
-          className="pcard__thumb"
-          mediaClassName="pcard__img"
-          src={current}
-          alt={product.title}
-          variant="card"
-          loading="lazy"
-          decoding="async"
-        />
+        {total > 0 ? (
+          <div className="pcard__viewport">
+            <div
+              className="pcard__track"
+              style={{ transform: `translateX(-${safeIndex * 100}%)` }}
+            >
+              {images.map((imageSrc, imageIndex) => (
+                <div className="pcard__slide" key={`${product.id}-slide-${imageIndex}`}>
+                  <ProductThumb
+                    className="pcard__thumb"
+                    mediaClassName="pcard__img"
+                    src={imageSrc}
+                    alt={product.title}
+                    variant="card"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <ProductThumb
+            className="pcard__thumb"
+            mediaClassName="pcard__img"
+            src={current}
+            alt={product.title}
+            variant="card"
+            loading="lazy"
+            decoding="async"
+          />
+        )}
 
         {total > 0 ? (
           <>
