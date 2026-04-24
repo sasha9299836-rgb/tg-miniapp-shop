@@ -32,6 +32,7 @@ export function CatalogPage() {
   const loadCart = useCartStore((s) => s.load);
   const registerCartCatalogItems = useCartStore((s) => s.registerCatalogItems);
   const hasInCart = useCartStore((s) => s.has);
+  const removeFromCart = useCartStore((s) => s.remove);
   const requestAddWithDefectGuard = useDefectReviewStore((s) => s.requestAddWithDefectGuard);
 
   const [q, setQ] = useState("");
@@ -119,6 +120,7 @@ export function CatalogPage() {
               product={p}
               onOpen={() => nav(`/item/${p.id}`)}
               onAddToCart={() => void requestAddWithDefectGuard(p)}
+              onRemoveFromCart={() => void removeFromCart({ id: p.id, postId: p.postId })}
               onToggleFav={() => void toggleFavorite({ id: p.id, postId: p.postId })}
               isFav={p.postId ? favoritePostIdsSet.has(p.postId) : hasFavorite({ id: p.id, postId: p.postId })}
               isInCart={p.postId ? cartPostIdsSet.has(p.postId) : hasInCart({ id: p.id, postId: p.postId })}

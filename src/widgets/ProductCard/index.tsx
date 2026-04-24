@@ -11,6 +11,7 @@ function ProductCardInner({
   product,
   onOpen,
   onAddToCart,
+  onRemoveFromCart,
   onToggleFav,
   isFav,
   isInCart,
@@ -18,6 +19,7 @@ function ProductCardInner({
   product: Product;
   onOpen: () => void;
   onAddToCart: () => void;
+  onRemoveFromCart: () => void;
   onToggleFav: () => void;
   isFav: boolean;
   isInCart: boolean;
@@ -140,7 +142,8 @@ function ProductCardInner({
   };
 
   const handleCartClick = () => {
-    onAddToCart();
+    if (isInCart) onRemoveFromCart();
+    else onAddToCart();
     setCartPulse(true);
     window.setTimeout(() => setCartPulse(false), 360);
   };
