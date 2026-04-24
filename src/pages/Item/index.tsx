@@ -562,12 +562,32 @@ export function ItemPage() {
           onTouchEnd={handlePhotoTouchEnd}
           onTouchCancel={handlePhotoTouchCancel}
         >
-          <ProductThumb
-            src={currentImage}
-            alt={product.title}
-            className="item-photo__thumb"
-            mediaClassName="item-photo__img"
-          />
+          {total > 0 ? (
+            <div className="item-photo__viewport">
+              <div
+                className="item-photo__track"
+                style={{ transform: `translateX(-${safeIndex * 100}%)` }}
+              >
+                {images.map((imageSrc, imageIndex) => (
+                  <div className="item-photo__slide" key={`${product.id}-main-slide-${imageIndex}`}>
+                    <ProductThumb
+                      src={imageSrc}
+                      alt={product.title}
+                      className="item-photo__thumb"
+                      mediaClassName="item-photo__img"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <ProductThumb
+              src={currentImage}
+              alt={product.title}
+              className="item-photo__thumb"
+              mediaClassName="item-photo__img"
+            />
+          )}
           {total > 1 ? (
             <>
               <div className="item-photo__count">{safeIndex + 1} / {total}</div>
