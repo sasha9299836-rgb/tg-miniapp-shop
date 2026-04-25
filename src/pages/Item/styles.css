@@ -97,6 +97,20 @@
   z-index: 2;
 }
 
+.item-photo__discount {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+  background: #d92d20;
+  z-index: 2;
+}
+
 .item-photo__nav {
   position: absolute;
   top: 50%;

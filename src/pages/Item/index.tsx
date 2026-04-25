@@ -335,6 +335,12 @@ export function ItemPage() {
   const total = images.length;
   const safeIndex = total ? photoIndex % total : 0;
   const currentImage = total ? images[safeIndex] : undefined;
+  const discountPercent = useMemo(() => {
+    if (typeof product?.oldPrice !== "number") return null;
+    if (product.oldPrice <= product.price) return null;
+    const percent = Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100);
+    return percent > 0 ? percent : null;
+  }, [product?.oldPrice, product?.price]);
   const viewerTotal = viewerImages.length;
   const viewerIndex = viewerTotal ? photoIndex % viewerTotal : 0;
   const viewerImage = viewerTotal ? viewerImages[viewerIndex] : undefined;
@@ -588,6 +594,7 @@ export function ItemPage() {
               mediaClassName="item-photo__img"
             />
           )}
+          {discountPercent != null ? <div className="item-photo__discount">{`-${discountPercent}%`}</div> : null}
           {total > 1 ? (
             <>
               <div className="item-photo__count">{safeIndex + 1} / {total}</div>

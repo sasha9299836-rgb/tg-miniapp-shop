@@ -81,7 +81,7 @@ export function HomePage() {
           <div className="home-hero__actions">
             <button type="button" className="home-hero__btn" onClick={() => nav("/account/addresses")}
             >
-              Добавить адресс доставки
+              Добавить адрес доставки
             </button>
             <button type="button" className="home-hero__btn" onClick={() => nav("/info/channel-rules")}
             >

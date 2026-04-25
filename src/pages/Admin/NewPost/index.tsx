@@ -414,6 +414,24 @@ export function AdminNewPostPage() {
     if (costPrice == null) return null;
     return Math.round(costPrice * 1.8);
   }, [costPrice]);
+  const originalPriceBaseline = useMemo(() => {
+    if (!currentPost) return null;
+    if (typeof currentPost.original_price === "number" && currentPost.original_price > 0) {
+      return currentPost.original_price;
+    }
+    return Number.isFinite(currentPost.price) && currentPost.price > 0 ? currentPost.price : null;
+  }, [currentPost]);
+  const currentPriceValue = useMemo(() => {
+    const parsed = Number(price);
+    if (!Number.isFinite(parsed) || parsed <= 0) return null;
+    return parsed;
+  }, [price]);
+  const adminDiscountPercent = useMemo(() => {
+    if (originalPriceBaseline == null || currentPriceValue == null) return null;
+    if (originalPriceBaseline <= currentPriceValue) return null;
+    const percent = Math.round(((originalPriceBaseline - currentPriceValue) / originalPriceBaseline) * 100);
+    return percent > 0 ? percent : null;
+  }, [currentPriceValue, originalPriceBaseline]);
   const conditionOptions = useMemo(
     () => (CONDITION_OPTIONS.includes(condition) ? CONDITION_OPTIONS : [condition, ...CONDITION_OPTIONS]),
     [condition],
@@ -2014,17 +2032,24 @@ export function AdminNewPostPage() {
               <input value={size} className="admin-post-form-control" onChange={(e) => setSize(e.target.value)} placeholder={"XL"} style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }} />
             </Field>
             <Field label={"Цена"}>
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={price}
-                className="admin-post-form-control"
-                onChange={(e) => onPriceChange(e.target.value)}
-                onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
-                placeholder={"Цена"}
-                style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }}
-              />
+              <div style={{ display: "grid", gap: 6 }}>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={price}
+                  className="admin-post-form-control"
+                  onChange={(e) => onPriceChange(e.target.value)}
+                  onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                  placeholder={"Цена"}
+                  style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }}
+                />
+                {adminDiscountPercent != null ? (
+                  <div style={{ color: "#b42318", fontSize: 13, fontWeight: 600 }}>
+                    {`Скидка: -${adminDiscountPercent}%`}
+                  </div>
+                ) : null}
+              </div>
             </Field>
             <Field label={"Замеры"}>
               <textarea

@@ -39,6 +39,7 @@ export type TgPost = {
   brand: string | null;
   size: string | null;
   price: number;
+  original_price: number | null;
   description: string;
   condition: string;
   has_defects: boolean;
@@ -1052,6 +1053,7 @@ export async function getPublishedCatalogProducts(): Promise<Product[]> {
     postId: post.id,
     title: post.title,
     price: post.price,
+    oldPrice: typeof post.original_price === "number" && post.original_price > post.price ? post.original_price : undefined,
     images: photosByPost.get(post.id) ?? [],
     isNew: false,
     description: post.description,
@@ -1135,6 +1137,7 @@ export async function getCatalogProductsByPostIds(postIds: string[]): Promise<Pr
     postId: post.id,
     title: post.title,
     price: post.price,
+    oldPrice: typeof post.original_price === "number" && post.original_price > post.price ? post.original_price : undefined,
     images: photosByPost.get(post.id) ?? [],
     isNew: false,
     description: post.description,

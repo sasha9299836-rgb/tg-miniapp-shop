@@ -40,6 +40,11 @@ function ProductCardInner({
   const safeIndex = total ? index % total : 0;
   const current = total ? images[safeIndex] : undefined;
   const showOldPrice = typeof product.oldPrice === "number" && product.oldPrice > product.price;
+  const discountPercent = useMemo(() => {
+    if (!showOldPrice || typeof product.oldPrice !== "number") return null;
+    const percent = Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100);
+    return percent > 0 ? percent : null;
+  }, [product.oldPrice, product.price, showOldPrice]);
   const cardTitle = useMemo(() => getProductDisplayTitle(product), [product.brand, product.title]);
 
   const setSlide = (next: number) => {
@@ -223,7 +228,8 @@ function ProductCardInner({
           </>
         ) : null}
 
-        {product.isNew ? <span className="pcard__badge">Новое</span> : null}
+        {discountPercent != null ? <span className="pcard__discountBadge">{`-${discountPercent}%`}</span> : null}
+        {product.isNew ? <span className={`pcard__badge ${discountPercent != null ? "pcard__badge--with-discount" : ""}`.trim()}>Новое</span> : null}
       </div>
 
       <div className="pcard__body" onClick={handleOpen} role="button" tabIndex={0}>
