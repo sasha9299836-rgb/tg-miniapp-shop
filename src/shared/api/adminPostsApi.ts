@@ -1,4 +1,4 @@
-import { supabase } from "./supabaseClient";
+﻿import { supabase } from "./supabaseClient";
 import type { DefectMediaItem, Product } from "../types/product";
 import { ensureAdminRuntimeReady } from "../auth/adminRuntimeReadiness";
 import { getCdekProxyBaseUrl } from "./cdekProxyBase";
@@ -935,20 +935,44 @@ export async function deletePostById(postId: string): Promise<void> {
 }
 
 export async function deleteDraftOrScheduledPost(postId: string): Promise<void> {
-  const { data: post, error: readError } = await supabase
+  const allowedStatuses: TgPostStatus[] = ["draft", "scheduled"];
+
+  const { data: deleted, error } = await supabase
     .from("tg_posts")
-    .select("id, status")
+    .delete()
     .eq("id", postId)
-    .single();
-  if (readError) throw readError;
-  const status = (post as { status: TgPostStatus }).status;
-  if (status !== "draft" && status !== "scheduled") {
-    throw new Error("Удаление доступно только для черновиков и отложенных постов.");
+    .in("status", allowedStatuses)
+    .select("id")
+    .maybeSingle();
+
+  if (!error) {
+    if (!deleted) {
+      throw new Error("Удаление доступно только для черновиков и отложенных постов.");
+    }
+    return;
   }
 
-  // TODO: при наличии безопасного server-side удаления добавить очистку объектов в Yandex Storage.
-  const { error } = await supabase.from("tg_posts").delete().eq("id", postId);
-  if (error) throw error;
+  const dbError = error as { code?: string };
+  if (dbError.code !== "23503") {
+    throw error;
+  }
+
+  const { data: archived, error: archiveError } = await supabase
+    .from("tg_posts")
+    .update({
+      status: "archived",
+      scheduled_at: null,
+      published_at: null,
+    })
+    .eq("id", postId)
+    .in("status", allowedStatuses)
+    .select("id")
+    .maybeSingle();
+
+  if (archiveError) throw archiveError;
+  if (!archived) {
+    throw new Error("Удаление доступно только для черновиков и отложенных постов.");
+  }
 }
 
 export async function listPostsByStatus(status: "draft" | "scheduled"): Promise<ScheduledPostListItem[]> {
@@ -1221,3 +1245,4 @@ export async function saveCatalogPostVideoLink(postId: string, videoUrl: string 
     throw new Error("POST_VIDEO_UPDATE_INVALID_RESPONSE");
   }
 }
+

@@ -322,7 +322,7 @@ export function AdminScheduledPostsPage() {
                 </div>
 
                 <div>Фото: {entry.photoCount}</div>
-                <div>Запланировано: {formatMoscow(entry.post.scheduled_at)}</div>
+                {tab === "scheduled" ? <div>Запланировано: {formatMoscow(entry.post.scheduled_at)}</div> : null}
 
                 <div style={{ display: "flex", gap: 8 }} onClick={(e) => e.stopPropagation()}>
                   <Button variant="secondary" onClick={() => void onPublishNow(entry.post.id)}>
