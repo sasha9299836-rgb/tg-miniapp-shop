@@ -17,18 +17,26 @@ import "./styles.css";
 
 type Tab = "draft" | "scheduled";
 
-function moscowDateTimeLocalToIso(value: string): string | null {
+function dateTimeLocalToIso(value: string): string | null {
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
   if (!match) return null;
-  const [, y, m, d, hh, mm] = match;
-  const utcMs = Date.UTC(Number(y), Number(m) - 1, Number(d), Number(hh) - 3, Number(mm), 0);
-  return new Date(utcMs).toISOString();
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
 }
 
-function formatMoscow(iso: string | null) {
+function formatDateTime(iso: string | null) {
   if (!iso) return "—";
-  const date = new Date(new Date(iso).getTime() + 3 * 60 * 60 * 1000);
-  return `${String(date.getUTCDate()).padStart(2, "0")}.${String(date.getUTCMonth() + 1).padStart(2, "0")}.${date.getUTCFullYear()} ${String(date.getUTCHours()).padStart(2, "0")}:${String(date.getUTCMinutes()).padStart(2, "0")}`;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
 }
 
 function addMinutes(iso: string, minutes: number): string {
@@ -119,7 +127,7 @@ export function AdminScheduledPostsPage() {
   const onBulkSchedule = async () => {
     setErrorText(null);
     setSuccessText(null);
-    const startIso = moscowDateTimeLocalToIso(startDateTime);
+    const startIso = dateTimeLocalToIso(startDateTime);
     if (!startIso) {
       setErrorText("Укажите корректное время начала публикации.");
       return;
@@ -322,7 +330,7 @@ export function AdminScheduledPostsPage() {
                 </div>
 
                 <div>Фото: {entry.photoCount}</div>
-                {tab === "scheduled" ? <div>Запланировано: {formatMoscow(entry.post.scheduled_at)}</div> : null}
+                {tab === "scheduled" ? <div>Запланировано: {formatDateTime(entry.post.scheduled_at)}</div> : null}
 
                 <div style={{ display: "flex", gap: 8 }} onClick={(e) => e.stopPropagation()}>
                   <Button variant="secondary" onClick={() => void onPublishNow(entry.post.id)}>

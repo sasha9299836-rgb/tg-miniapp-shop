@@ -204,6 +204,36 @@ type PublishPostProxyResponse = {
 };
 
 const cdekProxyBaseUrl = getCdekProxyBaseUrl();
+const PUBLISH_DUE_FALLBACK_COOLDOWN_MS = 30_000;
+let publishDueFallbackInFlight: Promise<void> | null = null;
+let publishDueFallbackLastAttemptAt = 0;
+
+function publishDuePostsIfNeeded(trigger: string) {
+  const now = Date.now();
+  if (publishDueFallbackInFlight) return;
+  if (now - publishDueFallbackLastAttemptAt < PUBLISH_DUE_FALLBACK_COOLDOWN_MS) return;
+
+  publishDueFallbackLastAttemptAt = now;
+  publishDueFallbackInFlight = (async () => {
+    const { error } = await supabase.rpc("tg_publish_due_posts", { batch_size: 100 });
+    if (error) {
+      console.warn("[publishDuePostsIfNeeded] rpc error", {
+        trigger,
+        message: error.message,
+        code: error.code ?? null,
+      });
+    }
+  })()
+    .catch((error) => {
+      console.warn("[publishDuePostsIfNeeded] unexpected error", {
+        trigger,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    })
+    .finally(() => {
+      publishDueFallbackInFlight = null;
+    });
+}
 
 export type DraftWriteDebugEvent =
   | { type: "branch_start"; branch: DraftWriteBranch; snapshot: DraftWritePayloadSnapshot; at: string; started_at_ms: number }
@@ -976,6 +1006,7 @@ export async function deleteDraftOrScheduledPost(postId: string): Promise<void> 
 }
 
 export async function listPostsByStatus(status: "draft" | "scheduled"): Promise<ScheduledPostListItem[]> {
+  publishDuePostsIfNeeded(`listPostsByStatus:${status}`);
   const { data, error } = await supabase
     .from("tg_posts")
     .select("*")
@@ -1013,6 +1044,7 @@ export async function listPostsByStatus(status: "draft" | "scheduled"): Promise<
 }
 
 export async function getPublishedCatalogProducts(): Promise<Product[]> {
+  publishDuePostsIfNeeded("getPublishedCatalogProducts");
   const { data: postsData, error: postsError } = await supabase
     .from("tg_posts")
     .select("*")
@@ -1097,6 +1129,7 @@ export async function getPublishedCatalogProducts(): Promise<Product[]> {
 }
 
 export async function getCatalogProductsByPostIds(postIds: string[]): Promise<Product[]> {
+  publishDuePostsIfNeeded("getCatalogProductsByPostIds");
   const normalized = [...new Set(postIds.map((value) => String(value ?? "").trim()).filter(Boolean))];
   if (!normalized.length) return [];
 

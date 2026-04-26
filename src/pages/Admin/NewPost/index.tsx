@@ -24,7 +24,6 @@ import {
   getPostMeasurementPhotos,
   getPostPhotos,
   publishPostNow,
-  schedulePost,
   saveCatalogPostVideoLink,
   unschedulePost,
   type NalichieItem,
@@ -290,12 +289,12 @@ function normalizeVideoLink(raw: string): string | null {
   }
 }
 
-function moscowDateTimeLocalToIso(value: string): string | null {
+function dateTimeLocalToIso(value: string): string | null {
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
   if (!match) return null;
-  const [, y, m, d, hh, mm] = match;
-  const utcMs = Date.UTC(Number(y), Number(m) - 1, Number(d), Number(hh) - 3, Number(mm), 0);
-  return new Date(utcMs).toISOString();
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
 }
 
 function delay(ms: number): Promise<void> {
@@ -314,14 +313,15 @@ function shouldRetryMainUpload(error: unknown): boolean {
   return name === "Error" || message === "NETWORK_ERROR";
 }
 
-function toMoscowInputValue(iso: string | null) {
+function toLocalInputValue(iso: string | null) {
   if (!iso) return "";
-  const date = new Date(new Date(iso).getTime() + 3 * 60 * 60 * 1000);
-  const yyyy = date.getUTCFullYear();
-  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(date.getUTCDate()).padStart(2, "0");
-  const hh = String(date.getUTCHours()).padStart(2, "0");
-  const min = String(date.getUTCMinutes()).padStart(2, "0");
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  const hh = String(date.getHours()).padStart(2, "0");
+  const min = String(date.getMinutes()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
 }
 
@@ -711,7 +711,7 @@ export function AdminNewPostPage() {
     setMeasurementsText(post.measurements_text ?? "");
     setHasDefects(post.has_defects);
     setDefectsText(post.defects_text ?? "");
-    setScheduleAtInput(toMoscowInputValue(post.scheduled_at));
+    setScheduleAtInput(toLocalInputValue(post.scheduled_at));
     setPackagingPreset(post.packaging_preset ?? "A3");
     setVideoLinkInput(post.video_url ?? "");
   };
@@ -1026,7 +1026,7 @@ export function AdminNewPostPage() {
       has_defects: hasDefects,
       defects_text: hasDefects ? defectsText.trim() : null,
       measurements_text: measurementsText.trim() || null,
-      scheduled_at: moscowDateTimeLocalToIso(scheduleAtInput),
+      scheduled_at: dateTimeLocalToIso(scheduleAtInput),
       current_status: effectivePost?.status,
       current_published_at: effectivePost?.published_at ?? null,
     }, stablePostId ?? undefined, (event) => {
@@ -1618,8 +1618,7 @@ export function AdminNewPostPage() {
   const onSchedule = async () => {
     setErrorText(null);
     setSuccessText(null);
-    const iso = moscowDateTimeLocalToIso(scheduleAtInput);
-    if (!iso) {
+    if (!dateTimeLocalToIso(scheduleAtInput)) {
       setErrorText("Укажите корректное время публикации.");
       return;
     }
@@ -1628,9 +1627,9 @@ export function AdminNewPostPage() {
     try {
       logPublishStep("schedule flow start", { currentPostId: currentPost?.id ?? null });
       const targetPost = await persistDraft();
-      logPublishStep("schedulePost start", { postId: targetPost.id, iso });
-      await schedulePost(targetPost.id, iso);
-      logPublishStep("schedulePost success", { postId: targetPost.id });
+      if (targetPost.status !== "scheduled") {
+        throw new Error("Пост не перешел в отложенный статус.");
+      }
       resetFormToEmpty();
       if (isEditMode) nav("/admin/posts/new", { replace: true });
       setSuccessText(currentPost?.status === "scheduled" ? "Время публикации изменено." : "Пост запланирован.");
