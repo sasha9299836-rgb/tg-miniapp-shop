@@ -199,10 +199,10 @@ const UPLOAD_MAX_ATTEMPTS = 3;
 const CONSIGNMENT_PUBLISH_COOLDOWN_MS = 600;
 const MAIN_UPLOAD_RETRY_DELAYS_MS = [0, 500, 1000] as const;
 const MAIN_UPLOAD_INTER_FILE_DELAY_MS = 300;
-const MEDIA_DRAFT_FALLBACK_TITLE = "Черновик";
-const MEDIA_DRAFT_FALLBACK_DESCRIPTION = "Черновик медиа";
+const MEDIA_DRAFT_FALLBACK_TITLE = "draft";
+const MEDIA_DRAFT_FALLBACK_DESCRIPTION = "draft media";
 const MEDIA_DRAFT_FALLBACK_CONDITION = "10/10 Идеальное";
-const MEDIA_DRAFT_FALLBACK_SIZE = "ONE SIZE";
+const MEDIA_DRAFT_FALLBACK_SIZE = null;
 const MEDIA_DRAFT_FALLBACK_PRICE = 1;
 
 function inferMediaTypeFromFile(file: File): "image" | "video" | null {
@@ -358,7 +358,7 @@ export function AdminNewPostPage() {
   const [title, setTitle] = useState("");
   const [brand, setBrand] = useState("");
   const [description, setDescription] = useState("");
-  const [condition, setCondition] = useState(CONDITION_OPTIONS[0]);
+  const [condition, setCondition] = useState("");
   const [size, setSize] = useState("");
   const [price, setPrice] = useState("");
   const [measurementsText, setMeasurementsText] = useState("");
@@ -434,7 +434,7 @@ export function AdminNewPostPage() {
     return percent > 0 ? percent : null;
   }, [currentPriceValue, originalPriceBaseline]);
   const conditionOptions = useMemo(
-    () => (CONDITION_OPTIONS.includes(condition) ? CONDITION_OPTIONS : [condition, ...CONDITION_OPTIONS]),
+    () => (condition && !CONDITION_OPTIONS.includes(condition) ? [condition, ...CONDITION_OPTIONS] : CONDITION_OPTIONS),
     [condition],
   );
   const normalizedItemTypeKey = useMemo(() => normalizeItemTypeKey(title), [title]);
@@ -637,7 +637,7 @@ export function AdminNewPostPage() {
     setTitle("");
     setBrand("");
     setDescription("");
-    setCondition(CONDITION_OPTIONS[0]);
+    setCondition("");
     setSize("");
     setPrice("");
     setMeasurementsText("");
@@ -673,7 +673,7 @@ export function AdminNewPostPage() {
     setTitle("");
     setBrand("");
     setDescription("");
-    setCondition(CONDITION_OPTIONS[0]);
+    setCondition("");
     setSize("");
     setPrice("");
     setMeasurementsText("");
@@ -862,7 +862,7 @@ export function AdminNewPostPage() {
     void loadByPostId(editPostId);
   }, [editPostId]);
 
-  const validateDraftForm = () => {
+  const validateStrictForm = () => {
     if (postType === "warehouse" && isNalichieIdOccupied) return "Этот nalichie_id уже используется, пост уже создан.";
     if (!title.trim()) return "Название обязательно.";
     if (!description.trim()) return "Описание обязательно.";
@@ -871,6 +871,31 @@ export function AdminNewPostPage() {
     const parsedPrice = Number(price);
     if (!price.trim() || !Number.isFinite(parsedPrice) || parsedPrice <= 0) return "Цена должна быть числом больше 0.";
     if (hasDefects && !defectsText.trim()) return "Описание дефектов обязательно.";
+    return null;
+  };
+
+  const validateDraftForm = () => {
+    if (postType === "warehouse" && isNalichieIdOccupied) return "Этот nalichie_id уже используется, пост уже создан.";
+    const hasAnyFieldValue = Boolean(
+      title.trim()
+      || brand.trim()
+      || description.trim()
+      || condition.trim()
+      || size.trim()
+      || price.trim()
+      || measurementsText.trim()
+      || defectsText.trim()
+      || videoLinkInput.trim(),
+    );
+    const hasAnyMedia = (
+      mainPhotos.length > 0
+      || defectPhotos.length > 0
+      || measurementPhotos.length > 0
+      || pendingMainUploads.length > 0
+      || pendingDefectUploads.length > 0
+      || pendingMeasurementUploads.length > 0
+    );
+    if (!hasAnyFieldValue && !hasAnyMedia) return "Заполните хотя бы одно поле или добавьте фото";
     return null;
   };
 
@@ -971,14 +996,18 @@ export function AdminNewPostPage() {
   };
 
   const persistDraft = async (
-    options?: { allowIncompleteForMedia?: boolean },
+    options?: { mode?: "strict" | "draft" | "media" },
   ): Promise<TgPost> => {
-    const allowIncompleteForMedia = Boolean(options?.allowIncompleteForMedia);
-    if (!allowIncompleteForMedia) {
+    const mode = options?.mode ?? "strict";
+    if (mode === "strict") {
+      const validationError = validateStrictForm();
+      if (validationError) throw new Error(validationError);
+    } else if (mode === "draft") {
       const validationError = validateDraftForm();
       if (validationError) throw new Error(validationError);
     }
-    if (postType === "warehouse") {
+    const allowIncompleteForMedia = mode !== "strict";
+    if (mode === "strict" && postType === "warehouse") {
       const itemStatus = String(itemData?.status ?? "").trim();
       if (!itemData || !ALLOWED_NALICHIE_STATUSES.has(itemStatus)) {
         throw new Error("Выбранный товар недоступен для публикации. Разрешены только in_stock и in_transit.");
@@ -1106,9 +1135,14 @@ export function AdminNewPostPage() {
 
     await syncUploadedPhotosToPost(saved.id);
     await syncUploadedMeasurementPhotosToPost(saved.id);
-    logPublishStep("persistDraft hydrateFromPost", { savedId: saved.id });
     currentPostRef.current = saved;
-    hydrateFromPost(saved);
+    if (mode === "strict") {
+      logPublishStep("persistDraft hydrateFromPost", { savedId: saved.id });
+      hydrateFromPost(saved);
+    } else {
+      setCurrentPost(saved);
+      setScheduleAtInput(toLocalInputValue(saved.scheduled_at));
+    }
     return saved;
   };
 
@@ -1117,7 +1151,7 @@ export function AdminNewPostPage() {
     setSuccessText(null);
     setIsSaving(true);
     try {
-      await persistDraft();
+      await persistDraft({ mode: "draft" });
       resetFormToEmpty();
       if (isEditMode) nav("/admin/posts/new", { replace: true });
       setSuccessText("Черновик сохранен.");
@@ -1208,7 +1242,7 @@ export function AdminNewPostPage() {
       const existing = stablePostIdRef.current ?? currentPostRef.current?.id ?? null;
       if (existing) return existing;
         logUploadStep(item.localId, "upload requires draft", { kind });
-        const saved = await persistDraft({ allowIncompleteForMedia: true });
+        const saved = await persistDraft({ mode: "media" });
         return saved.id;
       };
 
@@ -2001,6 +2035,9 @@ export function AdminNewPostPage() {
             </Field>
             <Field label={"Состояние"}>
               <select value={condition} onChange={(e) => setCondition(e.target.value)} style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }}>
+                <option value="" disabled>
+                  {"Выберите состояние"}
+                </option>
                 {conditionOptions.map((option) => (
                   <option key={option} value={option}>
                     {option === condition && !CONDITION_OPTIONS.includes(option) ? `${option} (устаревшее значение)` : option}
