@@ -59,8 +59,9 @@ export const useThemeStore = create<State>((set) => ({
 
   setMode: (mode) => {
     localStorage.setItem(STORAGE_KEY, mode);
+    localStorage.setItem(STORAGE_AUTO, "false");
     applyThemeToDom(mode);
-    set({ mode });
+    set({ mode, auto: false });
   },
 
   setAuto: (auto) => {
