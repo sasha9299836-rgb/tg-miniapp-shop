@@ -363,6 +363,7 @@ export function AdminNewPostPage() {
   const [price, setPrice] = useState("");
   const [measurementsText, setMeasurementsText] = useState("");
   const [hasDefects, setHasDefects] = useState(false);
+  const [isInUpdate, setIsInUpdate] = useState(false);
   const [defectsText, setDefectsText] = useState("");
   const [scheduleAtInput, setScheduleAtInput] = useState("");
   const [packagingPreset, setPackagingPreset] = useState<TgPostPackagingPreset>("A3");
@@ -641,6 +642,7 @@ export function AdminNewPostPage() {
     setPrice("");
     setMeasurementsText("");
     setHasDefects(false);
+    setIsInUpdate(false);
     setDefectsText("");
     setScheduleAtInput("");
     setPackagingPreset("A3");
@@ -676,6 +678,7 @@ export function AdminNewPostPage() {
     setPrice("");
     setMeasurementsText("");
     setHasDefects(false);
+    setIsInUpdate(false);
     setDefectsText("");
     setScheduleAtInput("");
     setPackagingPreset("A3");
@@ -710,6 +713,7 @@ export function AdminNewPostPage() {
     setPrice(String(post.price));
     setMeasurementsText(post.measurements_text ?? "");
     setHasDefects(post.has_defects);
+    setIsInUpdate(post.is_in_update ?? false);
     setDefectsText(post.defects_text ?? "");
     setScheduleAtInput(toLocalInputValue(post.scheduled_at));
     setPackagingPreset(post.packaging_preset ?? "A3");
@@ -1014,6 +1018,7 @@ export function AdminNewPostPage() {
     const saved = await createOrUpdateDraftPost({
       item_id: postType === "warehouse" ? (effectivePost?.item_id ?? normalizedNalichieId) : null,
       nalichie_id: postType === "warehouse" ? normalizedNalichieId : null,
+      is_in_update: isInUpdate,
       post_type: postType,
       origin_profile: getOriginProfileByPostType(postType),
       packaging_preset: packagingPreset,
@@ -2082,6 +2087,10 @@ export function AdminNewPostPage() {
             <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <input type="checkbox" checked={hasDefects} onChange={(e) => setHasDefects(e.target.checked)} />
               {"Есть дефекты?"}
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input type="checkbox" checked={isInUpdate} onChange={(e) => setIsInUpdate(e.target.checked)} />
+              {"Добавить в обновление"}
             </label>
             {hasDefects ? (
               <>

@@ -24,5 +24,7 @@ export type Product = {
   videoUrl?: string | null;
   measurementsText?: string | null;
   measurementPhotos?: string[];
+  is_in_update?: boolean;
+  is_in_update_expires_at?: string | null;
   saleStatus?: "available" | "reserved" | "sold";
 };

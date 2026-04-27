@@ -32,6 +32,8 @@ export type TgPost = {
   id: string;
   item_id: number | null;
   nalichie_id: number | null;
+  is_in_update: boolean;
+  is_in_update_expires_at: string | null;
   post_type: TgPostType;
   origin_profile: TgPostOriginProfile | null;
   packaging_preset: TgPostPackagingPreset | null;
@@ -89,6 +91,7 @@ export type TgPostMeasurementPhoto = {
 export type CreateDraftPostPayload = {
   item_id: number | null;
   nalichie_id: number | null;
+  is_in_update: boolean;
   post_type: TgPostType;
   origin_profile: TgPostOriginProfile;
   packaging_preset: TgPostPackagingPreset;
@@ -126,6 +129,7 @@ export type DraftWritePayloadSnapshot = {
 export type DraftWritePayload = {
   item_id: number | null;
   nalichie_id: number | null;
+  is_in_update: boolean;
   post_type: TgPostType;
   origin_profile: TgPostOriginProfile;
   packaging_preset: TgPostPackagingPreset;
@@ -465,6 +469,7 @@ function throwDraftStepError(step: string, error: unknown): never {
 function toDraftSnapshot(writePayload: {
   item_id: number | null;
   nalichie_id: number | null;
+  is_in_update: boolean;
   post_type: TgPostType;
   status: TgPostStatus;
   has_defects: boolean;
@@ -487,6 +492,14 @@ function syntheticIdFromUuid(uuid: string): number {
     hash = (hash * 31 + uuid.charCodeAt(i)) >>> 0;
   }
   return -(hash % 2_000_000_000) - 1;
+}
+
+function isUpdateBadgeActive(post: TgPost, nowMs: number): boolean {
+  if (!post.is_in_update) return false;
+  if (!post.is_in_update_expires_at) return true;
+  const expiresAtMs = Date.parse(post.is_in_update_expires_at);
+  if (!Number.isFinite(expiresAtMs)) return true;
+  return nowMs <= expiresAtMs;
 }
 
 export async function fetchNalichieById(itemId: number): Promise<NalichieItem | null> {
@@ -568,6 +581,7 @@ export async function createOrUpdateDraftPost(
   const writePayload: DraftWritePayload = {
     item_id: payload.item_id,
     nalichie_id: payload.nalichie_id,
+    is_in_update: payload.is_in_update,
     post_type: payload.post_type,
     origin_profile: payload.origin_profile,
     packaging_preset: payload.packaging_preset,
@@ -1056,6 +1070,7 @@ export async function getPublishedCatalogProducts(): Promise<Product[]> {
 
   const posts = (postsData as TgPost[]) ?? [];
   if (!posts.length) return [];
+  const nowMs = Date.now();
 
   const postIds = posts.map((p) => p.id);
   const { data: photosData, error: photosError } = await supabase
@@ -1111,7 +1126,7 @@ export async function getPublishedCatalogProducts(): Promise<Product[]> {
     price: post.price,
     oldPrice: typeof post.original_price === "number" && post.original_price > post.price ? post.original_price : undefined,
     images: photosByPost.get(post.id) ?? [],
-    isNew: false,
+    isNew: isUpdateBadgeActive(post, nowMs),
     description: post.description,
     brand: post.brand,
     subtitle: post.description,
@@ -1124,6 +1139,8 @@ export async function getPublishedCatalogProducts(): Promise<Product[]> {
     videoUrl: post.video_url,
     measurementsText: post.measurements_text,
     measurementPhotos: measurementsByPost.get(post.id) ?? [],
+    is_in_update: post.is_in_update ?? false,
+    is_in_update_expires_at: post.is_in_update_expires_at ?? null,
     saleStatus: post.sale_status,
   }));
 }
@@ -1142,6 +1159,7 @@ export async function getCatalogProductsByPostIds(postIds: string[]): Promise<Pr
 
   const posts = (postsData as TgPost[]) ?? [];
   if (!posts.length) return [];
+  const nowMs = Date.now();
 
   const { data: photosData, error: photosError } = await supabase
     .from("tg_post_photos")
@@ -1196,7 +1214,7 @@ export async function getCatalogProductsByPostIds(postIds: string[]): Promise<Pr
     price: post.price,
     oldPrice: typeof post.original_price === "number" && post.original_price > post.price ? post.original_price : undefined,
     images: photosByPost.get(post.id) ?? [],
-    isNew: false,
+    isNew: isUpdateBadgeActive(post, nowMs),
     description: post.description,
     brand: post.brand,
     subtitle: post.description,
@@ -1209,6 +1227,8 @@ export async function getCatalogProductsByPostIds(postIds: string[]): Promise<Pr
     videoUrl: post.video_url,
     measurementsText: post.measurements_text,
     measurementPhotos: measurementsByPost.get(post.id) ?? [],
+    is_in_update: post.is_in_update ?? false,
+    is_in_update_expires_at: post.is_in_update_expires_at ?? null,
     saleStatus: post.sale_status,
   }));
 }
