@@ -382,9 +382,6 @@ export function AdminPromosPage() {
             <Button onClick={() => void onSave()} disabled={isSaving || isDeleting || isStatusUpdating}>
               {isSaving ? "Сохраняем..." : "Сохранить"}
             </Button>
-            <Button variant="secondary" onClick={onResetForm} disabled={isSaving || isDeleting || isStatusUpdating}>
-              Новый
-            </Button>
             <Button variant="secondary" onClick={() => nav("/admin")} disabled={isSaving || isDeleting || isStatusUpdating}>
               Назад
             </Button>

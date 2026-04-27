@@ -201,7 +201,7 @@
   }
 
   .admin-promos-page__actions {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
   }
 
   .admin-promos-page__item-actions {

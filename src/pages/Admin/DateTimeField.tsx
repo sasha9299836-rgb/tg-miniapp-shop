@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import "./datetime-controls.css";
 
 type AdminDateTimeFieldProps = {
@@ -26,18 +27,34 @@ export function AdminDateTimeField({
   id,
   name,
 }: AdminDateTimeFieldProps) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const displayValue = value ? formatDateTimeLocalForDisplay(value) : placeholder;
   const isPlaceholder = !value;
   const inputId = id ?? name;
 
+  const onOpenPicker = () => {
+    if (disabled) return;
+    const input = inputRef.current;
+    if (!input) return;
+    try {
+      const pickerInput = input as HTMLInputElement & { showPicker?: () => void };
+      pickerInput.showPicker?.();
+    } catch {
+      // no-op: fallback below
+    }
+    input.focus({ preventScroll: true });
+    input.click();
+  };
+
   return (
     <label className="admin-datetime-field" htmlFor={inputId}>
       {label ? <span className="admin-datetime-field__label">{label}</span> : null}
-      <span className="admin-datetime-shell">
+      <span className="admin-datetime-shell" onClick={onOpenPicker}>
         <span className={`admin-datetime-shell__value${isPlaceholder ? " admin-datetime-shell__value--placeholder" : ""}`}>
           {displayValue}
         </span>
         <input
+          ref={inputRef}
           id={inputId}
           name={name}
           type="datetime-local"
@@ -51,4 +68,3 @@ export function AdminDateTimeField({
     </label>
   );
 }
-

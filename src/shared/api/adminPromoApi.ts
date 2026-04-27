@@ -91,6 +91,15 @@ function buildAdminSessionHeaders(adminToken: string): Record<string, string> | 
   };
 }
 
+function isEdgeTransportError(error: unknown): boolean {
+  const message = String((error as { message?: unknown })?.message ?? "");
+  return message.includes("Failed to send a request to the Edge Function");
+}
+
+function delay(ms: number) {
+  return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+}
+
 export async function listAdminPromos(): Promise<AdminPromoListItem[]> {
   const adminToken = readAdminToken();
   const { data, error } = await supabase.functions.invoke<{
@@ -130,22 +139,33 @@ export async function getAdminPromoDetail(id: string): Promise<AdminPromoDetail>
 
 export async function upsertAdminPromo(payload: UpsertPromoPayload): Promise<AdminPromoListItem> {
   const adminToken = readAdminToken();
-  const { data, error } = await supabase.functions.invoke<{
-    ok?: boolean;
-    promo?: AdminPromoListItem;
-    error?: string;
-  }>("tg_admin_promo_codes", {
-    body: {
-      mode: "upsert",
-      ...payload,
-    },
-    headers: buildAdminSessionHeaders(adminToken),
-  });
-  if (error) throw error;
-  if (!data?.ok || !data.promo) {
-    throw new Error(String(data?.error ?? "PROMO_UPSERT_FAILED"));
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      const { data, error } = await supabase.functions.invoke<{
+        ok?: boolean;
+        promo?: AdminPromoListItem;
+        error?: string;
+      }>("tg_admin_promo_codes", {
+        body: {
+          mode: "upsert",
+          ...payload,
+        },
+        headers: buildAdminSessionHeaders(adminToken),
+      });
+      if (error) throw error;
+      if (!data?.ok || !data.promo) {
+        throw new Error(String(data?.error ?? "PROMO_UPSERT_FAILED"));
+      }
+      return data.promo;
+    } catch (error) {
+      if (attempt < 2 && isEdgeTransportError(error)) {
+        await delay(250);
+        continue;
+      }
+      throw error;
+    }
   }
-  return data.promo;
+  throw new Error("PROMO_UPSERT_FAILED");
 }
 
 export async function setAdminPromoStatus(id: string, status: PromoStatus): Promise<AdminPromoListItem> {
