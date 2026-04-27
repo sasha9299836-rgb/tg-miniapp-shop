@@ -1876,30 +1876,6 @@ export function AdminNewPostPage() {
           onRemove={(id) => void onDeleteMainPhoto(id)}
         />
 
-        {currentPost ? (
-          <div className="glass" style={{ padding: 12, display: "grid", gap: 8 }}>
-            <div style={{ fontWeight: 700 }}>{"Видео поста"}</div>
-            <Field label={"Ссылка на видео (https)"}>
-              <input
-                value={videoLinkInput}
-                className="admin-post-form-control"
-                onChange={(e) => setVideoLinkInput(e.target.value)}
-                placeholder={"https://..."}
-                style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }}
-              />
-            </Field>
-            <div style={{ display: "grid", gap: 8 }}>
-              <Button
-                variant="secondary"
-                onClick={() => void onSaveVideoLink()}
-                disabled={isSavingVideo || isPreparingAdminRuntime || !isAdminRuntimeReady}
-              >
-                {isSavingVideo ? "Сохраняем видео..." : "Сохранить видео"}
-              </Button>
-            </div>
-          </div>
-        ) : null}
-
         {!canRenderProductForm ? (
           <div className="glass" style={{ padding: 12, color: "var(--muted)" }}>
             {"Выберите товар со склада, чтобы заполнить карточку поста."}
@@ -2116,6 +2092,27 @@ export function AdminNewPostPage() {
                   onSelect={(files) => stageSelectedFiles(files, "defect")}
                   onRemove={(id) => void onDeleteDefectPhoto(id)}
                 />
+                <div className="glass" style={{ padding: 12, display: "grid", gap: 8 }}>
+                  <div style={{ fontWeight: 700 }}>{"Видео дефектов"}</div>
+                  <Field label={"Ссылка на видео дефектов (https)"}>
+                    <input
+                      value={videoLinkInput}
+                      className="admin-post-form-control"
+                      onChange={(e) => setVideoLinkInput(e.target.value)}
+                      placeholder={"https://..."}
+                      style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }}
+                    />
+                  </Field>
+                  <div style={{ display: "grid", gap: 8 }}>
+                    <Button
+                      variant="secondary"
+                      onClick={() => void onSaveVideoLink()}
+                      disabled={isSavingVideo || isPreparingAdminRuntime || !isAdminRuntimeReady}
+                    >
+                      {isSavingVideo ? "Сохраняем видео..." : "Сохранить видео"}
+                    </Button>
+                  </div>
+                </div>
               </>
             ) : null}
             <Field label={"Упаковка"}>
