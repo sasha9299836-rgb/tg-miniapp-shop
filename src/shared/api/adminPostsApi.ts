@@ -496,6 +496,11 @@ function syntheticIdFromUuid(uuid: string): number {
 
 function isUpdateBadgeActive(post: TgPost, nowMs: number): boolean {
   if (!post.is_in_update) return false;
+  const publishedAtMs = Date.parse(post.published_at ?? "");
+  if (Number.isFinite(publishedAtMs)) {
+    const tenDaysMs = 10 * 24 * 60 * 60 * 1000;
+    return nowMs <= publishedAtMs + tenDaysMs;
+  }
   if (!post.is_in_update_expires_at) return true;
   const expiresAtMs = Date.parse(post.is_in_update_expires_at);
   if (!Number.isFinite(expiresAtMs)) return true;

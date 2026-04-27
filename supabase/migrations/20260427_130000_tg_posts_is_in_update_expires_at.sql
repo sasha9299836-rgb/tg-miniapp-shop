@@ -9,11 +9,11 @@ begin
   if new.is_in_update is true then
     if tg_op = 'INSERT' then
       if new.is_in_update_expires_at is null then
-        new.is_in_update_expires_at := now() + interval '24 hours';
+        new.is_in_update_expires_at := now() + interval '10 days';
       end if;
     elsif tg_op = 'UPDATE' then
       if old.is_in_update is distinct from true and new.is_in_update_expires_at is null then
-        new.is_in_update_expires_at := now() + interval '24 hours';
+        new.is_in_update_expires_at := now() + interval '10 days';
       end if;
     end if;
   else

@@ -119,13 +119,16 @@
   position: absolute;
   top: 12px;
   left: 12px;
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-  color: var(--text);
+  background: #2563eb;
+  color: #fff;
   font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
   padding: 6px 10px;
   border-radius: 999px;
-  border: 1px solid var(--border);
+  border: 1px solid #1d4ed8;
   box-shadow: var(--shadow-sm);
+  z-index: 4;
 }
 
 .pcard__badge--with-discount {
