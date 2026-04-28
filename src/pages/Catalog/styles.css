@@ -57,6 +57,22 @@
   font-size: 14px;
 }
 
+.catalog-filters__multi {
+  display: grid;
+  gap: 6px;
+  max-height: 180px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 8px;
+  background: var(--surface);
+}
+
+.catalog-filters__actions {
+  display: grid;
+  gap: 8px;
+}
+
 .catalog-filters__option {
   border: 1px solid var(--border);
   background: var(--surface);
