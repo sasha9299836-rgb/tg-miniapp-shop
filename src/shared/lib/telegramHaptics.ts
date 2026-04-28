@@ -11,34 +11,20 @@ type TelegramGlobal = {
   WebApp?: TelegramWebApp;
 };
 
-type TabHapticVariant = "home" | "catalog" | "favorites" | "default";
-
-export function triggerHapticTabPress(variant: TabHapticVariant = "default"): void {
+export function triggerHapticTabPress(): void {
   try {
     const telegram = (window as Window & { Telegram?: TelegramGlobal }).Telegram;
     const haptics = telegram?.WebApp?.HapticFeedback;
     if (!haptics) return;
-
-    if (variant === "home") {
-      if (haptics.selectionChanged) {
-        haptics.selectionChanged();
-        return;
+    if (haptics.impactOccurred) {
+      try {
+        haptics.impactOccurred("soft");
+      } catch {
+        haptics.impactOccurred("light");
       }
-      haptics.impactOccurred?.("light");
       return;
     }
-
-    if (variant === "catalog") {
-      haptics.impactOccurred?.("soft");
-      return;
-    }
-
-    if (variant === "favorites") {
-      haptics.impactOccurred?.("light");
-      return;
-    }
-
-    haptics.impactOccurred?.("light");
+    haptics.selectionChanged?.();
   } catch {
     // noop: outside Telegram / unsupported platform
   }

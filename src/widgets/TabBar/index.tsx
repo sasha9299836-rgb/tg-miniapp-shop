@@ -61,12 +61,6 @@ const tabs: Tab[] = [
 export const TabBar = () => {
   const favCount = useFavoritesStore((s) => s.postIds.length);
   const cartCount = useCartStore((s) => s.totalQty());
-  const resolveTabHapticVariant = (to: string): "home" | "catalog" | "favorites" | "default" => {
-    if (to === "/") return "home";
-    if (to === "/catalog") return "catalog";
-    if (to === "/favorites") return "favorites";
-    return "default";
-  };
 
   return (
     <nav className="tabbar">
@@ -81,7 +75,7 @@ export const TabBar = () => {
               key={t.to}
               to={t.to}
               className={({ isActive }) => (isActive ? "tab tab--active" : "tab")}
-              onClick={() => triggerHapticTabPress(resolveTabHapticVariant(t.to))}
+              onClick={() => triggerHapticTabPress()}
             >
               <div className="tab__iconWrap" aria-hidden>
                 <div className="tab__icon">
