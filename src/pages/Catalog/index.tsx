@@ -33,6 +33,16 @@ function parseSizeTokens(rawSize: string | null | undefined): string[] {
   return Array.from(set);
 }
 
+function normalizeTypeKey(raw: string | null | undefined): string {
+  return String(raw ?? "").trim().toLowerCase();
+}
+
+function formatTypeLabel(raw: string): string {
+  const source = normalizeTypeKey(raw);
+  if (!source) return "";
+  return source.charAt(0).toUpperCase() + source.slice(1);
+}
+
 export function CatalogPage() {
   const nav = useNavigate();
   const { products, load } = useProductsStore();
@@ -74,13 +84,17 @@ export function CatalogPage() {
   }, [products, registerFavoriteCatalogItems, registerCartCatalogItems]);
 
   const typeOptions = useMemo(() => {
-    const set = new Set<string>();
+    const map = new Map<string, string>();
     for (const product of products) {
-      const value = String(product.title ?? "").trim();
-      if (!value) continue;
-      set.add(value);
+      const key = normalizeTypeKey(product.title ?? "");
+      if (!key) continue;
+      if (!map.has(key)) {
+        map.set(key, formatTypeLabel(key));
+      }
     }
-    return Array.from(set);
+    return Array.from(map.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, "ru"));
   }, [products]);
 
   const sizeOptions = useMemo(() => {
@@ -116,13 +130,15 @@ export function CatalogPage() {
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    const from = Number(priceFrom);
-    const to = Number(priceTo);
-    const hasFrom = Number.isFinite(from);
-    const hasTo = Number.isFinite(to);
+    const fromRaw = priceFrom.trim();
+    const toRaw = priceTo.trim();
+    const from = Number(fromRaw);
+    const to = Number(toRaw);
+    const hasFrom = fromRaw.length > 0 && Number.isFinite(from);
+    const hasTo = toRaw.length > 0 && Number.isFinite(to);
     const filteredProducts = products.filter((p) => {
       if (s && !p.title.toLowerCase().includes(s)) return false;
-      if (typeFilter && String(p.title ?? "").trim() !== typeFilter) return false;
+      if (typeFilter && normalizeTypeKey(p.title ?? "") !== typeFilter) return false;
       if (selectedBrands.length) {
         const brandValue = String(p.brand ?? "").trim();
         if (!selectedBrands.includes(brandValue)) return false;
@@ -190,8 +206,8 @@ export function CatalogPage() {
                 <span className="catalog-filters__label">Тип вещи</span>
                 <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} className="catalog-filters__select">
                   <option value="">Все</option>
-                  {typeOptions.map((value) => (
-                    <option key={value} value={value}>{value}</option>
+                  {typeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
                 </select>
               </label>
