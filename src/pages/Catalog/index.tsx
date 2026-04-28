@@ -10,16 +10,6 @@ import { Button } from "../../shared/ui/Button";
 import { Page } from "../../shared/ui/Page";
 import "./styles.css";
 
-const FILTER_OPTIONS = [
-  { value: "all", label: "Все" },
-  { value: "new", label: "Новинки" },
-  { value: "price-asc", label: "Цена: по возрастанию" },
-  { value: "price-desc", label: "Цена: по убыванию" },
-  { value: "discount", label: "Скидки" },
-];
-
-type FilterValue = typeof FILTER_OPTIONS[number]["value"];
-
 export function CatalogPage() {
   const nav = useNavigate();
   const { products, load } = useProductsStore();
@@ -37,7 +27,9 @@ export function CatalogPage() {
 
   const [q, setQ] = useState("");
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
-  const [filter, setFilter] = useState<FilterValue>("all");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [sizeFilter, setSizeFilter] = useState("");
+  const [newOnly, setNewOnly] = useState(false);
 
   useEffect(() => {
     load();
@@ -54,30 +46,36 @@ export function CatalogPage() {
     registerCartCatalogItems(mapped);
   }, [products, registerFavoriteCatalogItems, registerCartCatalogItems]);
 
+  const typeOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const product of products) {
+      const value = String(product.title ?? "").trim();
+      if (!value) continue;
+      set.add(value);
+    }
+    return Array.from(set);
+  }, [products]);
+
+  const sizeOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const product of products) {
+      const value = String(product.size ?? "").trim();
+      if (!value) continue;
+      set.add(value);
+    }
+    return Array.from(set);
+  }, [products]);
+
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    const base = !s ? products : products.filter((p) => p.title.toLowerCase().includes(s));
-    if (!base.length) return base;
-
-    const sorted = [...base];
-    if (filter === "price-asc") sorted.sort((a, b) => a.price - b.price);
-    if (filter === "price-desc") sorted.sort((a, b) => b.price - a.price);
-    if (filter === "discount") {
-      sorted.sort((a, b) => {
-        const aDiscount = (a.oldPrice ?? 0) - a.price;
-        const bDiscount = (b.oldPrice ?? 0) - b.price;
-        return bDiscount - aDiscount;
-      });
-    }
-    if (filter === "new") {
-      sorted.sort((a, b) => Number(b.isNew) - Number(a.isNew));
-    }
-    if (filter === "all") {
-      sorted.sort((a, b) => Number(b.isNew) - Number(a.isNew));
-    }
-
-    return sorted;
-  }, [products, q, filter]);
+    return products.filter((p) => {
+      if (s && !p.title.toLowerCase().includes(s)) return false;
+      if (typeFilter && String(p.title ?? "").trim() !== typeFilter) return false;
+      if (sizeFilter && String(p.size ?? "").trim() !== sizeFilter) return false;
+      if (newOnly && !p.isNew) return false;
+      return true;
+    });
+  }, [products, q, typeFilter, sizeFilter, newOnly]);
   const favoritePostIdsSet = useMemo(() => new Set(favoritePostIds), [favoritePostIds]);
   const cartPostIdsSet = useMemo(
     () => new Set(cartItems.map((item) => String(item.postId ?? "").trim()).filter(Boolean)),
@@ -98,16 +96,28 @@ export function CatalogPage() {
           <div className="catalog-filters">
             <div className="catalog-filters__title">Фильтры</div>
             <div className="catalog-filters__options">
-              {FILTER_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  className={`catalog-filters__option ${filter === opt.value ? "is-active" : ""}`}
-                  onClick={() => setFilter(opt.value)}
-                >
-                  {opt.label}
-                </button>
-              ))}
+              <label className="catalog-filters__field">
+                <span className="catalog-filters__label">Тип вещи</span>
+                <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} className="catalog-filters__select">
+                  <option value="">Все</option>
+                  {typeOptions.map((value) => (
+                    <option key={value} value={value}>{value}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="catalog-filters__field">
+                <span className="catalog-filters__label">Размер</span>
+                <select value={sizeFilter} onChange={(event) => setSizeFilter(event.target.value)} className="catalog-filters__select">
+                  <option value="">Все</option>
+                  {sizeOptions.map((value) => (
+                    <option key={value} value={value}>{value}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="catalog-filters__checkbox">
+                <input type="checkbox" checked={newOnly} onChange={(event) => setNewOnly(event.target.checked)} />
+                <span>Новинки</span>
+              </label>
             </div>
             <Button variant="secondary" onClick={() => setIsFiltersOpen(false)}>Закрыть</Button>
           </div>

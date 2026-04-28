@@ -29,6 +29,34 @@
   margin-bottom: 12px;
 }
 
+.catalog-filters__field {
+  display: grid;
+  gap: 6px;
+}
+
+.catalog-filters__label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.catalog-filters__select {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+.catalog-filters__checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 14px;
+}
+
 .catalog-filters__option {
   border: 1px solid var(--border);
   background: var(--surface);
