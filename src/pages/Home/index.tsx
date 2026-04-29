@@ -1,28 +1,13 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useProductsStore } from "../../entities/product/model/useProductsStore";
-import { useFavoritesStore } from "../../entities/favorites/model/useFavoritesStore";
-import { useCartStore } from "../../entities/cart/model/useCartStore";
-import { useDefectReviewStore } from "../../entities/cart/model/useDefectReviewStore";
 import { Page } from "../../shared/ui/Page";
-import { ProductCard } from "../../widgets/ProductCard";
 import { getActiveDropTeaser, type DropTeaser } from "../../shared/api/dropTeaserApi";
 import "./styles.css";
 
 export function HomePage() {
   const nav = useNavigate();
   const { products, load } = useProductsStore();
-  const favoritePostIds = useFavoritesStore((s) => s.postIds);
-  const loadFavorites = useFavoritesStore((s) => s.load);
-  const registerFavoriteCatalogItems = useFavoritesStore((s) => s.registerCatalogItems);
-  const toggleFavorite = useFavoritesStore((s) => s.toggle);
-  const hasFavorite = useFavoritesStore((s) => s.has);
-  const cartItems = useCartStore((s) => s.items);
-  const loadCart = useCartStore((s) => s.load);
-  const registerCartCatalogItems = useCartStore((s) => s.registerCatalogItems);
-  const hasInCart = useCartStore((s) => s.has);
-  const removeFromCart = useCartStore((s) => s.remove);
-  const requestAddWithDefectGuard = useDefectReviewStore((s) => s.requestAddWithDefectGuard);
   const [dropTeaser, setDropTeaser] = useState<DropTeaser | null>(null);
 
   useEffect(() => {
@@ -44,28 +29,7 @@ export function HomePage() {
     };
   }, []);
 
-  useEffect(() => {
-    void loadFavorites();
-    void loadCart();
-  }, [loadFavorites, loadCart]);
-
-  useEffect(() => {
-    const mapped = products.map((product) => ({ id: product.id, postId: product.postId }));
-    registerFavoriteCatalogItems(mapped);
-    registerCartCatalogItems(mapped);
-  }, [products, registerFavoriteCatalogItems, registerCartCatalogItems]);
-
-  const catalogItems = useMemo(() => {
-    if (!products.length) return [];
-    return products.slice(0, 8);
-  }, [products]);
-  const favoritePostIdsSet = useMemo(() => new Set(favoritePostIds), [favoritePostIds]);
-  const cartPostIdsSet = useMemo(
-    () => new Set(cartItems.map((item) => String(item.postId ?? "").trim()).filter(Boolean)),
-    [cartItems],
-  );
-
-  const showPlaceholders = !products.length;
+  const updateItems = useMemo(() => products.filter((product) => product.isNew), [products]);
 
   return (
     <Page
@@ -113,37 +77,43 @@ export function HomePage() {
         </section>
       ) : null}
 
-      <section className="home-section">
-        <div className="home-section__head">
-          <div className="home-section__title">Каталог</div>
-          <button type="button" className="home-section__link" onClick={() => nav("/catalog")}
-          >
-            Смотреть все
-          </button>
-        </div>
+      {updateItems.length ? (
+        <section className="home-section">
+          <div className="home-section__head">
+            <div className="home-section__title">Обновление</div>
+            <button type="button" className="home-section__link" onClick={() => nav("/catalog")}
+            >
+              Смотреть все
+            </button>
+          </div>
 
-        <div className="home-grid">
-          {showPlaceholders
-            ? Array.from({ length: 8 }).map((_, idx) => (
-                <div key={`grid-placeholder-${idx}`} className="home-skeleton" />
-              ))
-            : catalogItems.map((p) => (
-                <ProductCard
-                  key={p.postId ?? `id:${p.id}`}
-                  product={p}
-                  onOpen={() => nav(`/item/${p.id}`)}
-                  onAddToCart={() => void requestAddWithDefectGuard(p)}
-                  onRemoveFromCart={() => void removeFromCart({ id: p.id, postId: p.postId })}
-                  onToggleFav={() => void toggleFavorite({ id: p.id, postId: p.postId })}
-                  isFav={p.postId ? favoritePostIdsSet.has(p.postId) : hasFavorite({ id: p.id, postId: p.postId })}
-                  isInCart={p.postId ? cartPostIdsSet.has(p.postId) : hasInCart({ id: p.id, postId: p.postId })}
-                />
-              ))}
-        </div>
-      </section>
+          <div className="home-update-row">
+            {updateItems.map((product) => (
+              <button
+                type="button"
+                key={product.postId ?? `id:${product.id}`}
+                className="home-update-card"
+                onClick={() => nav(`/item/${product.id}`)}
+              >
+                <div className="home-update-card__mediaWrap">
+                  {product.isNew ? <span className="home-update-card__badge">NEW</span> : null}
+                  {product.images[0] ? (
+                    <img src={product.images[0]} alt={product.title} className="home-update-card__media" />
+                  ) : (
+                    <div className="home-update-card__media home-update-card__media--empty" />
+                  )}
+                </div>
+                <div className="home-update-card__body">
+                  <div className="home-update-card__title">{product.title}</div>
+                  <div className="home-update-card__price">{product.price.toLocaleString("ru-RU")} ₽</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </Page>
   );
 }
 
 export default HomePage;
-
