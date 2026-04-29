@@ -317,16 +317,26 @@ export function CatalogPage() {
           </Button>
         </div>
         {activeFiltersCount > 0 ? (
-          <div className="catalog-active-filters">
-            {activeFilterChips.map((chip) => (
-              <span key={chip} className="catalog-active-filters__chip">{chip}</span>
-            ))}
+          <div className="catalog-active-filters-wrap">
+            <div className="catalog-active-filters">
+              {activeFilterChips.map((chip) => (
+                <span key={chip} className="catalog-active-filters__chip">{chip}</span>
+              ))}
+            </div>
+            <Button variant="secondary" style={{ width: "auto" }} onClick={resetFilters}>
+              Сбросить
+            </Button>
           </div>
         ) : null}
 
         {isFiltersOpen ? (
           <div className="catalog-filters">
-            <div className="catalog-filters__title">Фильтры</div>
+            <div className="catalog-filters__head">
+              <div className="catalog-filters__title">Фильтры</div>
+              <Button variant="secondary" style={{ width: "auto" }} onClick={resetFilters}>
+                Сбросить
+              </Button>
+            </div>
             <div className="catalog-filters__options">
               <label className="catalog-filters__field">
                 <span className="catalog-filters__label">Тип вещи</span>

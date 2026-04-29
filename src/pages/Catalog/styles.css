@@ -19,8 +19,15 @@
 
 .catalog-filters__title {
   font-weight: 700;
-  margin-bottom: 10px;
   color: var(--text);
+}
+
+.catalog-filters__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
 }
 
 .catalog-filters__options {
@@ -121,6 +128,13 @@
 .catalog-active-filters {
   display: flex;
   flex-wrap: wrap;
+  gap: 8px;
+}
+
+.catalog-active-filters-wrap {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 8px;
 }
 
