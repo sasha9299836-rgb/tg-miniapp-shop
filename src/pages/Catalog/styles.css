@@ -57,14 +57,26 @@
   font-size: 14px;
 }
 
+.catalog-filters__checkbox--pill {
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.catalog-filters__checkbox--pill input {
+  width: 18px;
+  height: 18px;
+}
+
 .catalog-filters__multi {
   display: grid;
-  gap: 6px;
+  gap: 10px;
   max-height: 180px;
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 8px;
+  padding: 10px;
   background: var(--surface);
 }
 
@@ -104,4 +116,19 @@
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 10px;
+}
+
+.catalog-active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.catalog-active-filters__chip {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface);
 }

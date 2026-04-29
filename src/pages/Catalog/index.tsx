@@ -12,6 +12,7 @@ import "./styles.css";
 
 const SIZE_ORDER = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL"] as const;
 type SortValue = "default" | "price-asc" | "price-desc";
+const CATALOG_FILTERS_SESSION_KEY = "catalog_filters_v1";
 
 function normalizeSizeToken(raw: string): string {
   const token = raw.trim().toUpperCase();
@@ -43,6 +44,16 @@ function formatTypeLabel(raw: string): string {
   return source.charAt(0).toUpperCase() + source.slice(1);
 }
 
+type CatalogFiltersSessionState = {
+  typeFilter: string;
+  selectedSizes: string[];
+  selectedBrands: string[];
+  newOnly: boolean;
+  priceFrom: string;
+  priceTo: string;
+  sortBy: SortValue;
+};
+
 export function CatalogPage() {
   const nav = useNavigate();
   const { products, load } = useProductsStore();
@@ -67,6 +78,23 @@ export function CatalogPage() {
   const [priceFrom, setPriceFrom] = useState("");
   const [priceTo, setPriceTo] = useState("");
   const [sortBy, setSortBy] = useState<SortValue>("default");
+
+  useEffect(() => {
+    try {
+      const raw = window.sessionStorage.getItem(CATALOG_FILTERS_SESSION_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<CatalogFiltersSessionState>;
+      setTypeFilter(typeof parsed.typeFilter === "string" ? parsed.typeFilter : "");
+      setSelectedSizes(Array.isArray(parsed.selectedSizes) ? parsed.selectedSizes.filter((value): value is string => typeof value === "string") : []);
+      setSelectedBrands(Array.isArray(parsed.selectedBrands) ? parsed.selectedBrands.filter((value): value is string => typeof value === "string") : []);
+      setNewOnly(Boolean(parsed.newOnly));
+      setPriceFrom(typeof parsed.priceFrom === "string" ? parsed.priceFrom : "");
+      setPriceTo(typeof parsed.priceTo === "string" ? parsed.priceTo : "");
+      setSortBy(parsed.sortBy === "price-asc" || parsed.sortBy === "price-desc" || parsed.sortBy === "default" ? parsed.sortBy : "default");
+    } catch {
+      // ignore broken session state
+    }
+  }, []);
 
   useEffect(() => {
     load();
@@ -180,7 +208,60 @@ export function CatalogPage() {
     setPriceFrom("");
     setPriceTo("");
     setSortBy("default");
+    try {
+      window.sessionStorage.removeItem(CATALOG_FILTERS_SESSION_KEY);
+    } catch {
+      // no-op
+    }
   };
+
+  useEffect(() => {
+    const payload: CatalogFiltersSessionState = {
+      typeFilter,
+      selectedSizes,
+      selectedBrands,
+      newOnly,
+      priceFrom,
+      priceTo,
+      sortBy,
+    };
+    try {
+      window.sessionStorage.setItem(CATALOG_FILTERS_SESSION_KEY, JSON.stringify(payload));
+    } catch {
+      // no-op
+    }
+  }, [typeFilter, selectedSizes, selectedBrands, newOnly, priceFrom, priceTo, sortBy]);
+
+  const activeFilterChips = useMemo(() => {
+    const chips: string[] = [];
+    if (typeFilter) {
+      chips.push(`Тип: ${formatTypeLabel(typeFilter)}`);
+    }
+    if (selectedBrands.length) {
+      chips.push(`Бренд: ${selectedBrands.join(", ")}`);
+    }
+    if (selectedSizes.length) {
+      chips.push(`Размер: ${selectedSizes.join(", ")}`);
+    }
+    if (newOnly) {
+      chips.push("Новинки");
+    }
+    if (priceFrom) {
+      chips.push(`Цена от: ${priceFrom}`);
+    }
+    if (priceTo) {
+      chips.push(`Цена до: ${priceTo}`);
+    }
+    if (sortBy === "price-asc") {
+      chips.push("Сортировка: дешевле → дороже");
+    }
+    if (sortBy === "price-desc") {
+      chips.push("Сортировка: дороже → дешевле");
+    }
+    return chips;
+  }, [typeFilter, selectedBrands, selectedSizes, newOnly, priceFrom, priceTo, sortBy]);
+
+  const activeFiltersCount = activeFilterChips.length;
 
   const favoritePostIdsSet = useMemo(() => new Set(favoritePostIds), [favoritePostIds]);
   const cartPostIdsSet = useMemo(
@@ -194,9 +275,16 @@ export function CatalogPage() {
         <div className="catalog-search">
           <Input placeholder="Поиск по каталогу..." value={q} onChange={(e) => setQ(e.target.value)} />
           <Button variant="secondary" style={{ width: "auto" }} onClick={() => setIsFiltersOpen((v) => !v)}>
-            Фильтры
+            {activeFiltersCount > 0 ? `Фильтры • ${activeFiltersCount}` : "Фильтры"}
           </Button>
         </div>
+        {activeFiltersCount > 0 ? (
+          <div className="catalog-active-filters">
+            {activeFilterChips.map((chip) => (
+              <span key={chip} className="catalog-active-filters__chip">{chip}</span>
+            ))}
+          </div>
+        ) : null}
 
         {isFiltersOpen ? (
           <div className="catalog-filters">
@@ -215,7 +303,7 @@ export function CatalogPage() {
                 <span className="catalog-filters__label">Размер</span>
                 <div className="catalog-filters__multi">
                   {sizeOptions.map((value) => (
-                    <label key={value} className="catalog-filters__checkbox">
+                    <label key={value} className="catalog-filters__checkbox catalog-filters__checkbox--pill">
                       <input type="checkbox" checked={selectedSizes.includes(value)} onChange={() => onToggleSize(value)} />
                       <span>{value}</span>
                     </label>
@@ -226,7 +314,7 @@ export function CatalogPage() {
                 <span className="catalog-filters__label">Бренд</span>
                 <div className="catalog-filters__multi">
                   {brandOptions.map((value) => (
-                    <label key={value} className="catalog-filters__checkbox">
+                    <label key={value} className="catalog-filters__checkbox catalog-filters__checkbox--pill">
                       <input type="checkbox" checked={selectedBrands.includes(value)} onChange={() => onToggleBrand(value)} />
                       <span>{value}</span>
                     </label>
