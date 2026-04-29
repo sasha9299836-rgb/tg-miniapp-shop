@@ -46,6 +46,7 @@ function ProductCardInner({
     return percent > 0 ? percent : null;
   }, [product.oldPrice, product.price, showOldPrice]);
   const cardTitle = useMemo(() => getProductDisplayTitle(product), [product.brand, product.title]);
+  const sizeText = useMemo(() => String(product.size ?? "").trim(), [product.size]);
 
   const setSlide = (next: number) => {
     if (!total) return;
@@ -234,6 +235,7 @@ function ProductCardInner({
 
       <div className="pcard__body" onClick={handleOpen} role="button" tabIndex={0}>
         <div className="pcard__title">{cardTitle}</div>
+        {sizeText ? <div className="pcard__size">{`Размер: ${sizeText}`}</div> : null}
         <div className="pcard__priceRow">
           <div className="pcard__price">{product.price.toLocaleString("ru-RU")} ₽</div>
           {showOldPrice ? (

@@ -164,6 +164,16 @@
   text-overflow: ellipsis;
 }
 
+.pcard__size {
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 8px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .pcard__priceRow {
   display: flex;
   align-items: baseline;
