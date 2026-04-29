@@ -29,7 +29,19 @@ export function HomePage() {
     };
   }, []);
 
-  const updateItems = useMemo(() => products.filter((product) => product.isNew), [products]);
+  const updateItems = useMemo(() => products.filter((product) => product.isNew).slice(0, 12), [products]);
+  const discountItems = useMemo(
+    () => products.filter((product) => typeof product.oldPrice === "number" && product.oldPrice > product.price).slice(0, 12),
+    [products],
+  );
+  const catalogItems = useMemo(
+    () =>
+      products
+        .filter((product) => !product.isNew)
+        .filter((product) => !(typeof product.oldPrice === "number" && product.oldPrice > product.price))
+        .slice(0, 12),
+    [products],
+  );
 
   return (
     <Page
@@ -109,6 +121,87 @@ export function HomePage() {
                 </div>
               </button>
             ))}
+          </div>
+        </section>
+      ) : null}
+
+      {catalogItems.length ? (
+        <section className="home-section">
+          <div className="home-section__head">
+            <div className="home-section__title">Каталог</div>
+            <button type="button" className="home-section__link" onClick={() => nav("/catalog")}
+            >
+              Смотреть все
+            </button>
+          </div>
+
+          <div className="home-update-row">
+            {catalogItems.map((product) => (
+              <button
+                type="button"
+                key={product.postId ?? `id:${product.id}`}
+                className="home-update-card"
+                onClick={() => nav(`/item/${product.id}`)}
+              >
+                <div className="home-update-card__mediaWrap">
+                  {product.images[0] ? (
+                    <img src={product.images[0]} alt={product.title} className="home-update-card__media" />
+                  ) : (
+                    <div className="home-update-card__media home-update-card__media--empty" />
+                  )}
+                </div>
+                <div className="home-update-card__body">
+                  <div className="home-update-card__title">{product.title}</div>
+                  <div className="home-update-card__price">{product.price.toLocaleString("ru-RU")} ₽</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {discountItems.length ? (
+        <section className="home-section">
+          <div className="home-section__head">
+            <div className="home-section__title">Скидки</div>
+            <button type="button" className="home-section__link" onClick={() => nav("/catalog")}
+            >
+              Смотреть все
+            </button>
+          </div>
+
+          <div className="home-update-row">
+            {discountItems.map((product) => {
+              const discountPercent = typeof product.oldPrice === "number" && product.oldPrice > product.price
+                ? Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100)
+                : 0;
+              return (
+                <button
+                  type="button"
+                  key={product.postId ?? `id:${product.id}`}
+                  className="home-update-card"
+                  onClick={() => nav(`/item/${product.id}`)}
+                >
+                  <div className="home-update-card__mediaWrap">
+                    {discountPercent > 0 ? <span className="home-update-card__discountBadge">{`-${discountPercent}%`}</span> : null}
+                    {product.images[0] ? (
+                      <img src={product.images[0]} alt={product.title} className="home-update-card__media" />
+                    ) : (
+                      <div className="home-update-card__media home-update-card__media--empty" />
+                    )}
+                  </div>
+                  <div className="home-update-card__body">
+                    <div className="home-update-card__title">{product.title}</div>
+                    <div className="home-update-card__priceRow">
+                      <div className="home-update-card__price">{product.price.toLocaleString("ru-RU")} ₽</div>
+                      {typeof product.oldPrice === "number" && product.oldPrice > product.price ? (
+                        <div className="home-update-card__oldPrice">{product.oldPrice.toLocaleString("ru-RU")} ₽</div>
+                      ) : null}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </section>
       ) : null}
