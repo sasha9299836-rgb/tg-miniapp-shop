@@ -71,26 +71,47 @@ export function CatalogPage() {
 
   const [q, setQ] = useState("");
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
-  const [typeFilter, setTypeFilter] = useState("");
-  const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
-  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
-  const [newOnly, setNewOnly] = useState(false);
-  const [priceFrom, setPriceFrom] = useState("");
-  const [priceTo, setPriceTo] = useState("");
-  const [sortBy, setSortBy] = useState<SortValue>("default");
+  const [appliedTypeFilter, setAppliedTypeFilter] = useState("");
+  const [appliedSelectedSizes, setAppliedSelectedSizes] = useState<string[]>([]);
+  const [appliedSelectedBrands, setAppliedSelectedBrands] = useState<string[]>([]);
+  const [appliedNewOnly, setAppliedNewOnly] = useState(false);
+  const [appliedPriceFrom, setAppliedPriceFrom] = useState("");
+  const [appliedPriceTo, setAppliedPriceTo] = useState("");
+  const [appliedSortBy, setAppliedSortBy] = useState<SortValue>("default");
+  const [draftTypeFilter, setDraftTypeFilter] = useState("");
+  const [draftSelectedSizes, setDraftSelectedSizes] = useState<string[]>([]);
+  const [draftSelectedBrands, setDraftSelectedBrands] = useState<string[]>([]);
+  const [draftNewOnly, setDraftNewOnly] = useState(false);
+  const [draftPriceFrom, setDraftPriceFrom] = useState("");
+  const [draftPriceTo, setDraftPriceTo] = useState("");
+  const [draftSortBy, setDraftSortBy] = useState<SortValue>("default");
 
   useEffect(() => {
     try {
       const raw = window.sessionStorage.getItem(CATALOG_FILTERS_SESSION_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw) as Partial<CatalogFiltersSessionState>;
-      setTypeFilter(typeof parsed.typeFilter === "string" ? parsed.typeFilter : "");
-      setSelectedSizes(Array.isArray(parsed.selectedSizes) ? parsed.selectedSizes.filter((value): value is string => typeof value === "string") : []);
-      setSelectedBrands(Array.isArray(parsed.selectedBrands) ? parsed.selectedBrands.filter((value): value is string => typeof value === "string") : []);
-      setNewOnly(Boolean(parsed.newOnly));
-      setPriceFrom(typeof parsed.priceFrom === "string" ? parsed.priceFrom : "");
-      setPriceTo(typeof parsed.priceTo === "string" ? parsed.priceTo : "");
-      setSortBy(parsed.sortBy === "price-asc" || parsed.sortBy === "price-desc" || parsed.sortBy === "default" ? parsed.sortBy : "default");
+      const nextTypeFilter = typeof parsed.typeFilter === "string" ? parsed.typeFilter : "";
+      const nextSelectedSizes = Array.isArray(parsed.selectedSizes) ? parsed.selectedSizes.filter((value): value is string => typeof value === "string") : [];
+      const nextSelectedBrands = Array.isArray(parsed.selectedBrands) ? parsed.selectedBrands.filter((value): value is string => typeof value === "string") : [];
+      const nextNewOnly = Boolean(parsed.newOnly);
+      const nextPriceFrom = typeof parsed.priceFrom === "string" ? parsed.priceFrom : "";
+      const nextPriceTo = typeof parsed.priceTo === "string" ? parsed.priceTo : "";
+      const nextSortBy = parsed.sortBy === "price-asc" || parsed.sortBy === "price-desc" || parsed.sortBy === "default" ? parsed.sortBy : "default";
+      setAppliedTypeFilter(nextTypeFilter);
+      setAppliedSelectedSizes(nextSelectedSizes);
+      setAppliedSelectedBrands(nextSelectedBrands);
+      setAppliedNewOnly(nextNewOnly);
+      setAppliedPriceFrom(nextPriceFrom);
+      setAppliedPriceTo(nextPriceTo);
+      setAppliedSortBy(nextSortBy);
+      setDraftTypeFilter(nextTypeFilter);
+      setDraftSelectedSizes(nextSelectedSizes);
+      setDraftSelectedBrands(nextSelectedBrands);
+      setDraftNewOnly(nextNewOnly);
+      setDraftPriceFrom(nextPriceFrom);
+      setDraftPriceTo(nextPriceTo);
+      setDraftSortBy(nextSortBy);
     } catch {
       // ignore broken session state
     }
@@ -158,56 +179,73 @@ export function CatalogPage() {
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    const fromRaw = priceFrom.trim();
-    const toRaw = priceTo.trim();
+    const fromRaw = appliedPriceFrom.trim();
+    const toRaw = appliedPriceTo.trim();
     const from = Number(fromRaw);
     const to = Number(toRaw);
     const hasFrom = fromRaw.length > 0 && Number.isFinite(from);
     const hasTo = toRaw.length > 0 && Number.isFinite(to);
     const filteredProducts = products.filter((p) => {
       if (s && !p.title.toLowerCase().includes(s)) return false;
-      if (typeFilter && normalizeTypeKey(p.title ?? "") !== typeFilter) return false;
-      if (selectedBrands.length) {
+      if (appliedTypeFilter && normalizeTypeKey(p.title ?? "") !== appliedTypeFilter) return false;
+      if (appliedSelectedBrands.length) {
         const brandValue = String(p.brand ?? "").trim();
-        if (!selectedBrands.includes(brandValue)) return false;
+        if (!appliedSelectedBrands.includes(brandValue)) return false;
       }
-      if (selectedSizes.length) {
+      if (appliedSelectedSizes.length) {
         const tokens = parseSizeTokens(p.size ?? null);
         if (!tokens.length) return false;
-        const hasMatch = selectedSizes.some((size) => tokens.includes(size));
+        const hasMatch = appliedSelectedSizes.some((size) => tokens.includes(size));
         if (!hasMatch) return false;
       }
       const numericPrice = Number(p.price);
       if (!Number.isFinite(numericPrice)) return false;
       if (hasFrom && numericPrice < from) return false;
       if (hasTo && numericPrice > to) return false;
-      if (newOnly && !p.isNew) return false;
+      if (appliedNewOnly && !p.isNew) return false;
       return true;
     });
-    if (sortBy === "price-asc") return [...filteredProducts].sort((a, b) => Number(a.price) - Number(b.price));
-    if (sortBy === "price-desc") return [...filteredProducts].sort((a, b) => Number(b.price) - Number(a.price));
+    if (appliedSortBy === "price-asc") return [...filteredProducts].sort((a, b) => Number(a.price) - Number(b.price));
+    if (appliedSortBy === "price-desc") return [...filteredProducts].sort((a, b) => Number(b.price) - Number(a.price));
     return filteredProducts;
-  }, [products, q, typeFilter, selectedBrands, selectedSizes, priceFrom, priceTo, newOnly, sortBy]);
+  }, [products, q, appliedTypeFilter, appliedSelectedBrands, appliedSelectedSizes, appliedPriceFrom, appliedPriceTo, appliedNewOnly, appliedSortBy]);
 
   const onToggleSize = (size: string) => {
-    setSelectedSizes((prev) => (prev.includes(size) ? prev.filter((value) => value !== size) : [...prev, size]));
+    setDraftSelectedSizes((prev) => (prev.includes(size) ? prev.filter((value) => value !== size) : [...prev, size]));
   };
 
   const onToggleBrand = (brand: string) => {
-    setSelectedBrands((prev) => (prev.includes(brand) ? prev.filter((value) => value !== brand) : [...prev, brand]));
+    setDraftSelectedBrands((prev) => (prev.includes(brand) ? prev.filter((value) => value !== brand) : [...prev, brand]));
   };
 
-  const onPriceFromChange = (value: string) => setPriceFrom(value.replace(/\D/g, ""));
-  const onPriceToChange = (value: string) => setPriceTo(value.replace(/\D/g, ""));
+  const onPriceFromChange = (value: string) => setDraftPriceFrom(value.replace(/\D/g, ""));
+  const onPriceToChange = (value: string) => setDraftPriceTo(value.replace(/\D/g, ""));
+
+  const applyFilters = () => {
+    setAppliedTypeFilter(draftTypeFilter);
+    setAppliedSelectedSizes(draftSelectedSizes);
+    setAppliedSelectedBrands(draftSelectedBrands);
+    setAppliedNewOnly(draftNewOnly);
+    setAppliedPriceFrom(draftPriceFrom);
+    setAppliedPriceTo(draftPriceTo);
+    setAppliedSortBy(draftSortBy);
+  };
 
   const resetFilters = () => {
-    setTypeFilter("");
-    setSelectedSizes([]);
-    setSelectedBrands([]);
-    setNewOnly(false);
-    setPriceFrom("");
-    setPriceTo("");
-    setSortBy("default");
+    setDraftTypeFilter("");
+    setDraftSelectedSizes([]);
+    setDraftSelectedBrands([]);
+    setDraftNewOnly(false);
+    setDraftPriceFrom("");
+    setDraftPriceTo("");
+    setDraftSortBy("default");
+    setAppliedTypeFilter("");
+    setAppliedSelectedSizes([]);
+    setAppliedSelectedBrands([]);
+    setAppliedNewOnly(false);
+    setAppliedPriceFrom("");
+    setAppliedPriceTo("");
+    setAppliedSortBy("default");
     try {
       window.sessionStorage.removeItem(CATALOG_FILTERS_SESSION_KEY);
     } catch {
@@ -217,49 +255,49 @@ export function CatalogPage() {
 
   useEffect(() => {
     const payload: CatalogFiltersSessionState = {
-      typeFilter,
-      selectedSizes,
-      selectedBrands,
-      newOnly,
-      priceFrom,
-      priceTo,
-      sortBy,
+      typeFilter: appliedTypeFilter,
+      selectedSizes: appliedSelectedSizes,
+      selectedBrands: appliedSelectedBrands,
+      newOnly: appliedNewOnly,
+      priceFrom: appliedPriceFrom,
+      priceTo: appliedPriceTo,
+      sortBy: appliedSortBy,
     };
     try {
       window.sessionStorage.setItem(CATALOG_FILTERS_SESSION_KEY, JSON.stringify(payload));
     } catch {
       // no-op
     }
-  }, [typeFilter, selectedSizes, selectedBrands, newOnly, priceFrom, priceTo, sortBy]);
+  }, [appliedTypeFilter, appliedSelectedSizes, appliedSelectedBrands, appliedNewOnly, appliedPriceFrom, appliedPriceTo, appliedSortBy]);
 
   const activeFilterChips = useMemo(() => {
     const chips: string[] = [];
-    if (typeFilter) {
-      chips.push(`Тип: ${formatTypeLabel(typeFilter)}`);
+    if (appliedTypeFilter) {
+      chips.push(`Тип: ${formatTypeLabel(appliedTypeFilter)}`);
     }
-    if (selectedBrands.length) {
-      chips.push(`Бренд: ${selectedBrands.join(", ")}`);
+    if (appliedSelectedBrands.length) {
+      chips.push(`Бренд: ${appliedSelectedBrands.join(", ")}`);
     }
-    if (selectedSizes.length) {
-      chips.push(`Размер: ${selectedSizes.join(", ")}`);
+    if (appliedSelectedSizes.length) {
+      chips.push(`Размер: ${appliedSelectedSizes.join(", ")}`);
     }
-    if (newOnly) {
+    if (appliedNewOnly) {
       chips.push("Новинки");
     }
-    if (priceFrom) {
-      chips.push(`Цена от: ${priceFrom}`);
+    if (appliedPriceFrom) {
+      chips.push(`Цена от: ${appliedPriceFrom}`);
     }
-    if (priceTo) {
-      chips.push(`Цена до: ${priceTo}`);
+    if (appliedPriceTo) {
+      chips.push(`Цена до: ${appliedPriceTo}`);
     }
-    if (sortBy === "price-asc") {
+    if (appliedSortBy === "price-asc") {
       chips.push("Сортировка: дешевле → дороже");
     }
-    if (sortBy === "price-desc") {
+    if (appliedSortBy === "price-desc") {
       chips.push("Сортировка: дороже → дешевле");
     }
     return chips;
-  }, [typeFilter, selectedBrands, selectedSizes, newOnly, priceFrom, priceTo, sortBy]);
+  }, [appliedTypeFilter, appliedSelectedBrands, appliedSelectedSizes, appliedNewOnly, appliedPriceFrom, appliedPriceTo, appliedSortBy]);
 
   const activeFiltersCount = activeFilterChips.length;
 
@@ -292,7 +330,7 @@ export function CatalogPage() {
             <div className="catalog-filters__options">
               <label className="catalog-filters__field">
                 <span className="catalog-filters__label">Тип вещи</span>
-                <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} className="catalog-filters__select">
+                <select value={draftTypeFilter} onChange={(event) => setDraftTypeFilter(event.target.value)} className="catalog-filters__select">
                   <option value="">Все</option>
                   {typeOptions.map((option) => (
                     <option key={option.value} value={option.value}>{option.label}</option>
@@ -304,7 +342,7 @@ export function CatalogPage() {
                 <div className="catalog-filters__multi">
                   {sizeOptions.map((value) => (
                     <label key={value} className="catalog-filters__checkbox catalog-filters__checkbox--pill">
-                      <input type="checkbox" checked={selectedSizes.includes(value)} onChange={() => onToggleSize(value)} />
+                      <input type="checkbox" checked={draftSelectedSizes.includes(value)} onChange={() => onToggleSize(value)} />
                       <span>{value}</span>
                     </label>
                   ))}
@@ -315,7 +353,7 @@ export function CatalogPage() {
                 <div className="catalog-filters__multi">
                   {brandOptions.map((value) => (
                     <label key={value} className="catalog-filters__checkbox catalog-filters__checkbox--pill">
-                      <input type="checkbox" checked={selectedBrands.includes(value)} onChange={() => onToggleBrand(value)} />
+                      <input type="checkbox" checked={draftSelectedBrands.includes(value)} onChange={() => onToggleBrand(value)} />
                       <span>{value}</span>
                     </label>
                   ))}
@@ -323,26 +361,27 @@ export function CatalogPage() {
               </label>
               <label className="catalog-filters__field">
                 <span className="catalog-filters__label">Цена от</span>
-                <Input placeholder="0" value={priceFrom} onChange={(event) => onPriceFromChange(event.target.value)} />
+                <Input placeholder="0" value={draftPriceFrom} onChange={(event) => onPriceFromChange(event.target.value)} />
               </label>
               <label className="catalog-filters__field">
                 <span className="catalog-filters__label">Цена до</span>
-                <Input placeholder="0" value={priceTo} onChange={(event) => onPriceToChange(event.target.value)} />
+                <Input placeholder="0" value={draftPriceTo} onChange={(event) => onPriceToChange(event.target.value)} />
               </label>
               <label className="catalog-filters__field">
                 <span className="catalog-filters__label">Сортировка цены</span>
-                <select value={sortBy} onChange={(event) => setSortBy(event.target.value as SortValue)} className="catalog-filters__select">
+                <select value={draftSortBy} onChange={(event) => setDraftSortBy(event.target.value as SortValue)} className="catalog-filters__select">
                   <option value="default">Без сортировки</option>
                   <option value="price-asc">Дешевле → дороже</option>
                   <option value="price-desc">Дороже → дешевле</option>
                 </select>
               </label>
               <label className="catalog-filters__checkbox">
-                <input type="checkbox" checked={newOnly} onChange={(event) => setNewOnly(event.target.checked)} />
+                <input type="checkbox" checked={draftNewOnly} onChange={(event) => setDraftNewOnly(event.target.checked)} />
                 <span>Новинки</span>
               </label>
             </div>
             <div className="catalog-filters__actions">
+              <Button onClick={applyFilters}>Применить фильтры</Button>
               <Button variant="secondary" onClick={resetFilters}>Сбросить фильтры</Button>
               <Button variant="secondary" onClick={() => setIsFiltersOpen(false)}>Закрыть</Button>
             </div>
