@@ -229,6 +229,7 @@ export function CatalogPage() {
     setAppliedPriceFrom(draftPriceFrom);
     setAppliedPriceTo(draftPriceTo);
     setAppliedSortBy(draftSortBy);
+    setIsFiltersOpen(false);
   };
 
   const resetFilters = () => {
@@ -282,7 +283,7 @@ export function CatalogPage() {
       chips.push(`Размер: ${appliedSelectedSizes.join(", ")}`);
     }
     if (appliedNewOnly) {
-      chips.push("Новинки");
+      chips.push("Последние обновления");
     }
     if (appliedPriceFrom) {
       chips.push(`Цена от: ${appliedPriceFrom}`);
@@ -387,7 +388,7 @@ export function CatalogPage() {
               </label>
               <label className="catalog-filters__checkbox">
                 <input type="checkbox" checked={draftNewOnly} onChange={(event) => setDraftNewOnly(event.target.checked)} />
-                <span>Новинки</span>
+                <span>Последние обновления</span>
               </label>
             </div>
             <div className="catalog-filters__actions">
