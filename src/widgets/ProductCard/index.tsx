@@ -230,7 +230,7 @@ function ProductCardInner({
         ) : null}
 
         {discountPercent != null ? <span className="pcard__discountBadge">{`-${discountPercent}%`}</span> : null}
-        {product.isNew ? <span className={`pcard__badge ${discountPercent != null ? "pcard__badge--with-discount" : ""}`.trim()}>Новое</span> : null}
+        {product.isNew ? <span className={`pcard__badge ${discountPercent != null ? "pcard__badge--with-discount" : ""}`.trim()}>NEW</span> : null}
       </div>
 
       <div className="pcard__body" onClick={handleOpen} role="button" tabIndex={0}>

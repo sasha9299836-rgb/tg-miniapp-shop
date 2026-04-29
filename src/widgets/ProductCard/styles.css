@@ -119,14 +119,14 @@
   position: absolute;
   top: 12px;
   left: 12px;
-  background: #2563eb;
-  color: #fff;
+  background: var(--accent-strong);
+  color: var(--overlay-control-text);
   font-size: 12px;
   font-weight: 700;
   line-height: 1;
   padding: 6px 10px;
   border-radius: 999px;
-  border: 1px solid #1d4ed8;
+  border: 1px solid color-mix(in srgb, var(--accent-strong) 78%, var(--surface) 22%);
   box-shadow: var(--shadow-sm);
   z-index: 4;
 }

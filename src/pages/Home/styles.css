@@ -293,16 +293,18 @@
 
 .home-update-card__badge {
   position: absolute;
-  top: 8px;
-  left: 8px;
+  top: 12px;
+  left: 12px;
   z-index: 1;
   border-radius: 999px;
-  padding: 4px 8px;
-  font-size: 10px;
+  padding: 6px 10px;
+  font-size: 12px;
   font-weight: 700;
   line-height: 1;
   color: var(--overlay-control-text);
   background: var(--accent-strong);
+  border: 1px solid color-mix(in srgb, var(--accent-strong) 78%, var(--surface) 22%);
+  box-shadow: var(--shadow-sm);
 }
 
 .home-update-card__discountBadge {
