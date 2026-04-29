@@ -146,3 +146,9 @@
   color: var(--text);
   background: var(--surface);
 }
+
+.catalog-active-filters__chip--reset {
+  cursor: pointer;
+  font: inherit;
+  line-height: 1.2;
+}

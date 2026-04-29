@@ -283,7 +283,7 @@ export function CatalogPage() {
       chips.push(`Размер: ${appliedSelectedSizes.join(", ")}`);
     }
     if (appliedNewOnly) {
-      chips.push("Последние обновления");
+      chips.push("Последние обновление");
     }
     if (appliedPriceFrom) {
       chips.push(`Цена от: ${appliedPriceFrom}`);
@@ -324,9 +324,9 @@ export function CatalogPage() {
                 <span key={chip} className="catalog-active-filters__chip">{chip}</span>
               ))}
             </div>
-            <Button variant="secondary" style={{ width: "auto" }} onClick={resetFilters}>
-              Сбросить
-            </Button>
+            <button type="button" className="catalog-active-filters__chip catalog-active-filters__chip--reset" onClick={resetFilters}>
+              Сбросить фильтры
+            </button>
           </div>
         ) : null}
 
@@ -334,9 +334,6 @@ export function CatalogPage() {
           <div className="catalog-filters">
             <div className="catalog-filters__head">
               <div className="catalog-filters__title">Фильтры</div>
-              <Button variant="secondary" style={{ width: "auto" }} onClick={resetFilters}>
-                Сбросить
-              </Button>
             </div>
             <div className="catalog-filters__options">
               <label className="catalog-filters__field">
@@ -388,12 +385,11 @@ export function CatalogPage() {
               </label>
               <label className="catalog-filters__checkbox">
                 <input type="checkbox" checked={draftNewOnly} onChange={(event) => setDraftNewOnly(event.target.checked)} />
-                <span>Последние обновления</span>
+                <span>Последние обновление</span>
               </label>
             </div>
             <div className="catalog-filters__actions">
               <Button onClick={applyFilters}>Применить фильтры</Button>
-              <Button variant="secondary" onClick={resetFilters}>Сбросить фильтры</Button>
               <Button variant="secondary" onClick={() => setIsFiltersOpen(false)}>Закрыть</Button>
             </div>
           </div>
