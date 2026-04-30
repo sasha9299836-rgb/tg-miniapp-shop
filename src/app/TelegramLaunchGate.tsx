@@ -59,6 +59,20 @@ export function TelegramLaunchGate({ children }: { children: ReactNode }) {
   const [state, setState] = useState<GateState>(() => resolveInitialState());
 
   useEffect(() => {
+    const shouldBlackout = state !== "telegram_allowed";
+    const root = document.getElementById("root");
+    document.documentElement.classList.toggle("tg-browser-fallback", shouldBlackout);
+    document.body.classList.toggle("tg-browser-fallback", shouldBlackout);
+    if (root) root.classList.toggle("tg-browser-fallback", shouldBlackout);
+
+    return () => {
+      document.documentElement.classList.remove("tg-browser-fallback");
+      document.body.classList.remove("tg-browser-fallback");
+      if (root) root.classList.remove("tg-browser-fallback");
+    };
+  }, [state]);
+
+  useEffect(() => {
     if (state !== "checking") return;
 
     let cancelled = false;

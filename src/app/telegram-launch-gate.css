@@ -6,9 +6,12 @@
 }
 
 .tg-launch-gate-blackout {
+  min-height: 100dvh;
   min-height: 100vh;
   width: 100%;
   background: #000;
+  margin: 0;
+  padding: 0;
 }
 
 .tg-launch-gate__card {
@@ -53,6 +56,29 @@
 
 .tg-launch-gate--checking {
   background: #000;
+}
+
+html.tg-browser-fallback,
+body.tg-browser-fallback,
+#root.tg-browser-fallback {
+  background: #000 !important;
+}
+
+html.tg-browser-fallback,
+body.tg-browser-fallback,
+#root.tg-browser-fallback,
+.tg-browser-fallback .tg-launch-gate,
+.tg-browser-fallback .tg-launch-gate-blackout {
+  min-height: 100dvh;
+  min-height: 100vh;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body.tg-browser-fallback::before,
+body.tg-browser-fallback::after {
+  display: none;
 }
 
 @media (max-width: 520px) {
