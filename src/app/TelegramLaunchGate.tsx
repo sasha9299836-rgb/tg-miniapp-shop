@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+﻿import { useEffect, useMemo, useState, type ReactNode } from "react";
 import "./telegram-launch-gate.css";
 
 type GateState = "checking" | "telegram_allowed" | "outside_telegram";
@@ -52,19 +52,7 @@ function resolveInitialState(): GateState {
 }
 
 function TelegramOutsideStub() {
-  return (
-    <div className="tg-launch-gate">
-      <div className="tg-launch-gate__card glass">
-        <div className="tg-launch-gate__title">AES ISLAND</div>
-        <div className="tg-launch-gate__text">
-          Приложение доступно только внутри Telegram Mini App.
-        </div>
-        <a className="tg-launch-gate__button" href="https://t.me/aesisland_bot" target="_blank" rel="noreferrer">
-          Открыть в Telegram
-        </a>
-      </div>
-    </div>
-  );
+  return <div className="tg-launch-gate-blackout" />;
 }
 
 export function TelegramLaunchGate({ children }: { children: ReactNode }) {

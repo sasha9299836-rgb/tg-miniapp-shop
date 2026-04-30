@@ -5,6 +5,12 @@
   padding: max(24px, var(--safe-top, 0px)) 18px calc(24px + var(--safe-bottom, 0px));
 }
 
+.tg-launch-gate-blackout {
+  min-height: 100vh;
+  width: 100%;
+  background: #000;
+}
+
 .tg-launch-gate__card {
   width: min(460px, 100%);
   padding: 22px 18px;
@@ -46,7 +52,7 @@
 }
 
 .tg-launch-gate--checking {
-  background: transparent;
+  background: #000;
 }
 
 @media (max-width: 520px) {
@@ -58,4 +64,3 @@
     font-size: 14px;
   }
 }
-
