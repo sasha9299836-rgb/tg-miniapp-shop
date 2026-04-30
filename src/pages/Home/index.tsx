@@ -93,7 +93,7 @@ export function HomePage() {
         <section className="home-section">
           <div className="home-section__head">
             <div className="home-section__title">Обновление</div>
-            <button type="button" className="home-section__link" onClick={() => nav("/catalog")}
+            <button type="button" className="home-section__link" onClick={() => nav("/catalog?filter=updates")}
             >
               Смотреть все
             </button>
@@ -164,7 +164,7 @@ export function HomePage() {
         <section className="home-section">
           <div className="home-section__head">
             <div className="home-section__title">Скидки</div>
-            <button type="button" className="home-section__link" onClick={() => nav("/catalog")}
+            <button type="button" className="home-section__link" onClick={() => nav("/catalog?filter=discounts")}
             >
               Смотреть все
             </button>

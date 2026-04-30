@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useProductsStore } from "../../entities/product/model/useProductsStore";
 import { useFavoritesStore } from "../../entities/favorites/model/useFavoritesStore";
 import { useCartStore } from "../../entities/cart/model/useCartStore";
@@ -49,6 +49,7 @@ type CatalogFiltersSessionState = {
   selectedSizes: string[];
   selectedBrands: string[];
   newOnly: boolean;
+  discountOnly: boolean;
   priceFrom: string;
   priceTo: string;
   sortBy: SortValue;
@@ -56,6 +57,7 @@ type CatalogFiltersSessionState = {
 
 export function CatalogPage() {
   const nav = useNavigate();
+  const location = useLocation();
   const { products, load } = useProductsStore();
   const favoritePostIds = useFavoritesStore((s) => s.postIds);
   const loadFavorites = useFavoritesStore((s) => s.load);
@@ -75,6 +77,7 @@ export function CatalogPage() {
   const [appliedSelectedSizes, setAppliedSelectedSizes] = useState<string[]>([]);
   const [appliedSelectedBrands, setAppliedSelectedBrands] = useState<string[]>([]);
   const [appliedNewOnly, setAppliedNewOnly] = useState(false);
+  const [appliedDiscountOnly, setAppliedDiscountOnly] = useState(false);
   const [appliedPriceFrom, setAppliedPriceFrom] = useState("");
   const [appliedPriceTo, setAppliedPriceTo] = useState("");
   const [appliedSortBy, setAppliedSortBy] = useState<SortValue>("default");
@@ -82,11 +85,36 @@ export function CatalogPage() {
   const [draftSelectedSizes, setDraftSelectedSizes] = useState<string[]>([]);
   const [draftSelectedBrands, setDraftSelectedBrands] = useState<string[]>([]);
   const [draftNewOnly, setDraftNewOnly] = useState(false);
+  const [draftDiscountOnly, setDraftDiscountOnly] = useState(false);
   const [draftPriceFrom, setDraftPriceFrom] = useState("");
   const [draftPriceTo, setDraftPriceTo] = useState("");
   const [draftSortBy, setDraftSortBy] = useState<SortValue>("default");
 
   useEffect(() => {
+    const search = new URLSearchParams(location.search);
+    const preset = search.get("filter");
+    if (preset === "updates" || preset === "discounts") {
+      const newOnly = preset === "updates";
+      const discountOnly = preset === "discounts";
+      setAppliedTypeFilter("");
+      setAppliedSelectedSizes([]);
+      setAppliedSelectedBrands([]);
+      setAppliedNewOnly(newOnly);
+      setAppliedDiscountOnly(discountOnly);
+      setAppliedPriceFrom("");
+      setAppliedPriceTo("");
+      setAppliedSortBy("default");
+      setDraftTypeFilter("");
+      setDraftSelectedSizes([]);
+      setDraftSelectedBrands([]);
+      setDraftNewOnly(newOnly);
+      setDraftDiscountOnly(discountOnly);
+      setDraftPriceFrom("");
+      setDraftPriceTo("");
+      setDraftSortBy("default");
+      return;
+    }
+
     try {
       const raw = window.sessionStorage.getItem(CATALOG_FILTERS_SESSION_KEY);
       if (!raw) return;
@@ -95,6 +123,7 @@ export function CatalogPage() {
       const nextSelectedSizes = Array.isArray(parsed.selectedSizes) ? parsed.selectedSizes.filter((value): value is string => typeof value === "string") : [];
       const nextSelectedBrands = Array.isArray(parsed.selectedBrands) ? parsed.selectedBrands.filter((value): value is string => typeof value === "string") : [];
       const nextNewOnly = Boolean(parsed.newOnly);
+      const nextDiscountOnly = Boolean(parsed.discountOnly);
       const nextPriceFrom = typeof parsed.priceFrom === "string" ? parsed.priceFrom : "";
       const nextPriceTo = typeof parsed.priceTo === "string" ? parsed.priceTo : "";
       const nextSortBy = parsed.sortBy === "price-asc" || parsed.sortBy === "price-desc" || parsed.sortBy === "default" ? parsed.sortBy : "default";
@@ -102,6 +131,7 @@ export function CatalogPage() {
       setAppliedSelectedSizes(nextSelectedSizes);
       setAppliedSelectedBrands(nextSelectedBrands);
       setAppliedNewOnly(nextNewOnly);
+      setAppliedDiscountOnly(nextDiscountOnly);
       setAppliedPriceFrom(nextPriceFrom);
       setAppliedPriceTo(nextPriceTo);
       setAppliedSortBy(nextSortBy);
@@ -109,13 +139,14 @@ export function CatalogPage() {
       setDraftSelectedSizes(nextSelectedSizes);
       setDraftSelectedBrands(nextSelectedBrands);
       setDraftNewOnly(nextNewOnly);
+      setDraftDiscountOnly(nextDiscountOnly);
       setDraftPriceFrom(nextPriceFrom);
       setDraftPriceTo(nextPriceTo);
       setDraftSortBy(nextSortBy);
     } catch {
       // ignore broken session state
     }
-  }, []);
+  }, [location.search]);
 
   useEffect(() => {
     load();
@@ -203,12 +234,16 @@ export function CatalogPage() {
       if (hasFrom && numericPrice < from) return false;
       if (hasTo && numericPrice > to) return false;
       if (appliedNewOnly && !p.isNew) return false;
+      if (appliedDiscountOnly) {
+        const hasDiscount = typeof p.oldPrice === "number" && p.oldPrice > p.price;
+        if (!hasDiscount) return false;
+      }
       return true;
     });
     if (appliedSortBy === "price-asc") return [...filteredProducts].sort((a, b) => Number(a.price) - Number(b.price));
     if (appliedSortBy === "price-desc") return [...filteredProducts].sort((a, b) => Number(b.price) - Number(a.price));
     return filteredProducts;
-  }, [products, q, appliedTypeFilter, appliedSelectedBrands, appliedSelectedSizes, appliedPriceFrom, appliedPriceTo, appliedNewOnly, appliedSortBy]);
+  }, [products, q, appliedTypeFilter, appliedSelectedBrands, appliedSelectedSizes, appliedPriceFrom, appliedPriceTo, appliedNewOnly, appliedDiscountOnly, appliedSortBy]);
 
   const onToggleSize = (size: string) => {
     setDraftSelectedSizes((prev) => (prev.includes(size) ? prev.filter((value) => value !== size) : [...prev, size]));
@@ -226,6 +261,7 @@ export function CatalogPage() {
     setAppliedSelectedSizes(draftSelectedSizes);
     setAppliedSelectedBrands(draftSelectedBrands);
     setAppliedNewOnly(draftNewOnly);
+    setAppliedDiscountOnly(draftDiscountOnly);
     setAppliedPriceFrom(draftPriceFrom);
     setAppliedPriceTo(draftPriceTo);
     setAppliedSortBy(draftSortBy);
@@ -237,6 +273,7 @@ export function CatalogPage() {
     setDraftSelectedSizes([]);
     setDraftSelectedBrands([]);
     setDraftNewOnly(false);
+    setDraftDiscountOnly(false);
     setDraftPriceFrom("");
     setDraftPriceTo("");
     setDraftSortBy("default");
@@ -244,6 +281,7 @@ export function CatalogPage() {
     setAppliedSelectedSizes([]);
     setAppliedSelectedBrands([]);
     setAppliedNewOnly(false);
+    setAppliedDiscountOnly(false);
     setAppliedPriceFrom("");
     setAppliedPriceTo("");
     setAppliedSortBy("default");
@@ -260,6 +298,7 @@ export function CatalogPage() {
       selectedSizes: appliedSelectedSizes,
       selectedBrands: appliedSelectedBrands,
       newOnly: appliedNewOnly,
+      discountOnly: appliedDiscountOnly,
       priceFrom: appliedPriceFrom,
       priceTo: appliedPriceTo,
       sortBy: appliedSortBy,
@@ -269,7 +308,7 @@ export function CatalogPage() {
     } catch {
       // no-op
     }
-  }, [appliedTypeFilter, appliedSelectedSizes, appliedSelectedBrands, appliedNewOnly, appliedPriceFrom, appliedPriceTo, appliedSortBy]);
+  }, [appliedTypeFilter, appliedSelectedSizes, appliedSelectedBrands, appliedNewOnly, appliedDiscountOnly, appliedPriceFrom, appliedPriceTo, appliedSortBy]);
 
   const activeFilterChips = useMemo(() => {
     const chips: string[] = [];
@@ -283,7 +322,10 @@ export function CatalogPage() {
       chips.push(`Размер: ${appliedSelectedSizes.join(", ")}`);
     }
     if (appliedNewOnly) {
-      chips.push("Последние обновление");
+      chips.push("Последние обновления");
+    }
+    if (appliedDiscountOnly) {
+      chips.push("Скидки");
     }
     if (appliedPriceFrom) {
       chips.push(`Цена от: ${appliedPriceFrom}`);
@@ -298,7 +340,7 @@ export function CatalogPage() {
       chips.push("Сортировка: дороже → дешевле");
     }
     return chips;
-  }, [appliedTypeFilter, appliedSelectedBrands, appliedSelectedSizes, appliedNewOnly, appliedPriceFrom, appliedPriceTo, appliedSortBy]);
+  }, [appliedTypeFilter, appliedSelectedBrands, appliedSelectedSizes, appliedNewOnly, appliedDiscountOnly, appliedPriceFrom, appliedPriceTo, appliedSortBy]);
 
   const activeFiltersCount = activeFilterChips.length;
 
@@ -385,7 +427,11 @@ export function CatalogPage() {
               </label>
               <label className="catalog-filters__checkbox">
                 <input type="checkbox" checked={draftNewOnly} onChange={(event) => setDraftNewOnly(event.target.checked)} />
-                <span>Последние обновление</span>
+                <span>Последние обновления</span>
+              </label>
+              <label className="catalog-filters__checkbox">
+                <input type="checkbox" checked={draftDiscountOnly} onChange={(event) => setDraftDiscountOnly(event.target.checked)} />
+                <span>Скидки</span>
               </label>
             </div>
             <div className="catalog-filters__actions">
