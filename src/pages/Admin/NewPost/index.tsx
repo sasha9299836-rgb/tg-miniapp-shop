@@ -835,6 +835,7 @@ export function AdminNewPostPage() {
 
     if (!nalichieIdInput.trim()) {
       fetchRequestId.current += 1;
+      setIsAutoFetching(false);
       setFieldError(null);
       setItemData(null);
       clearPostIdentity("startFetchById:empty_input");
@@ -842,6 +843,7 @@ export function AdminNewPostPage() {
     }
 
     if (!Number.isInteger(parsedNalichieId) || parsedNalichieId <= 0) {
+      setIsAutoFetching(false);
       if (force) setFieldError("Введите корректный nalichie_id.");
       return;
     }
@@ -854,9 +856,28 @@ export function AdminNewPostPage() {
 
   useEffect(() => {
     if (isEditMode || postType !== "warehouse") return;
-    const timer = window.setTimeout(() => startFetchById(false), 350);
+    const timer = window.setTimeout(() => {
+      if (!nalichieIdInput.trim()) {
+        fetchRequestId.current += 1;
+        setIsAutoFetching(false);
+        setFieldError(null);
+        setItemData(null);
+        clearPostIdentity("autoFetchById:empty_input");
+        return;
+      }
+
+      if (!Number.isInteger(parsedNalichieId) || parsedNalichieId <= 0) {
+        setIsAutoFetching(false);
+        return;
+      }
+
+      const requestId = fetchRequestId.current + 1;
+      fetchRequestId.current = requestId;
+      setIsAutoFetching(true);
+      void applyFetchedItem(parsedNalichieId, requestId);
+    }, 350);
     return () => window.clearTimeout(timer);
-  }, [nalichieIdInput, isEditMode, postType, startFetchById]);
+  }, [nalichieIdInput, isEditMode, postType, parsedNalichieId]);
 
   useEffect(() => {
     if (!editPostId) return;
