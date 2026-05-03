@@ -31,7 +31,13 @@ import "./styles.css";
 
 export function CartPage() {
   const nav = useNavigate();
-  const cart = useCartStore();
+  const cartItems = useCartStore((s) => s.items);
+  const loadCart = useCartStore((s) => s.load);
+  const registerCartCatalogItems = useCartStore((s) => s.registerCatalogItems);
+  const pruneUnavailable = useCartStore((s) => s.pruneUnavailable);
+  const consumeCartNotice = useCartStore((s) => s.consumeNotice);
+  const removeFromCart = useCartStore((s) => s.remove);
+  const clearCart = useCartStore((s) => s.clear);
   const { products, load } = useProductsStore();
   const { isReady, isChecking, errorText: readinessErrorText } = useUserSessionReadiness();
   const [presets, setPresets] = useState<TgAddressPreset[]>([]);
@@ -49,14 +55,14 @@ export function CartPage() {
   useEffect(() => {
     if (!isReady) return;
     void load();
-    void cart.load();
-  }, [isReady, load, cart]);
+    void loadCart();
+  }, [isReady, load, loadCart]);
 
   useEffect(() => {
     if (!isReady) return;
     const mapped = products.map((product) => ({ id: product.id, postId: product.postId }));
-    cart.registerCatalogItems(mapped);
-  }, [isReady, products, cart]);
+    registerCartCatalogItems(mapped);
+  }, [isReady, products, registerCartCatalogItems]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -67,15 +73,15 @@ export function CartPage() {
 
     if (!availablePostIds.length && !products.length) return;
 
-    void cart.pruneUnavailable(availablePostIds).then((removed) => {
+    void pruneUnavailable(availablePostIds).then((removed) => {
       if (removed > 0) {
-        const note = cart.consumeNotice();
+        const note = consumeCartNotice();
         if (note) {
           setDeliveryQuoteError(note);
         }
       }
     });
-  }, [isReady, products, cart]);
+  }, [isReady, products, pruneUnavailable, consumeCartNotice]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -105,7 +111,7 @@ export function CartPage() {
   }, [isReady]);
 
   const lines = useMemo(() => {
-    return cart.items
+    return cartItems
       .map((item) => {
         const product = products.find((row) => row.id === item.productId);
         if (!product) return null;
@@ -124,7 +130,7 @@ export function CartPage() {
         };
         lineSum: number;
       }>;
-  }, [cart.items, products]);
+  }, [cartItems, products]);
 
   const quotePostIds = useMemo(
     () =>
@@ -177,7 +183,7 @@ export function CartPage() {
   const total = pricingSnapshot?.subtotal_without_discount_rub === itemsSum
     ? pricingSnapshot.final_total_rub
     : (discountedItemsSum + payableDeliveryFee);
-  const totalQty = cart.totalQty();
+  const totalQty = useMemo(() => cartItems.reduce((sum, item) => sum + Math.max(0, item.qty), 0), [cartItems]);
   const hasValidDeliveryAddress = Boolean(selectedPreset?.city_code && selectedPreset?.pvz_code);
 
   useEffect(() => {
@@ -299,7 +305,7 @@ export function CartPage() {
     );
   }
 
-  if (!cart.items.length) {
+  if (!cartItems.length) {
     return (
       <Page>
         <div className="cart-page">
@@ -323,7 +329,7 @@ export function CartPage() {
       <div className="cart-page">
         <div className="cart-header">
           <h1 className="cart-title">Корзина</h1>
-          <Button variant="secondary" className="cart-clear" onClick={() => cart.clear()}>
+          <Button variant="secondary" className="cart-clear" onClick={clearCart}>
             Удалить все
           </Button>
         </div>
@@ -352,7 +358,7 @@ export function CartPage() {
               </div>
 
               <div className="cart-item__actions">
-                <Button variant="secondary" onClick={() => void cart.remove({ id: line.productId, postId: line.product.postId })}>Удалить</Button>
+                <Button variant="secondary" onClick={() => void removeFromCart({ id: line.productId, postId: line.product.postId })}>Удалить</Button>
               </div>
             </Card>
           ))}
