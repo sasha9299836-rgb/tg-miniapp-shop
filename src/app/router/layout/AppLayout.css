@@ -1,7 +1,13 @@
 ﻿.app-shell {
   min-height: 100vh;
   width: 100%;
-  padding-top: calc(var(--safe-top, 0px) + var(--app-top-offset, 0px));
+  padding-top: calc(var(--safe-top, 0px) + var(--app-top-offset, 0px) + 10px);
+}
+
+@media (min-width: 1024px) {
+  .app-shell {
+    padding-top: calc(var(--safe-top, 0px) + var(--app-top-offset, 0px));
+  }
 }
 
 .app-shell--mobilePreview {
@@ -148,3 +154,4 @@
     grid-template-columns: repeat(2, minmax(140px, 1fr));
   }
 }
+
