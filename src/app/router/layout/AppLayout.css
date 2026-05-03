@@ -127,3 +127,17 @@
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
+
+@media (min-width: 768px) {
+  .cookie-consent-banner {
+    left: 50%;
+    right: auto;
+    width: min(560px, calc(100vw - 24px));
+    transform: translateX(-50%);
+    padding: 14px;
+  }
+
+  .cookie-consent-banner__actions {
+    grid-template-columns: repeat(2, minmax(140px, 1fr));
+  }
+}

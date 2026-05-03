@@ -372,6 +372,8 @@ export function AdminNewPostPage() {
 
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [isNalichieIdOccupied, setIsNalichieIdOccupied] = useState(false);
+  const [isNalichieSold, setIsNalichieSold] = useState(false);
+  const [nalichieStatusMessage, setNalichieStatusMessage] = useState<string | null>(null);
   const [isAutoFetching, setIsAutoFetching] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
@@ -650,6 +652,8 @@ export function AdminNewPostPage() {
     setVideoLinkInput("");
     setFieldError(null);
     setIsNalichieIdOccupied(false);
+    setIsNalichieSold(false);
+    setNalichieStatusMessage(null);
     setIsAutoFetching(false);
     setIsTypeSuggestionsOpen(false);
     setIsBrandSuggestionsOpen(false);
@@ -686,6 +690,8 @@ export function AdminNewPostPage() {
     setVideoLinkInput("");
     setFieldError(null);
     setIsNalichieIdOccupied(false);
+    setIsNalichieSold(false);
+    setNalichieStatusMessage(null);
     setErrorText(null);
     setSuccessText(null);
     setIsTypeSuggestionsOpen(false);
@@ -742,6 +748,9 @@ export function AdminNewPostPage() {
   const loadByPostId = useCallback(async (postId: string) => {
     setIsAutoFetching(true);
     setFieldError(null);
+    setNalichieStatusMessage(null);
+    setIsNalichieSold(false);
+    setIsNalichieIdOccupied(false);
     try {
       const post = await getPostById(postId);
       if (!post) {
@@ -772,6 +781,8 @@ export function AdminNewPostPage() {
 
       if (!foundItem) {
         setIsNalichieIdOccupied(false);
+        setIsNalichieSold(false);
+        setNalichieStatusMessage(null);
         setItemData(null);
         const cleared = clearPostIdentity("applyFetchedItem:not_found");
         if (cleared) {
@@ -783,8 +794,24 @@ export function AdminNewPostPage() {
       }
 
       const itemStatus = String(foundItem.status ?? "").trim();
+      const normalizedStatus = itemStatus.toLowerCase();
+      if (normalizedStatus === "sold" || normalizedStatus === "sold_out" || normalizedStatus === "soldout") {
+        setIsNalichieIdOccupied(false);
+        setIsNalichieSold(true);
+        setNalichieStatusMessage(null);
+        setItemData(foundItem);
+        setFieldError("Данная вещь продана");
+        return;
+      }
+      if (normalizedStatus === "in_transit") {
+        setNalichieStatusMessage("Данная вещь в пути");
+      } else {
+        setNalichieStatusMessage(null);
+      }
       if (!ALLOWED_NALICHIE_STATUSES.has(itemStatus)) {
         setIsNalichieIdOccupied(false);
+        setIsNalichieSold(false);
+        setNalichieStatusMessage(null);
         setItemData(null);
         const cleared = clearPostIdentity("applyFetchedItem:status_not_allowed");
         if (cleared) {
@@ -797,17 +824,17 @@ export function AdminNewPostPage() {
 
       setFieldError(null);
       setItemData(foundItem);
+      setIsNalichieSold(false);
       const existing = await getPostByNalichieId(nalichieIdValue) ?? await getPostByItemId(nalichieIdValue);
       if (requestId !== fetchRequestId.current) return;
 
       if (existing) {
         setIsNalichieIdOccupied(true);
-        setFieldError("Этот nalichie_id уже используется, пост уже создан.");
+        setFieldError("На данную вещь уже написан пост");
         return;
       } else {
         setIsNalichieIdOccupied(false);
         const nextTitle = (foundItem.tip_veshi ?? "").trim();
-        const nextDescription = (foundItem.opisanie_veshi ?? "").trim();
         const nextCondition = foundItem.defekt_marker ? CONDITION_OPTIONS[6] : CONDITION_OPTIONS[1];
         const nextCost = (foundItem.obh_summa ?? 0) > 0 ? Number(foundItem.obh_summa) : Number(foundItem.vikup_rub ?? 0);
         const suggestedPrice = nextCost > 0 ? Math.round(nextCost * 1.8) : null;
@@ -815,7 +842,6 @@ export function AdminNewPostPage() {
         setTitle((prev) => (prev.trim() ? prev : nextTitle));
         setBrand((prev) => (prev.trim() ? prev : (foundItem.brend ?? "")));
         setSize((prev) => (prev.trim() ? prev : (foundItem.razmer ?? "")));
-        setDescription((prev) => (prev.trim() ? prev : nextDescription));
         setCondition((prev) => (prev.trim() ? prev : nextCondition));
         setHasDefects((prev) => prev || Boolean(foundItem.defekt_marker));
         setDefectsText((prev) => (prev.trim() ? prev : (foundItem.defekt_text ?? "")));
@@ -837,6 +863,9 @@ export function AdminNewPostPage() {
       fetchRequestId.current += 1;
       setIsAutoFetching(false);
       setFieldError(null);
+      setNalichieStatusMessage(null);
+      setIsNalichieSold(false);
+      setIsNalichieIdOccupied(false);
       setItemData(null);
       clearPostIdentity("startFetchById:empty_input");
       return;
@@ -861,6 +890,9 @@ export function AdminNewPostPage() {
         fetchRequestId.current += 1;
         setIsAutoFetching(false);
         setFieldError(null);
+        setNalichieStatusMessage(null);
+        setIsNalichieSold(false);
+        setIsNalichieIdOccupied(false);
         setItemData(null);
         clearPostIdentity("autoFetchById:empty_input");
         return;
@@ -882,10 +914,11 @@ export function AdminNewPostPage() {
   useEffect(() => {
     if (!editPostId) return;
     void loadByPostId(editPostId);
-  }, [editPostId, loadByPostId]);
+  }, [editPostId]);
 
   const validateStrictForm = () => {
-    if (postType === "warehouse" && isNalichieIdOccupied) return "Этот nalichie_id уже используется, пост уже создан.";
+    if (postType === "warehouse" && isNalichieSold) return "Данная вещь продана";
+    if (postType === "warehouse" && isNalichieIdOccupied) return "На данную вещь уже написан пост";
     if (!title.trim()) return "Название обязательно.";
     if (!description.trim()) return "Описание обязательно.";
     if (!condition.trim()) return "Состояние обязательно.";
@@ -897,7 +930,8 @@ export function AdminNewPostPage() {
   };
 
   const validateDraftForm = () => {
-    if (postType === "warehouse" && isNalichieIdOccupied) return "Этот nalichie_id уже используется, пост уже создан.";
+    if (postType === "warehouse" && isNalichieSold) return "Данная вещь продана";
+    if (postType === "warehouse" && isNalichieIdOccupied) return "На данную вещь уже написан пост";
     const hasAnyFieldValue = Boolean(
       title.trim()
       || brand.trim()
@@ -1906,7 +1940,7 @@ export function AdminNewPostPage() {
                 inputMode="numeric"
                 pattern="[0-9]*"
                 value={nalichieIdInput}
-                className={`admin-post-form-control${isNalichieIdOccupied ? " admin-post-form-control--invalid" : ""}`}
+                className={`admin-post-form-control${(isNalichieIdOccupied || isNalichieSold) ? " admin-post-form-control--invalid" : ""}`}
                 disabled={isEditMode}
                 onChange={(e) => onNalichieIdChange(e.target.value)}
                 onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
@@ -1923,6 +1957,7 @@ export function AdminNewPostPage() {
             </div>
           ) : null}
           {fieldError ? <div style={{ color: "#b42318", fontSize: 13 }}>{fieldError}</div> : null}
+          {nalichieStatusMessage ? <div style={{ color: "var(--muted)", fontSize: 13 }}>{nalichieStatusMessage}</div> : null}
         </div>
 
         {showWarehouseSelector && itemData ? (
@@ -2108,7 +2143,7 @@ export function AdminNewPostPage() {
                   placeholder={"Цена"}
                   style={{ width: "100%", padding: 8, borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }}
                 />
-                {adminDiscountPercent != null ? (
+                {isEditMode && adminDiscountPercent != null ? (
                   <div style={{ color: "#b42318", fontSize: 13, fontWeight: 600 }}>
                     {`Скидка: -${adminDiscountPercent}%`}
                   </div>
