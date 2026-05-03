@@ -229,7 +229,7 @@ export const AppLayout = () => {
       {showCookieConsentBanner && !isAdminRoute ? (
         <div className="cookie-consent-banner" role="dialog" aria-label="Согласие на обработку технических данных">
           <div className="cookie-consent-banner__text">
-            Мы используем технические данные и локальное хранилище для корректной работы приложения. Подробнее — в{" "}
+            Мы используем технические данные и локальное хранилище для корректной работы приложения. Подробнее - в{" "}
             <Link to="/account/privacy" className="cookie-consent-banner__link">
               Политике конфиденциальности
             </Link>
