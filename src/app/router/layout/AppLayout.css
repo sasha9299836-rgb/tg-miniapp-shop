@@ -94,3 +94,36 @@
   display: grid;
   gap: 8px;
 }
+
+.cookie-consent-banner {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(86px + var(--safe-bottom, 0px) + 8px);
+  z-index: 210;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--border) 60%, #fff 8%);
+  background: color-mix(in srgb, #0b1220 92%, #000 8%);
+  color: #f8fbff;
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.34);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.cookie-consent-banner__text {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.cookie-consent-banner__link {
+  color: #c9ddff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.cookie-consent-banner__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}

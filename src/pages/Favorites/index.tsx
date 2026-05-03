@@ -32,13 +32,13 @@ export function FavoritesPage() {
     if (!isReady) return;
     void fav.load();
     void cart.load();
-  }, [isReady]);
+  }, [isReady, fav, cart]);
 
   useEffect(() => {
     const mapped = products.map((product) => ({ id: product.id, postId: product.postId }));
     fav.registerCatalogItems(mapped);
     cart.registerCatalogItems(mapped);
-  }, [products]);
+  }, [products, fav, cart]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -58,7 +58,7 @@ export function FavoritesPage() {
       }
     };
     void run();
-  }, [fav.postIds, isReady]);
+  }, [fav.postIds, isReady, fav, cart]);
 
   const items = useMemo(() => {
     const map = new Map(itemsByFavorites.map((item) => [item.postId, item]));

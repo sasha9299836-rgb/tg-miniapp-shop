@@ -50,13 +50,13 @@ export function CartPage() {
     if (!isReady) return;
     void load();
     void cart.load();
-  }, [isReady, load]);
+  }, [isReady, load, cart]);
 
   useEffect(() => {
     if (!isReady) return;
     const mapped = products.map((product) => ({ id: product.id, postId: product.postId }));
     cart.registerCatalogItems(mapped);
-  }, [isReady, products]);
+  }, [isReady, products, cart]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -75,7 +75,7 @@ export function CartPage() {
         }
       }
     });
-  }, [isReady, products]);
+  }, [isReady, products, cart]);
 
   useEffect(() => {
     if (!isReady) return;

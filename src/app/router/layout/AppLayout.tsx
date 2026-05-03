@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Outlet, useLocation, useNavigate, useNavigationType } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate, useNavigationType } from "react-router-dom";
 import { getTelegramStartParam } from "../../providers/telegram";
 import { Button } from "../../../shared/ui/Button";
 import { useDefectReviewStore } from "../../../entities/cart/model/useDefectReviewStore";
@@ -9,6 +9,44 @@ import "./AppLayout.css";
 const DESKTOP_PREVIEW_KEY = "tg_desktop_mobile_preview";
 const CATALOG_PATH = "/catalog";
 const CATALOG_SCROLL_STORAGE_KEY = "catalog_scroll_y";
+const COOKIE_CONSENT_STORAGE_KEY = "aes_cookie_consent";
+const CONSENT_VERSION = 1;
+
+type ConsentStatus = "accepted" | "declined";
+
+type CookieConsentSnapshot = {
+  status: ConsentStatus;
+  version: number;
+  acceptedAt?: string;
+  declinedAt?: string;
+};
+
+function readCookieConsentSnapshot(): CookieConsentSnapshot | null {
+  try {
+    const raw = window.localStorage.getItem(COOKIE_CONSENT_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CookieConsentSnapshot | null;
+    if (!parsed || typeof parsed !== "object") return null;
+    if (parsed.status !== "accepted" && parsed.status !== "declined") return null;
+    if (!Number.isInteger(parsed.version)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveCookieConsentSnapshot(status: ConsentStatus) {
+  const now = new Date().toISOString();
+  const payload: CookieConsentSnapshot =
+    status === "accepted"
+      ? { status, version: CONSENT_VERSION, acceptedAt: now }
+      : { status, version: CONSENT_VERSION, declinedAt: now };
+  try {
+    window.localStorage.setItem(COOKIE_CONSENT_STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // no-op
+  }
+}
 
 function isCatalogRoute(pathname: string): boolean {
   return pathname === CATALOG_PATH;
@@ -48,6 +86,7 @@ export const AppLayout = () => {
   const confirmPendingAndAdd = useDefectReviewStore((s) => s.confirmPendingAndAdd);
   const declinePendingForReview = useDefectReviewStore((s) => s.declinePendingForReview);
   const [isConfirmSubmitting, setIsConfirmSubmitting] = useState(false);
+  const [showCookieConsentBanner, setShowCookieConsentBanner] = useState(false);
 
   useEffect(() => {
     if (startupRouteHandledRef.current) return;
@@ -79,6 +118,15 @@ export const AppLayout = () => {
     } catch {
       setIsMobilePreview(false);
     }
+  }, []);
+
+  useEffect(() => {
+    const snapshot = readCookieConsentSnapshot();
+    if (snapshot && snapshot.version === CONSENT_VERSION) {
+      setShowCookieConsentBanner(false);
+      return;
+    }
+    setShowCookieConsentBanner(true);
   }, []);
 
   useEffect(() => {
@@ -131,6 +179,7 @@ export const AppLayout = () => {
 
   const showDesktopToggle = isDesktopScreen && !isLikelyMobileRuntime;
   const useMobilePreviewLayout = isDesktopScreen && isMobilePreview;
+  const isAdminRoute = location.pathname.startsWith("/admin");
 
   const onConfirmDefects = async () => {
     setIsConfirmSubmitting(true);
@@ -147,6 +196,16 @@ export const AppLayout = () => {
     navigate(`/item/${encodeURIComponent(pending.itemRef)}`, {
       state: { openDefectsOnLoad: true, markDefectsReviewedOnLoad: true, scrollDefectsOnLoad: true },
     });
+  };
+
+  const onAcceptCookieConsent = () => {
+    saveCookieConsentSnapshot("accepted");
+    setShowCookieConsentBanner(false);
+  };
+
+  const onDeclineCookieConsent = () => {
+    saveCookieConsentSnapshot("declined");
+    setShowCookieConsentBanner(false);
   };
 
   return (
@@ -167,6 +226,21 @@ export const AppLayout = () => {
       <main className="app-content">
         <Outlet />
       </main>
+      {showCookieConsentBanner && !isAdminRoute ? (
+        <div className="cookie-consent-banner" role="dialog" aria-label="Согласие на обработку технических данных">
+          <div className="cookie-consent-banner__text">
+            Мы используем технические данные и локальное хранилище для корректной работы приложения. Подробнее — в{" "}
+            <Link to="/account/privacy" className="cookie-consent-banner__link">
+              Политике конфиденциальности
+            </Link>
+            .
+          </div>
+          <div className="cookie-consent-banner__actions">
+            <Button onClick={onAcceptCookieConsent}>Принять</Button>
+            <Button variant="secondary" onClick={onDeclineCookieConsent}>Отклонить</Button>
+          </div>
+        </div>
+      ) : null}
       <TabBar />
       {pendingConfirm ? (
         <div className="defect-confirm-overlay">

@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../../shared/ui/Button";
 import { Page } from "../../../shared/ui/Page";
@@ -132,7 +132,7 @@ export function AdminPromosPage() {
     return detail;
   }, [detail, selectedId]);
 
-  const loadList = async () => {
+  const loadList = useCallback(async () => {
     setIsLoading(true);
     setErrorText(null);
     try {
@@ -147,7 +147,7 @@ export function AdminPromosPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedId]);
 
   const loadDetail = async (id: string) => {
     try {
@@ -161,7 +161,7 @@ export function AdminPromosPage() {
 
   useEffect(() => {
     void loadList();
-  }, []);
+  }, [loadList]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -502,3 +502,4 @@ export function AdminPromosPage() {
 }
 
 export default AdminPromosPage;
+

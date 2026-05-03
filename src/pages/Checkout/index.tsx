@@ -74,13 +74,13 @@ export function CheckoutPage() {
     if (!isReady) return;
     if (!products.length) void loadProducts();
     void cart.load();
-  }, [isReady, products.length, loadProducts]);
+  }, [isReady, products.length, loadProducts, cart]);
 
   useEffect(() => {
     if (!isReady) return;
     const mapped = products.map((product) => ({ id: product.id, postId: product.postId }));
     cart.registerCatalogItems(mapped);
-  }, [isReady, products]);
+  }, [isReady, products, cart]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -95,7 +95,7 @@ export function CheckoutPage() {
         if (note) setErrorText(note);
         }
       });
-  }, [isReady, products]);
+  }, [isReady, products, cart]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -141,7 +141,7 @@ export function CheckoutPage() {
     setRecipientPhone(selectedAddress.recipient_phone);
     setCity(selectedAddress.city);
     setPvz(selectedAddress.pvz);
-  }, [selectedAddress?.id]);
+  }, [selectedAddress]);
 
   const itemsWithProducts = useMemo(() => {
     return cart.items

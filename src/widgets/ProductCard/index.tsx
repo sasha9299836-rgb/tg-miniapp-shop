@@ -45,7 +45,7 @@ function ProductCardInner({
     const percent = Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100);
     return percent > 0 ? percent : null;
   }, [product.oldPrice, product.price, showOldPrice]);
-  const cardTitle = useMemo(() => getProductDisplayTitle(product), [product.brand, product.title]);
+  const cardTitle = useMemo(() => getProductDisplayTitle(product), [product]);
   const sizeText = useMemo(() => String(product.size ?? "").trim(), [product.size]);
 
   const setSlide = (next: number) => {

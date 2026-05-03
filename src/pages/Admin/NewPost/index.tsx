@@ -1,4 +1,5 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+﻿/* eslint-disable react-hooks/exhaustive-deps */
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Page } from "../../../shared/ui/Page";
 import { Button } from "../../../shared/ui/Button";
@@ -738,7 +739,7 @@ export function AdminNewPostPage() {
     setPackagingPreset((prev) => (prev === mappedPackagingByType ? prev : mappedPackagingByType));
   }, [mappedPackagingByType, normalizedItemTypeKey, manualPackagingOverrideTypeKey]);
 
-  const loadByPostId = async (postId: string) => {
+  const loadByPostId = useCallback(async (postId: string) => {
     setIsAutoFetching(true);
     setFieldError(null);
     try {
@@ -761,7 +762,7 @@ export function AdminNewPostPage() {
     } finally {
       setIsAutoFetching(false);
     }
-  };
+  }, [hydrateAllPhotosFromDb, hydrateFromPost]);
 
   const applyFetchedItem = async (nalichieIdValue: number, requestId: number) => {
     if (postType !== "warehouse") return;
@@ -828,7 +829,7 @@ export function AdminNewPostPage() {
     }
   };
 
-  const startFetchById = (force = false) => {
+  const startFetchById = useCallback((force = false) => {
     if (isEditMode) return;
     if (postType !== "warehouse") return;
 
@@ -849,18 +850,18 @@ export function AdminNewPostPage() {
     fetchRequestId.current = requestId;
     setIsAutoFetching(true);
     void applyFetchedItem(parsedNalichieId, requestId);
-  };
+  }, [applyFetchedItem, clearPostIdentity, isEditMode, nalichieIdInput, parsedNalichieId, postType]);
 
   useEffect(() => {
     if (isEditMode || postType !== "warehouse") return;
     const timer = window.setTimeout(() => startFetchById(false), 350);
     return () => window.clearTimeout(timer);
-  }, [nalichieIdInput, isEditMode, postType]);
+  }, [nalichieIdInput, isEditMode, postType, startFetchById]);
 
   useEffect(() => {
     if (!editPostId) return;
     void loadByPostId(editPostId);
-  }, [editPostId]);
+  }, [editPostId, loadByPostId]);
 
   const validateStrictForm = () => {
     if (postType === "warehouse" && isNalichieIdOccupied) return "Этот nalichie_id уже используется, пост уже создан.";
@@ -1336,7 +1337,7 @@ export function AdminNewPostPage() {
     if (kind === "measurement") setSuccessText("Фотографии замеров загружены.");
   };
 
-  const uploadQueue = async (
+  const uploadQueue = useCallback(async (
     item: PendingUpload,
     kind: "main" | "defect",
   ) => {
@@ -1354,7 +1355,7 @@ export function AdminNewPostPage() {
         await delay(UPLOAD_RETRY_DELAY_MS);
       }
     }
-  };
+  }, [uploadPendingItem]);
 
   const uploadWithRetry = async (
     file: PendingUpload,
@@ -1419,7 +1420,7 @@ export function AdminNewPostPage() {
     }
   };
 
-  const uploadPhotosSequentially = async (
+  const uploadPhotosSequentially = useCallback(async (
     files: PendingUpload[],
     context: { item_id: number | null },
   ) => {
@@ -1449,9 +1450,9 @@ export function AdminNewPostPage() {
 
       await delay(MAIN_UPLOAD_INTER_FILE_DELAY_MS);
     }
-  };
+  }, [uploadWithRetry]);
 
-  const uploadMeasurementPhotosSequentially = async (
+  const uploadMeasurementPhotosSequentially = useCallback(async (
     files: PendingUpload[],
   ) => {
     for (const pendingFile of files) {
@@ -1480,7 +1481,7 @@ export function AdminNewPostPage() {
 
       await delay(MAIN_UPLOAD_INTER_FILE_DELAY_MS);
     }
-  };
+  }, [uploadMeasurementWithRetry]);
 
   useEffect(() => {
     if (isUploadingPhotos || pendingMainActivationRef.current || uploadWorkerLockRef.current) return;
@@ -1508,7 +1509,17 @@ export function AdminNewPostPage() {
         setIsUploadingPhotos(false);
       }
     })();
-  }, [pendingMainUploads, isUploadingPhotos, currentPost?.id, currentPost?.item_id, draftUploadId, postType, normalizedNalichieId]);
+  }, [
+    pendingMainUploads,
+    isUploadingPhotos,
+    currentPost,
+    currentPost?.id,
+    currentPost?.item_id,
+    draftUploadId,
+    postType,
+    normalizedNalichieId,
+    uploadPhotosSequentially,
+  ]);
 
   useEffect(() => {
     if (isUploadingMeasurements || pendingMeasurementActivationRef.current || uploadWorkerLockRef.current) return;
@@ -1533,7 +1544,13 @@ export function AdminNewPostPage() {
         setIsUploadingMeasurements(false);
       }
     })();
-  }, [pendingMeasurementUploads, isUploadingMeasurements, currentPost?.id, draftUploadId]);
+  }, [
+    pendingMeasurementUploads,
+    isUploadingMeasurements,
+    currentPost?.id,
+    draftUploadId,
+    uploadMeasurementPhotosSequentially,
+  ]);
 
   useEffect(() => {
     if (isUploadingDefects || pendingDefectActivationRef.current || uploadWorkerLockRef.current) return;
@@ -1578,7 +1595,16 @@ export function AdminNewPostPage() {
         setIsUploadingDefects(false);
       }
     })();
-  }, [pendingDefectUploads, isUploadingDefects, currentPost?.id, currentPost?.item_id, draftUploadId, postType, normalizedNalichieId]);
+  }, [
+    pendingDefectUploads,
+    isUploadingDefects,
+    currentPost?.id,
+    currentPost?.item_id,
+    draftUploadId,
+    postType,
+    normalizedNalichieId,
+    uploadQueue,
+  ]);
 
   const onDeleteMainPhoto = async (localId: string) => {
     const pending = pendingMainUploads.find((entry) => entry.localId === localId);
@@ -2241,3 +2267,10 @@ export function AdminNewPostPage() {
   }
 
 export default AdminNewPostPage;
+
+
+
+
+
+
+

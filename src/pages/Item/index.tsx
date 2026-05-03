@@ -285,13 +285,13 @@ export function ItemPage() {
   useEffect(() => {
     void fav.load();
     void cart.load();
-  }, []);
+  }, [fav, cart]);
 
   useEffect(() => {
     const mapped = products.map((entry) => ({ id: entry.id, postId: entry.postId }));
     fav.registerCatalogItems(mapped);
     cart.registerCatalogItems(mapped);
-  }, [products]);
+  }, [products, fav, cart]);
 
   const product = useMemo(() => {
     if (!productRef) return undefined;

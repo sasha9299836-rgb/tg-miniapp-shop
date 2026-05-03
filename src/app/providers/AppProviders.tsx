@@ -135,7 +135,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
               // no-op
             }
             useAdminStore.getState().setDbAdmin(Boolean(row.is_admin));
-            if (Boolean(row.is_admin)) {
+            if (row.is_admin) {
               try {
                 const adminSession = await bootstrapAdminSessionFromTelegramUserSession();
                 useAdminStore.getState().setSessionToken(adminSession.session_token);

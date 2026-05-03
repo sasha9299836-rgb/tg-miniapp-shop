@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../../shared/ui/Button";
 import { Page } from "../../../shared/ui/Page";
@@ -33,7 +33,7 @@ export function AdminPostVideoPage() {
   const [errorText, setErrorText] = useState<string | null>(null);
   const [successText, setSuccessText] = useState<string | null>(null);
 
-  const loadItems = async () => {
+  const loadItems = useCallback(async () => {
     setIsLoading(true);
     setErrorText(null);
     try {
@@ -48,11 +48,11 @@ export function AdminPostVideoPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedPostId]);
 
   useEffect(() => {
     void loadItems();
-  }, []);
+  }, [loadItems]);
 
   const filteredItems = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -173,4 +173,6 @@ export function AdminPostVideoPage() {
 }
 
 export default AdminPostVideoPage;
+
+
 
