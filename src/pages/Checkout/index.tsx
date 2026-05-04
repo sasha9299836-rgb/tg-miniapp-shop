@@ -49,7 +49,11 @@ function getAddressOptionLabel(address: TgAddressPreset): string {
 
 export function CheckoutPage() {
   const nav = useNavigate();
-  const cart = useCartStore();
+  const cartItems = useCartStore((state) => state.items);
+  const loadCart = useCartStore((state) => state.load);
+  const registerCartCatalogItems = useCartStore((state) => state.registerCatalogItems);
+  const pruneUnavailable = useCartStore((state) => state.pruneUnavailable);
+  const consumeCartNotice = useCartStore((state) => state.consumeNotice);
   const products = useProductsStore((state) => state.products);
   const loadProducts = useProductsStore((state) => state.load);
   const { isReady, isChecking, errorText: readinessErrorText } = useUserSessionReadiness();
@@ -73,14 +77,14 @@ export function CheckoutPage() {
   useEffect(() => {
     if (!isReady) return;
     if (!products.length) void loadProducts();
-    void cart.load();
-  }, [isReady, products.length, loadProducts, cart]);
+    void loadCart();
+  }, [isReady, products.length, loadProducts, loadCart]);
 
   useEffect(() => {
     if (!isReady) return;
     const mapped = products.map((product) => ({ id: product.id, postId: product.postId }));
-    cart.registerCatalogItems(mapped);
-  }, [isReady, products, cart]);
+    registerCartCatalogItems(mapped);
+  }, [isReady, products, registerCartCatalogItems]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -89,13 +93,13 @@ export function CheckoutPage() {
       .map((product) => String(product.postId ?? "").trim())
       .filter(Boolean);
     if (!availablePostIds.length && !products.length) return;
-    void cart.pruneUnavailable(availablePostIds).then((removed) => {
+    void pruneUnavailable(availablePostIds).then((removed) => {
       if (removed > 0) {
-        const note = cart.consumeNotice();
+        const note = consumeCartNotice();
         if (note) setErrorText(note);
         }
       });
-  }, [isReady, products, cart]);
+  }, [isReady, products, pruneUnavailable, consumeCartNotice]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -144,7 +148,7 @@ export function CheckoutPage() {
   }, [selectedAddress]);
 
   const itemsWithProducts = useMemo(() => {
-    return cart.items
+    return cartItems
       .map((item) => {
         const product = products.find((row) => row.id === item.productId);
         return product ? { ...item, product } : null;
@@ -154,7 +158,7 @@ export function CheckoutPage() {
         qty: number;
         product: { id: number; postId?: string; title: string; price: number };
       }>;
-  }, [cart.items, products]);
+  }, [cartItems, products]);
 
   const createOrderPostIds = useMemo(
     () =>
@@ -407,7 +411,7 @@ export function CheckoutPage() {
     }
   };
 
-  if (!cart.items.length) {
+  if (!cartItems.length) {
     return (
       <Page>
         <div className="checkout-page">
