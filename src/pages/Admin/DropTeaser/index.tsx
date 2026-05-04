@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Page } from "../../../shared/ui/Page";
 import { Button } from "../../../shared/ui/Button";
@@ -77,11 +77,11 @@ export function AdminDropTeaserPage() {
     const normalizedShortText = shortText.trim();
     const normalizedDetails = details.trim();
     if (!normalizedTitle) {
-      setErrorText("Р’РІРµРґРёС‚Рµ Р·Р°РіРѕР»РѕРІРѕРє Р°РЅРѕРЅСЃР°.");
+      setErrorText("Введите заголовок анонса.");
       return;
     }
     if (!normalizedShortText) {
-      setErrorText("Р’РІРµРґРёС‚Рµ РєСЂР°С‚РєРёР№ С‚РµРєСЃС‚ Р°РЅРѕРЅСЃР°.");
+      setErrorText("Введите краткий текст анонса.");
       return;
     }
 
@@ -99,7 +99,7 @@ export function AdminDropTeaserPage() {
       }
 
       if (!previewImages.length) {
-        throw new Error("Р”РѕР±Р°РІСЊС‚Рµ С…РѕС‚СЏ Р±С‹ РѕРґРЅРѕ С„РѕС‚Рѕ РїСЂРµРІСЊСЋ.");
+        throw new Error("Добавьте хотя бы одно фото превью.");
       }
 
       await saveActiveDropTeaser({
@@ -112,9 +112,9 @@ export function AdminDropTeaserPage() {
 
       setCurrentImages(previewImages);
       setSelectedFiles([]);
-      setSuccessText("РџСЂРµРІСЊСЋ СЃРѕС…СЂР°РЅРµРЅРѕ Рё РѕРїСѓР±Р»РёРєРѕРІР°РЅРѕ РЅР° РіР»Р°РІРЅРѕР№.");
+      setSuccessText("Превью сохранено и опубликовано на главной.");
     } catch (error) {
-      setErrorText(`РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕС…СЂР°РЅРёС‚СЊ РїСЂРµРІСЊСЋ: ${(error as Error).message}`);
+      setErrorText(`Не удалось сохранить превью: ${(error as Error).message}`);
     } finally {
       setIsSaving(false);
     }
@@ -132,55 +132,55 @@ export function AdminDropTeaserPage() {
       setIsPublicImmediately(false);
       setCurrentImages([]);
       setSelectedFiles([]);
-      setSuccessText("РўРµРєСѓС‰РµРµ Р°РєС‚РёРІРЅРѕРµ РїСЂРµРІСЊСЋ СѓРґР°Р»РµРЅРѕ.");
+      setSuccessText("Текущее активное превью удалено.");
     } catch (error) {
-      setErrorText(`РќРµ СѓРґР°Р»РѕСЃСЊ СѓРґР°Р»РёС‚СЊ С‚РµРєСѓС‰РµРµ РїСЂРµРІСЊСЋ: ${(error as Error).message}`);
+      setErrorText(`Не удалось удалить текущее превью: ${(error as Error).message}`);
     } finally {
       setIsClearing(false);
     }
   };
 
   return (
-    <Page title="Р”РѕР±Р°РІРёС‚СЊ РїСЂРµРІСЊСЋ" subtitle="Р—Р°РіСЂСѓР·РёС‚Рµ РґРѕ 4 С„РѕС‚Рѕ Рё РєРѕСЂРѕС‚РєРёР№ Р°РЅРѕРЅСЃ Р±СѓРґСѓС‰РµРіРѕ РґСЂРѕРїР°">
+    <Page title="Добавить превью" subtitle="Загрузите до 4 фото и короткий анонс будущего дропа">
       <section className="admin-drop-teaser">
         {currentImages.length || title.trim() || shortText.trim() || details.trim() ? (
-          <div className="admin-drop-teaser__active-note">РўРµРєСѓС‰РµРµ Р°РєС‚РёРІРЅРѕРµ РїСЂРµРІСЊСЋ Р·Р°РіСЂСѓР¶РµРЅРѕ. Р’С‹ РјРѕР¶РµС‚Рµ РѕР±РЅРѕРІРёС‚СЊ РёР»Рё СѓРґР°Р»РёС‚СЊ РµРіРѕ.</div>
+          <div className="admin-drop-teaser__active-note">Текущее активное превью загружено. Вы можете обновить или удалить его.</div>
         ) : null}
 
         <label className="admin-drop-teaser__label">
-          Р—Р°РіРѕР»РѕРІРѕРє
+          Заголовок
           <input
             className="admin-drop-teaser__input"
             value={title}
             onChange={(event) => setTitle(event.target.value)}
-            placeholder="РЎРєРѕСЂРѕ РЅРѕРІРѕРµ РїРѕСЃС‚СѓРїР»РµРЅРёРµ"
+            placeholder="Скоро новое поступление"
           />
         </label>
 
         <label className="admin-drop-teaser__label">
-          РљСЂР°С‚РєРёР№ С‚РµРєСЃС‚
+          Краткий текст
           <textarea
             className="admin-drop-teaser__textarea"
             value={shortText}
             onChange={(event) => setShortText(event.target.value)}
-            placeholder="РљРѕСЂРѕС‚РєРѕ СЂР°СЃСЃРєР°Р¶РёС‚Рµ, С‡С‚Рѕ Р±СѓРґРµС‚ РІ РѕР±РЅРѕРІР»РµРЅРёРё."
+            placeholder="Коротко расскажите, что будет в обновлении."
             rows={3}
           />
         </label>
 
         <label className="admin-drop-teaser__label">
-          Р”РµС‚Р°Р»Рё (РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ)
+          Детали (опционально)
           <textarea
             className="admin-drop-teaser__textarea"
             value={details}
             onChange={(event) => setDetails(event.target.value)}
-            placeholder="Р”РѕРїРѕР»РЅРёС‚РµР»СЊРЅР°СЏ РёРЅС„РѕСЂРјР°С†РёСЏ РґР»СЏ СЃС‚СЂР°РЅРёС†С‹ Р°РЅРѕРЅСЃР°."
+            placeholder="Дополнительная информация для страницы анонса."
             rows={4}
           />
         </label>
 
         <label className="admin-drop-teaser__label">
-          Р¤РѕС‚РѕРіСЂР°С„РёРё РїСЂРµРІСЊСЋ (1вЂ“4)
+          Фотографии превью (1-4)
           <input
             className="admin-drop-teaser__input"
             type="file"
@@ -203,7 +203,7 @@ export function AdminDropTeaserPage() {
               <ProductThumb
                 key={`preview-${index}`}
                 src={image}
-                alt={`РџСЂРµРІСЊСЋ ${index + 1}`}
+                alt={`Превью ${index + 1}`}
                 className="admin-drop-teaser__thumb"
                 mediaClassName="admin-drop-teaser__thumb-media"
               />
@@ -213,17 +213,17 @@ export function AdminDropTeaserPage() {
 
         <div className="admin-drop-teaser__actions">
           <Button onClick={() => void onSave()} disabled={isSaving || isLoading || isClearing}>
-            {isSaving ? "РЎРѕС…СЂР°РЅСЏРµРј..." : "РЎРѕС…СЂР°РЅРёС‚СЊ"}
+            {isSaving ? "Сохраняем..." : "Сохранить"}
           </Button>
           <Button
             variant="secondary"
             onClick={() => void onClearActive()}
             disabled={isSaving || isLoading || isClearing || (!currentImages.length && !title.trim() && !shortText.trim() && !details.trim())}
           >
-            {isClearing ? "РЈРґР°Р»СЏРµРј..." : "РЈРґР°Р»РёС‚СЊ С‚РµРєСѓС‰РµРµ РїСЂРµРІСЊСЋ"}
+            {isClearing ? "Удаляем..." : "Удалить текущее превью"}
           </Button>
           <Button variant="secondary" onClick={() => nav("/admin")}>
-            РќР°Р·Р°Рґ
+            Назад
           </Button>
         </div>
 
@@ -235,5 +235,3 @@ export function AdminDropTeaserPage() {
 }
 
 export default AdminDropTeaserPage;
-
-
