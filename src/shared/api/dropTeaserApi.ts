@@ -11,6 +11,7 @@ export type DropTeaser = {
   dropDate: string | null;
   highlights: string[];
   isActive: boolean;
+  isPublicImmediately: boolean;
   updatedAt: string;
 };
 
@@ -24,6 +25,7 @@ type DropTeaserRow = {
   drop_date: string | null;
   highlights: string[] | null;
   is_active: boolean;
+  is_public_immediately?: boolean;
   updated_at: string;
   published_at?: string | null;
 };
@@ -39,6 +41,7 @@ function mapDropTeaser(row: DropTeaserRow): DropTeaser {
     dropDate: row.drop_date ?? null,
     highlights: Array.isArray(row.highlights) ? row.highlights.filter(Boolean).slice(0, 6) : [],
     isActive: Boolean(row.is_active),
+    isPublicImmediately: Boolean(row.is_public_immediately),
     updatedAt: row.updated_at,
   };
 }

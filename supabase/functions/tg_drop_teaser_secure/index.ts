@@ -15,6 +15,7 @@ type DropTeaserPayload = {
   drop_date: string | null;
   highlights: string[];
   is_active: boolean;
+  is_public_immediately?: boolean;
   updated_at: string;
   published_at: string | null;
 };
@@ -45,4 +46,3 @@ Deno.serve(async (req) => {
     return json({ error: "SERVER_ERROR", details: message }, 500);
   }
 });
-

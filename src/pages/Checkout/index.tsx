@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useCartStore } from "../../entities/cart/model/useCartStore";
 import { useProductsStore } from "../../entities/product/model/useProductsStore";
@@ -30,7 +30,7 @@ import { Page } from "../../shared/ui/Page";
 import "./styles.css";
 
 function rub(value: number): string {
-  return `${value.toLocaleString("ru-RU")} ₽`;
+  return `${value.toLocaleString("ru-RU")} в‚Ѕ`;
 }
 
 function isValidFio(value: string): boolean {
@@ -40,7 +40,7 @@ function isValidFio(value: string): boolean {
 function shortenPvz(value: string): string {
   const max = 52;
   if (value.length <= max) return value;
-  return `${value.slice(0, max - 1)}…`;
+  return `${value.slice(0, max - 1)}вЂ¦`;
 }
 
 function getAddressOptionLabel(address: TgAddressPreset): string {
@@ -50,6 +50,7 @@ function getAddressOptionLabel(address: TgAddressPreset): string {
 export function CheckoutPage() {
   const nav = useNavigate();
   const cartItems = useCartStore((state) => state.items);
+  const isCartLoaded = useCartStore((state) => state.isLoaded);
   const loadCart = useCartStore((state) => state.load);
   const registerCartCatalogItems = useCartStore((state) => state.registerCatalogItems);
   const pruneUnavailable = useCartStore((state) => state.pruneUnavailable);
@@ -73,12 +74,13 @@ export function CheckoutPage() {
   const [pricingSnapshot, setPricingSnapshot] = useState<PromoPreviewSnapshot | null>(null);
   const [isOfferAccepted, setIsOfferAccepted] = useState(false);
   const [isPrivacyAccepted, setIsPrivacyAccepted] = useState(false);
+  const quotedKeyRef = useRef<string>("");
 
   useEffect(() => {
     if (!isReady) return;
     if (!products.length) void loadProducts();
-    void loadCart();
-  }, [isReady, products.length, loadProducts, loadCart]);
+    if (!isCartLoaded) void loadCart();
+  }, [isReady, products.length, isCartLoaded, loadProducts, loadCart]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -178,39 +180,45 @@ export function CheckoutPage() {
       }),
     [itemsWithProducts],
   );
-
+  const quoteKey = useMemo(() => {
+    if (!selectedAddress?.city_code || !selectedAddress?.pvz_code || !quotePostIds.length) return "";
+    const stablePostIds = [...quotePostIds].sort();
+    return `${selectedAddress.city_code}|${selectedAddress.pvz_code}|${stablePostIds.join(",")}`;
+  }, [quotePostIds, selectedAddress?.city_code, selectedAddress?.pvz_code]);
   useEffect(() => {
     if (!isReady) return;
     const run = async () => {
-      if (
-        !quotePostIds.length ||
-        !selectedAddress?.city_code ||
-        !selectedAddress?.pvz_code
-      ) {
+      const cityCode = selectedAddress?.city_code;
+      const pvzCode = selectedAddress?.pvz_code;
+      if (!quoteKey || !cityCode || !pvzCode) {
         setDeliveryQuote(null);
         setDeliveryQuoteError(null);
+        quotedKeyRef.current = "";
         return;
       }
+      if (quotedKeyRef.current === quoteKey) return;
 
       setIsDeliveryQuoteLoading(true);
       setDeliveryQuoteError(null);
       try {
         const quote = await calculateDeliveryQuote({
           post_ids: quotePostIds,
-          receiver_city_code: selectedAddress.city_code,
-          delivery_point: selectedAddress.pvz_code,
+          receiver_city_code: cityCode,
+          delivery_point: pvzCode,
         });
         setDeliveryQuote(quote);
+        quotedKeyRef.current = quoteKey;
       } catch (error) {
         console.error("checkout delivery quote failed", error);
         setDeliveryQuote(null);
-        setDeliveryQuoteError("Не удалось рассчитать доставку. Проверьте адрес и попробуйте снова.");
+        setDeliveryQuoteError("РќРµ СѓРґР°Р»РѕСЃСЊ СЂР°СЃСЃС‡РёС‚Р°С‚СЊ РґРѕСЃС‚Р°РІРєСѓ. РџСЂРѕРІРµСЂСЊС‚Рµ Р°РґСЂРµСЃ Рё РїРѕРїСЂРѕР±СѓР№С‚Рµ СЃРЅРѕРІР°.");
+        quotedKeyRef.current = "";
       } finally {
         setIsDeliveryQuoteLoading(false);
       }
     };
     void run();
-  }, [isReady, quotePostIds, selectedAddress?.city_code, selectedAddress?.pvz_code]);
+  }, [isReady, quoteKey, quotePostIds, selectedAddress?.city_code, selectedAddress?.pvz_code]);
 
   const itemsSum = useMemo(
     () => itemsWithProducts.reduce((sum, item) => sum + item.product.price * item.qty, 0),
@@ -277,7 +285,7 @@ export function CheckoutPage() {
     return (
       <Page>
         <div className="checkout-page">
-          <div style={{ color: "var(--muted)" }}>Загрузка...</div>
+          <div style={{ color: "var(--muted)" }}>Р—Р°РіСЂСѓР·РєР°...</div>
         </div>
       </Page>
     );
@@ -288,7 +296,7 @@ export function CheckoutPage() {
       <Page>
         <div className="checkout-page">
           <div style={{ color: "#b42318" }}>{readinessErrorText}</div>
-          <Button variant="secondary" onClick={() => nav("/catalog")}>В каталог</Button>
+          <Button variant="secondary" onClick={() => nav("/catalog")}>Р’ РєР°С‚Р°Р»РѕРі</Button>
         </div>
       </Page>
     );
@@ -297,31 +305,31 @@ export function CheckoutPage() {
   const validate = (): string | null => {
     const tgUserId = getCurrentTgUserId();
     if (!Number.isInteger(tgUserId) || tgUserId <= 0) {
-      return "Не удалось определить пользователя. Перезапустите приложение.";
+      return "РќРµ СѓРґР°Р»РѕСЃСЊ РѕРїСЂРµРґРµР»РёС‚СЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ. РџРµСЂРµР·Р°РїСѓСЃС‚РёС‚Рµ РїСЂРёР»РѕР¶РµРЅРёРµ.";
     }
     if (!itemsWithProducts.length) {
-      return "Корзина пуста.";
+      return "РљРѕСЂР·РёРЅР° РїСѓСЃС‚Р°.";
     }
     if (!selectedAddressId) {
-      return "Выберите адрес доставки.";
+      return "Р’С‹Р±РµСЂРёС‚Рµ Р°РґСЂРµСЃ РґРѕСЃС‚Р°РІРєРё.";
     }
     if (!isValidFio(recipientFio)) {
-      return "Введите ФИО минимум в формате «Имя Фамилия».";
+      return "Р’РІРµРґРёС‚Рµ Р¤РРћ РјРёРЅРёРјСѓРј РІ С„РѕСЂРјР°С‚Рµ В«РРјСЏ Р¤Р°РјРёР»РёСЏВ».";
     }
     if (!/^\+7\(\d{3}\) \d{3}-\d{2}-\d{2}$/.test(recipientPhone)) {
-      return "Введите телефон в формате +7(XXX) XXX-XX-XX.";
+      return "Р’РІРµРґРёС‚Рµ С‚РµР»РµС„РѕРЅ РІ С„РѕСЂРјР°С‚Рµ +7(XXX) XXX-XX-XX.";
     }
-    if (!city.trim()) return "Укажите город.";
-    if (!pvz.trim()) return "Укажите пункт выдачи.";
+    if (!city.trim()) return "РЈРєР°Р¶РёС‚Рµ РіРѕСЂРѕРґ.";
+    if (!pvz.trim()) return "РЈРєР°Р¶РёС‚Рµ РїСѓРЅРєС‚ РІС‹РґР°С‡Рё.";
     if (!selectedAddress?.city_code || !selectedAddress?.pvz_code) {
-      return "Обновите адрес в разделе адресов: нужно выбрать город и ПВЗ из справочника.";
+      return "РћР±РЅРѕРІРёС‚Рµ Р°РґСЂРµСЃ РІ СЂР°Р·РґРµР»Рµ Р°РґСЂРµСЃРѕРІ: РЅСѓР¶РЅРѕ РІС‹Р±СЂР°С‚СЊ РіРѕСЂРѕРґ Рё РџР’Р— РёР· СЃРїСЂР°РІРѕС‡РЅРёРєР°.";
     }
     const hasMissingPostIds = itemsWithProducts.some((item) => !item.product.postId);
     if (!createOrderPostIds.length || hasMissingPostIds) {
-      return "Часть товаров недоступна для оформления.";
+      return "Р§Р°СЃС‚СЊ С‚РѕРІР°СЂРѕРІ РЅРµРґРѕСЃС‚СѓРїРЅР° РґР»СЏ РѕС„РѕСЂРјР»РµРЅРёСЏ.";
     }
     if (!deliveryQuote) {
-      return "Не удалось получить стоимость доставки. Проверьте адрес и повторите попытку.";
+      return "РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕР»СѓС‡РёС‚СЊ СЃС‚РѕРёРјРѕСЃС‚СЊ РґРѕСЃС‚Р°РІРєРё. РџСЂРѕРІРµСЂСЊС‚Рµ Р°РґСЂРµСЃ Рё РїРѕРІС‚РѕСЂРёС‚Рµ РїРѕРїС‹С‚РєСѓ.";
     }
     return null;
   };
@@ -372,39 +380,39 @@ export function CheckoutPage() {
       if (isTgIdentityRequiredError(error)) {
         setErrorText(TG_IDENTITY_REQUIRED_MESSAGE);
       } else if (message.includes("PROMO_NOT_FOUND")) {
-        setErrorText("Промокод не найден. Примените код заново.");
+        setErrorText("РџСЂРѕРјРѕРєРѕРґ РЅРµ РЅР°Р№РґРµРЅ. РџСЂРёРјРµРЅРёС‚Рµ РєРѕРґ Р·Р°РЅРѕРІРѕ.");
       } else if (message.includes("PROMO_DISABLED")) {
-        setErrorText("Промокод выключен.");
+        setErrorText("РџСЂРѕРјРѕРєРѕРґ РІС‹РєР»СЋС‡РµРЅ.");
       } else if (message.includes("PROMO_NOT_STARTED")) {
-        setErrorText("Промокод ещё не активен.");
+        setErrorText("РџСЂРѕРјРѕРєРѕРґ РµС‰С‘ РЅРµ Р°РєС‚РёРІРµРЅ.");
       } else if (message.includes("PROMO_EXPIRED")) {
-        setErrorText("Срок действия промокода истёк.");
+        setErrorText("РЎСЂРѕРє РґРµР№СЃС‚РІРёСЏ РїСЂРѕРјРѕРєРѕРґР° РёСЃС‚С‘Рє.");
       } else if (message.includes("PROMO_EXHAUSTED")) {
-        setErrorText("Промокод исчерпан.");
+        setErrorText("РџСЂРѕРјРѕРєРѕРґ РёСЃС‡РµСЂРїР°РЅ.");
       } else if (message.includes("PROMO_ALREADY_USED_BY_USER")) {
-        setErrorText("Этот одноразовый промокод уже использован.");
+        setErrorText("Р­С‚РѕС‚ РѕРґРЅРѕСЂР°Р·РѕРІС‹Р№ РїСЂРѕРјРѕРєРѕРґ СѓР¶Рµ РёСЃРїРѕР»СЊР·РѕРІР°РЅ.");
       } else if (message.includes("NOT_AVAILABLE")) {
-        setErrorText("Товар уже зарезервирован или продан.");
+        setErrorText("РўРѕРІР°СЂ СѓР¶Рµ Р·Р°СЂРµР·РµСЂРІРёСЂРѕРІР°РЅ РёР»Рё РїСЂРѕРґР°РЅ.");
       } else if (message.includes("PERMISSION_DENIED")) {
-        setErrorText("Нет прав на создание заказа. Проверьте настройки доступа.");
+        setErrorText("РќРµС‚ РїСЂР°РІ РЅР° СЃРѕР·РґР°РЅРёРµ Р·Р°РєР°Р·Р°. РџСЂРѕРІРµСЂСЊС‚Рµ РЅР°СЃС‚СЂРѕР№РєРё РґРѕСЃС‚СѓРїР°.");
       } else if (message.includes("CHECKOUT_RECIPIENT_REQUIRED")) {
-        setErrorText("Не удалось оформить заказ: не указаны данные получателя.");
+        setErrorText("РќРµ СѓРґР°Р»РѕСЃСЊ РѕС„РѕСЂРјРёС‚СЊ Р·Р°РєР°Р·: РЅРµ СѓРєР°Р·Р°РЅС‹ РґР°РЅРЅС‹Рµ РїРѕР»СѓС‡Р°С‚РµР»СЏ.");
       } else if (message.includes("CHECKOUT_RECEIVER_CITY_CODE_REQUIRED")) {
-        setErrorText("Не удалось оформить заказ: не выбран город доставки.");
+        setErrorText("РќРµ СѓРґР°Р»РѕСЃСЊ РѕС„РѕСЂРјРёС‚СЊ Р·Р°РєР°Р·: РЅРµ РІС‹Р±СЂР°РЅ РіРѕСЂРѕРґ РґРѕСЃС‚Р°РІРєРё.");
       } else if (message.includes("CHECKOUT_DELIVERY_POINT_REQUIRED")) {
-        setErrorText("Не удалось оформить заказ: не выбран пункт выдачи.");
+        setErrorText("РќРµ СѓРґР°Р»РѕСЃСЊ РѕС„РѕСЂРјРёС‚СЊ Р·Р°РєР°Р·: РЅРµ РІС‹Р±СЂР°РЅ РїСѓРЅРєС‚ РІС‹РґР°С‡Рё.");
       } else if (message.includes("CHECKOUT_POST_PACKAGING_PRESET_REQUIRED")) {
-        setErrorText("Не удалось оформить заказ: у товара не задана упаковка.");
+        setErrorText("РќРµ СѓРґР°Р»РѕСЃСЊ РѕС„РѕСЂРјРёС‚СЊ Р·Р°РєР°Р·: Сѓ С‚РѕРІР°СЂР° РЅРµ Р·Р°РґР°РЅР° СѓРїР°РєРѕРІРєР°.");
       } else if (message.includes("CHECKOUT_POST_ORIGIN_PROFILE_REQUIRED")) {
-        setErrorText("Не удалось оформить заказ: у товара не задан профиль отправки.");
+        setErrorText("РќРµ СѓРґР°Р»РѕСЃСЊ РѕС„РѕСЂРјРёС‚СЊ Р·Р°РєР°Р·: Сѓ С‚РѕРІР°СЂР° РЅРµ Р·Р°РґР°РЅ РїСЂРѕС„РёР»СЊ РѕС‚РїСЂР°РІРєРё.");
       } else if (message.includes("CHECKOUT_PACKAGE_DIMENSIONS_REQUIRED")) {
-        setErrorText("Не удалось оформить заказ: у товара не заданы параметры упаковки.");
+        setErrorText("РќРµ СѓРґР°Р»РѕСЃСЊ РѕС„РѕСЂРјРёС‚СЊ Р·Р°РєР°Р·: Сѓ С‚РѕРІР°СЂР° РЅРµ Р·Р°РґР°РЅС‹ РїР°СЂР°РјРµС‚СЂС‹ СѓРїР°РєРѕРІРєРё.");
       } else if (message.includes("CHECKOUT_DELIVERY_QUOTE_REQUIRED")) {
-        setErrorText("Не удалось оформить заказ: сначала рассчитайте доставку.");
+        setErrorText("РќРµ СѓРґР°Р»РѕСЃСЊ РѕС„РѕСЂРјРёС‚СЊ Р·Р°РєР°Р·: СЃРЅР°С‡Р°Р»Р° СЂР°СЃСЃС‡РёС‚Р°Р№С‚Рµ РґРѕСЃС‚Р°РІРєСѓ.");
       } else if (message.includes("CHECKOUT_DELIVERY_TOTAL_MISMATCH")) {
-        setErrorText("Не удалось оформить заказ: стоимость доставки устарела, пересчитайте и попробуйте снова.");
+        setErrorText("РќРµ СѓРґР°Р»РѕСЃСЊ РѕС„РѕСЂРјРёС‚СЊ Р·Р°РєР°Р·: СЃС‚РѕРёРјРѕСЃС‚СЊ РґРѕСЃС‚Р°РІРєРё СѓСЃС‚Р°СЂРµР»Р°, РїРµСЂРµСЃС‡РёС‚Р°Р№С‚Рµ Рё РїРѕРїСЂРѕР±СѓР№С‚Рµ СЃРЅРѕРІР°.");
       } else {
-        setErrorText("Не удалось оформить заказ. Проверьте данные и повторите попытку.");
+        setErrorText("РќРµ СѓРґР°Р»РѕСЃСЊ РѕС„РѕСЂРјРёС‚СЊ Р·Р°РєР°Р·. РџСЂРѕРІРµСЂСЊС‚Рµ РґР°РЅРЅС‹Рµ Рё РїРѕРІС‚РѕСЂРёС‚Рµ РїРѕРїС‹С‚РєСѓ.");
       }
     } finally {
       setIsSubmitting(false);
@@ -415,8 +423,8 @@ export function CheckoutPage() {
     return (
       <Page>
         <div className="checkout-page">
-          <EmptyState title="Корзина пуста" text="Добавьте товар в корзину перед оформлением." />
-          <Button variant="secondary" onClick={() => nav("/catalog")}>В каталог</Button>
+          <EmptyState title="РљРѕСЂР·РёРЅР° РїСѓСЃС‚Р°" text="Р”РѕР±Р°РІСЊС‚Рµ С‚РѕРІР°СЂ РІ РєРѕСЂР·РёРЅСѓ РїРµСЂРµРґ РѕС„РѕСЂРјР»РµРЅРёРµРј." />
+          <Button variant="secondary" onClick={() => nav("/catalog")}>Р’ РєР°С‚Р°Р»РѕРі</Button>
         </div>
       </Page>
     );
@@ -426,12 +434,12 @@ export function CheckoutPage() {
     <Page>
       <div className="checkout-page">
         <Card className="ui-card--padded">
-          <CardTitle>Оформление заказа</CardTitle>
-          <CardText>Проверьте данные перед переходом к оплате.</CardText>
+          <CardTitle>РћС„РѕСЂРјР»РµРЅРёРµ Р·Р°РєР°Р·Р°</CardTitle>
+          <CardText>РџСЂРѕРІРµСЂСЊС‚Рµ РґР°РЅРЅС‹Рµ РїРµСЂРµРґ РїРµСЂРµС…РѕРґРѕРј Рє РѕРїР»Р°С‚Рµ.</CardText>
         </Card>
 
         <Card className="ui-card--padded checkout-delivery">
-          <div className="checkout-section__title">Адрес доставки</div>
+          <div className="checkout-section__title">РђРґСЂРµСЃ РґРѕСЃС‚Р°РІРєРё</div>
           {addresses.length ? (
             <>
               <select
@@ -455,14 +463,14 @@ export function CheckoutPage() {
                 </div>
               ) : null}
               <Button variant="secondary" onClick={() => nav("/account/addresses")}>
-                Управлять адресами
+                РЈРїСЂР°РІР»СЏС‚СЊ Р°РґСЂРµСЃР°РјРё
               </Button>
             </>
           ) : (
             <>
-              <div style={{ color: "var(--muted)" }}>Сохранённых адресов пока нет. Добавьте адрес в профиле.</div>
+              <div style={{ color: "var(--muted)" }}>РЎРѕС…СЂР°РЅС‘РЅРЅС‹С… Р°РґСЂРµСЃРѕРІ РїРѕРєР° РЅРµС‚. Р”РѕР±Р°РІСЊС‚Рµ Р°РґСЂРµСЃ РІ РїСЂРѕС„РёР»Рµ.</div>
               <Button variant="secondary" onClick={() => nav("/account/addresses")}>
-                Добавить в профиле
+                Р”РѕР±Р°РІРёС‚СЊ РІ РїСЂРѕС„РёР»Рµ
               </Button>
             </>
           )}
@@ -470,7 +478,7 @@ export function CheckoutPage() {
 
         <Card className="ui-card--padded checkout-total">
           <div className="checkout-total__row">
-            <span>Товары</span>
+            <span>РўРѕРІР°СЂС‹</span>
             {pricingSnapshot && discountedItemsSum !== itemsSum ? (
               <span className="checkout-total__promo-value">
                 <span className="checkout-total__old-value">{rub(itemsSum)}</span>
@@ -481,16 +489,16 @@ export function CheckoutPage() {
             )}
           </div>
           <div className="checkout-total__row checkout-total__divider">
-            <span>Доставка</span>
+            <span>Р”РѕСЃС‚Р°РІРєР°</span>
             <span>{isDeliveryQuoteLoading ? "..." : rub(payableDeliveryFee)}</span>
           </div>
           <div className="checkout-total__row checkout-total__sum">
-            <span>Итого</span>
+            <span>РС‚РѕРіРѕ</span>
             <span>{rub(total)}</span>
           </div>
           {pricingSnapshot?.promo_code ? (
             <div className="checkout-total__promo-note">
-              Промокод: {pricingSnapshot.promo_code} (-{pricingSnapshot.promo_discount_percent}%)
+              РџСЂРѕРјРѕРєРѕРґ: {pricingSnapshot.promo_code} (-{pricingSnapshot.promo_discount_percent}%)
               <button
                 type="button"
                 className="checkout-total__promo-remove"
@@ -499,15 +507,15 @@ export function CheckoutPage() {
                   clearCheckoutPromoSnapshot();
                 }}
               >
-                Убрать
+                РЈР±СЂР°С‚СЊ
               </button>
             </div>
           ) : null}
           {deliveryDiscountAmount > 0 ? (
-            <div className="checkout-total__promo-note">Скидка на доставку: -{rub(deliveryDiscountAmount)}</div>
+            <div className="checkout-total__promo-note">РЎРєРёРґРєР° РЅР° РґРѕСЃС‚Р°РІРєСѓ: -{rub(deliveryDiscountAmount)}</div>
           ) : null}
           {pricingSnapshot?.loyalty_discount_amount_rub ? (
-            <div className="checkout-total__promo-note">Loyalty-скидка: -{rub(pricingSnapshot.loyalty_discount_amount_rub)}</div>
+            <div className="checkout-total__promo-note">Loyalty-СЃРєРёРґРєР°: -{rub(pricingSnapshot.loyalty_discount_amount_rub)}</div>
           ) : null}
         </Card>
 
@@ -520,9 +528,9 @@ export function CheckoutPage() {
                 onChange={(event) => setIsOfferAccepted(event.target.checked)}
               />
               <span>
-                Я ознакомился и согласен с{" "}
+                РЇ РѕР·РЅР°РєРѕРјРёР»СЃСЏ Рё СЃРѕРіР»Р°СЃРµРЅ СЃ{" "}
                 <Link to="/account/offer" className="checkout-consent-link">
-                  Публичной офертой
+                  РџСѓР±Р»РёС‡РЅРѕР№ РѕС„РµСЂС‚РѕР№
                 </Link>
               </span>
             </label>
@@ -534,16 +542,16 @@ export function CheckoutPage() {
                 onChange={(event) => setIsPrivacyAccepted(event.target.checked)}
               />
               <span>
-                Я ознакомился и согласен с{" "}
+                РЇ РѕР·РЅР°РєРѕРјРёР»СЃСЏ Рё СЃРѕРіР»Р°СЃРµРЅ СЃ{" "}
                 <Link to="/account/privacy" className="checkout-consent-link">
-                  Политикой конфиденциальности
+                  РџРѕР»РёС‚РёРєРѕР№ РєРѕРЅС„РёРґРµРЅС†РёР°Р»СЊРЅРѕСЃС‚Рё
                 </Link>
               </span>
             </label>
 
             {!isLegalAccepted ? (
               <div className="checkout-consent-hint">
-                Чтобы продолжить, подтвердите согласие с офертой и политикой.
+                Р§С‚РѕР±С‹ РїСЂРѕРґРѕР»Р¶РёС‚СЊ, РїРѕРґС‚РІРµСЂРґРёС‚Рµ СЃРѕРіР»Р°СЃРёРµ СЃ РѕС„РµСЂС‚РѕР№ Рё РїРѕР»РёС‚РёРєРѕР№.
               </div>
             ) : null}
           </Card>
@@ -552,9 +560,9 @@ export function CheckoutPage() {
             onClick={() => void onCreateOrder()}
             disabled={isSubmitting || !itemsWithProducts.length || isDeliveryQuoteLoading || !isLegalAccepted}
           >
-            {isSubmitting ? "Создаем заказ..." : "Перейти к оплате"}
+            {isSubmitting ? "РЎРѕР·РґР°РµРј Р·Р°РєР°Р·..." : "РџРµСЂРµР№С‚Рё Рє РѕРїР»Р°С‚Рµ"}
           </Button>
-          <Button variant="secondary" onClick={() => nav(-1)}>Назад</Button>
+          <Button variant="secondary" onClick={() => nav(-1)}>РќР°Р·Р°Рґ</Button>
         </div>
 
         {deliveryQuoteError ? <div style={{ color: "#b42318" }}>{deliveryQuoteError}</div> : null}
@@ -565,3 +573,4 @@ export function CheckoutPage() {
 }
 
 export default CheckoutPage;
+

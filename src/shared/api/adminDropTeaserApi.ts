@@ -8,6 +8,7 @@ type SaveDropTeaserPayload = {
   short_text: string;
   details: string | null;
   preview_images: string[];
+  is_public_immediately: boolean;
 };
 
 function readAdminToken(): string {
